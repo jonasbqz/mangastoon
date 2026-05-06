@@ -162,6 +162,7 @@ export default function HeroCarousel({
                 index === currentIndex ? "z-0 opacity-30" : "z-0 opacity-0"
               }`}
               loading={index === 0 ? "eager" : "lazy"}
+              unoptimized={true}
             />
           </div>
         );

@@ -185,6 +185,7 @@ export default function SearchBar() {
                       sizes="44px"
                       className="object-cover"
                       loading="lazy"
+                      unoptimized={true}
                     />
                   ) : null}
                 </div>

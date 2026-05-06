@@ -1,15 +1,7 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" rx="120" fill="#0A0908"/>
-  <rect x="52" y="52" width="408" height="408" rx="96" fill="url(#paint0_linear)"/>
-  <path d="M164 148H208L260 238L312 148H356V364H314V222L260 309L206 222V364H164V148Z" fill="#FFF8F0"/>
-  <path d="M132 110C132 97.8497 141.85 88 154 88H358C370.15 88 380 97.8497 380 110V132H132V110Z" fill="#D6A25E"/>
-  <circle cx="164" cy="110" r="12" fill="#24170D"/>
-  <circle cx="204" cy="110" r="12" fill="#24170D"/>
-  <circle cx="244" cy="110" r="12" fill="#24170D"/>
-  <defs>
-    <linearGradient id="paint0_linear" x1="84" y1="68" x2="430" y2="444" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1B1715"/>
-      <stop offset="1" stop-color="#110F0E"/>
-    </linearGradient>
-  </defs>
+﻿<svg viewBox="-10 -10 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Circulo perfecto con margen de seguridad (padding invisible) -->
+  <circle cx="50" cy="50" r="50" fill="#0a0a0a" stroke="#f97316" stroke-width="6"/>
+  
+  <!-- La "M" de MangaStoon -->
+  <path d="M22 75 V28 L40 52 L50 38 L60 52 L78 28 V75 H65 V48 L50 70 L35 48 V75 Z" fill="#f97316"/>
 </svg>

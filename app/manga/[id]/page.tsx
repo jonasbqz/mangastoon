@@ -68,6 +68,12 @@ type ChapterFeedResponse = {
   offset?: number;
 };
 
+type ChapterLanguageFallback = {
+  language: SupportedLanguage;
+  total: number;
+  firstChapter: ChapterFeedItem | null;
+};
+
 export async function generateMetadata({
   params,
 }: {
@@ -139,6 +145,8 @@ const UI_COPY: Record<
     totalSuffix: string;
     noSynopsis: string;
     noChapters: string;
+    noChaptersInLanguage: string;
+    readInFallbackLanguage: string;
     latestOrder: string;
     noScan: string;
     publishedOn: string;
@@ -158,6 +166,8 @@ const UI_COPY: Record<
     totalSuffix: "capitulos en total",
     noSynopsis: "No hay descripcion disponible para este manga.",
     noChapters: "No encontramos capitulos disponibles todavia.",
+    noChaptersInLanguage: "No hay capitulos disponibles en este idioma.",
+    readInFallbackLanguage: "Leer en",
     latestOrder: "Mas recientes primero",
     noScan: "Seleccion automatica",
     publishedOn: "Publicado",
@@ -176,6 +186,8 @@ const UI_COPY: Record<
     totalSuffix: "chapters in total",
     noSynopsis: "No description is available for this manga.",
     noChapters: "We could not find available chapters yet.",
+    noChaptersInLanguage: "No chapters are available in this language.",
+    readInFallbackLanguage: "Read in",
     latestOrder: "Newest first",
     noScan: "Auto selection",
     publishedOn: "Published",
@@ -194,6 +206,8 @@ const UI_COPY: Record<
     totalSuffix: "capitulos no total",
     noSynopsis: "Nao ha descricao disponivel para este manga.",
     noChapters: "Ainda nao encontramos capitulos disponiveis.",
+    noChaptersInLanguage: "Nao ha capitulos disponiveis neste idioma.",
+    readInFallbackLanguage: "Ler em",
     latestOrder: "Mais recentes primeiro",
     noScan: "Selecao automatica",
     publishedOn: "Publicado",
@@ -208,6 +222,14 @@ function normalizeLanguage(value: string | undefined): SupportedLanguage {
 
   return "es";
 }
+
+const SUPPORTED_CHAPTER_LANGUAGES: SupportedLanguage[] = ["es", "en", "pt"];
+
+const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
+  es: "Español",
+  en: "English",
+  pt: "Português",
+};
 
 function getChapterLanguageVariants(language: SupportedLanguage) {
   if (language === "es") {
@@ -382,6 +404,54 @@ async function fetchMangaChapters(id: string, language: SupportedLanguage) {
   return chapters;
 }
 
+async function fetchChapterLanguageFallback(
+  id: string,
+  language: SupportedLanguage
+): Promise<ChapterLanguageFallback> {
+  const params = new URLSearchParams();
+  getChapterLanguageVariants(language).forEach((variant) => {
+    params.append("translatedLanguage[]", variant);
+  });
+  // Para recomendar otro idioma debemos mandar al inicio real de lectura,
+  // no al cap?tulo m?s reciente. Por eso pedimos el cap?tulo m?s antiguo.
+  params.set("order[chapter]", "asc");
+  params.set("limit", "1");
+  params.set("offset", "0");
+  params.append("includes[]", "scanlation_group");
+
+  const response = await fetch(`https://api.mangadex.org/manga/${id}/feed?${params.toString()}`, {
+    next: { revalidate: 300 },
+  });
+
+  if (!response.ok) {
+    return { language, total: 0, firstChapter: null };
+  }
+
+  const payload = (await response.json()) as ChapterFeedResponse;
+
+  return {
+    language,
+    total: payload.total ?? payload.data?.length ?? 0,
+    firstChapter: payload.data?.[0] ?? null,
+  };
+}
+
+async function findBestChapterLanguageFallback(
+  id: string,
+  currentLanguage: SupportedLanguage
+) {
+  const fallbackCandidates = SUPPORTED_CHAPTER_LANGUAGES.filter(
+    (language) => language !== currentLanguage
+  );
+  const fallbacks = await Promise.all(
+    fallbackCandidates.map((language) => fetchChapterLanguageFallback(id, language))
+  );
+
+  return fallbacks
+    .filter((fallback) => fallback.total > 0 && fallback.firstChapter)
+    .sort((a, b) => b.total - a.total)[0] ?? null;
+}
+
 export default async function MangaDetailsPage({
   params,
 }: {
@@ -401,6 +471,9 @@ export default async function MangaDetailsPage({
     notFound();
   }
 
+  const bestFallbackLanguage =
+    chapters.length === 0 ? await findBestChapterLanguageFallback(id, currentLanguage) : null;
+
   const displayTitle = getLocalizedTitle(manga, currentLanguage);
   const description =
     getLocalizedDescription(manga.attributes?.description, currentLanguage) ?? copy.noSynopsis;
@@ -409,6 +482,21 @@ export default async function MangaDetailsPage({
     name: getLocalizedTagName(tag, currentLanguage),
   }));
   const coverUrl = getCoverUrl(manga.id, manga.relationships);
+  const favoriteManga = {
+    id: manga.id,
+    mangaDexId: manga.id,
+    title: displayTitle,
+    url: `/manga/${manga.id}`,
+    titleMap: manga.attributes?.title,
+    altTitles: manga.attributes?.altTitles,
+    originalLanguage: undefined,
+    themes: (manga.attributes?.tags ?? [])
+      .filter((tag) => tag.attributes?.group === "theme")
+      .map((tag) => getLocalizedTagName(tag, currentLanguage)),
+    tags: tags.map((tag) => tag.name),
+    genres: tags.map((tag, index) => ({ mal_id: index, name: tag.name })),
+    images: coverUrl ? { webp: { large_image_url: coverUrl } } : {},
+  };
   const authorName = getAuthorName(manga.relationships) ?? copy.noAuthor;
   const activeScanGroup = getScanGroupName(chapters[0] ?? null) ?? copy.noScan;
   const chapterTotals = new Map<string, number>();
@@ -460,6 +548,7 @@ export default async function MangaDetailsPage({
                     sizes="(max-width: 768px) 100vw, 320px"
                     className="object-cover"
                     priority
+                    unoptimized={true}
                   />
                 </div>
               ) : (
@@ -468,7 +557,7 @@ export default async function MangaDetailsPage({
             </div>
 
             <div className="mt-4 rounded-xl border border-white/5 bg-[#141519] p-4">
-              <FavoriteButton mangaId={manga.id} title={displayTitle} label={copy.addToFavorites} />
+              <FavoriteButton manga={favoriteManga} label={copy.addToFavorites} variant="inline" />
               <ContinueReadingButton mangaId={manga.id} />
 
               <div className="mt-5">
@@ -538,7 +627,17 @@ export default async function MangaDetailsPage({
 
               {chapters.length === 0 ? (
                 <div className="rounded-xl bg-[#141519] p-6 text-sm text-gray-400">
-                  {copy.noChapters}
+                  <p>{bestFallbackLanguage ? copy.noChaptersInLanguage : copy.noChapters}</p>
+
+                  {bestFallbackLanguage?.firstChapter ? (
+                    <Link
+                      href={`/read/${manga.id}?chapter=${bestFallbackLanguage.firstChapter.id}&lang=${bestFallbackLanguage.language}`}
+                      className="mt-5 inline-flex rounded-full bg-orange-500 px-5 py-2.5 text-sm font-bold text-black transition hover:bg-orange-400"
+                    >
+                      {copy.readInFallbackLanguage} {LANGUAGE_LABELS[bestFallbackLanguage.language]} ·{" "}
+                      {bestFallbackLanguage.total} {copy.totalSuffix}
+                    </Link>
+                  ) : null}
                 </div>
               ) : (
                 <div>

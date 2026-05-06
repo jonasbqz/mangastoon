@@ -1,11 +1,14 @@
 import Link from "next/link";
+import BrandLogo from "./BrandLogo";
 
 export default function Footer() {
   return (
     <footer className="mt-20 w-full border-t border-white/5 bg-[#0a0a0a] pb-8 pt-12">
       <div className="mx-auto flex max-w-[1600px] flex-col items-center justify-between gap-6 px-4 md:flex-row md:px-8">
         <div className="text-center md:text-left">
-          <h2 className="text-2xl font-black tracking-tighter text-orange-500">MANGASTOON</h2>
+          <div className="flex justify-center md:justify-start">
+            <BrandLogo />
+          </div>
           <p className="mt-2 max-w-sm text-sm text-gray-500">
             El mejor catalogo para explorar tus mangas favoritos. Actualizaciones diarias y la mejor calidad.
           </p>

@@ -13,6 +13,8 @@ const UI_COPY: Record<
   {
     topToday: string;
     topTodaySubtitle: string;
+    topManhwas: string;
+    topManhwasSubtitle: string;
     worldTop: string;
     worldTopSubtitle: string;
     latestReleases: string;
@@ -24,6 +26,8 @@ const UI_COPY: Record<
   es: {
     topToday: "Lo mas Top del Dia",
     topTodaySubtitle: "Lo que esta dominando hoy en lectura",
+    topManhwas: "Top Manhwas",
+    topManhwasSubtitle: "Los gigantes coreanos mas seguidos",
     worldTop: "Top Mundial",
     worldTopSubtitle: "Los favoritos de la comunidad global",
     latestReleases: "Nuevos Lanzamientos",
@@ -34,6 +38,8 @@ const UI_COPY: Record<
   en: {
     topToday: "Top of the Day",
     topTodaySubtitle: "What is leading reading right now",
+    topManhwas: "Top Manhwas",
+    topManhwasSubtitle: "The most followed Korean comics",
     worldTop: "Global Top",
     worldTopSubtitle: "Community favorites around the world",
     latestReleases: "New Releases",
@@ -44,6 +50,8 @@ const UI_COPY: Record<
   pt: {
     topToday: "O Melhor do Dia",
     topTodaySubtitle: "O que esta dominando a leitura hoje",
+    topManhwas: "Top Manhwas",
+    topManhwasSubtitle: "Os quadrinhos coreanos mais seguidos",
     worldTop: "Top Mundial",
     worldTopSubtitle: "Os favoritos da comunidade global",
     latestReleases: "Novos Lancamentos",
@@ -175,8 +183,17 @@ export default async function HomePage() {
 
   const topTodayUrl = buildMangaDexMangaUrl(
     {
-      limit: "15",
-      "order[rating]": "desc",
+      limit: "10",
+      "order[followedCount]": "desc",
+    },
+    isAdult,
+    currentLanguage
+  );
+
+  const topManhwasUrl = buildMangaDexMangaUrl(
+    {
+      limit: "10",
+      "originalLanguage[]": "ko",
       "order[followedCount]": "desc",
     },
     isAdult,
@@ -201,15 +218,16 @@ export default async function HomePage() {
     currentLanguage
   );
 
-  const [topTodayResponse, worldTopResponse, latestResponse] = await Promise.all([
+  const [topTodayResponse, topManhwasResponse, worldTopResponse, latestResponse] = await Promise.all([
     fetchMangaDexCollection(topTodayUrl),
+    fetchMangaDexCollection(topManhwasUrl),
     fetchMangaDexCollection(worldTopUrl),
     fetchMangaDexCollection(latestUrl),
   ]);
 
   const uniqueIds = Array.from(
     new Set(
-      [...topTodayResponse.data, ...worldTopResponse.data, ...latestResponse.data].map(
+      [...topTodayResponse.data, ...topManhwasResponse.data, ...worldTopResponse.data, ...latestResponse.data].map(
         (manga) => manga.id
       )
     )
@@ -218,6 +236,7 @@ export default async function HomePage() {
   const statistics = await fetchMangaDexStatistics(uniqueIds);
 
   const topToday = mapToShowcaseItems(topTodayResponse.data, statistics, currentLanguage);
+  const topManhwas = mapToShowcaseItems(topManhwasResponse.data, statistics, currentLanguage);
   const worldTop = mapToShowcaseItems(worldTopResponse.data, statistics, currentLanguage);
   const latestBase = mapToShowcaseItems(latestResponse.data, statistics, currentLanguage);
   const latestChapterPreviews = await Promise.all(
@@ -244,7 +263,7 @@ export default async function HomePage() {
     })
     .slice(0, 15);
 
-  if (topToday.length === 0 && worldTop.length === 0 && latest.length === 0) {
+  if (topToday.length === 0 && topManhwas.length === 0 && worldTop.length === 0 && latest.length === 0) {
     return (
       <main className="min-h-screen bg-[#141519] text-white">
         <SiteHeader language={currentLanguage} />
@@ -268,6 +287,11 @@ export default async function HomePage() {
           title={copy.topToday}
           subtitle={copy.topTodaySubtitle}
           featuredCards
+        />
+        <HorizontalCarousel
+          mangas={topManhwas}
+          title={copy.topManhwas}
+          subtitle={copy.topManhwasSubtitle}
         />
         <HorizontalCarousel
           mangas={worldTop}

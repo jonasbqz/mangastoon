@@ -10,9 +10,9 @@ const LANGUAGE_OPTIONS: Array<{
   code: SupportedLanguage;
   label: string;
 }> = [
-  { code: "es", label: "Espanol" },
+  { code: "es", label: "Espa\u00f1ol" },
   { code: "en", label: "English" },
-  { code: "pt", label: "Portugues" },
+  { code: "pt", label: "Portugu\u00eas" },
 ];
 
 export default function LanguagePreferencePicker() {

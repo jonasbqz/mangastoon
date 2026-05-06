@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useLanguage } from "./language-provider";
 import { getLocalizedTitle } from "../utils/get-localized-title";
+import FavoriteButton from "./FavoriteButton";
 
 export type MangaShowcaseItem = {
   mal_id: number;
@@ -122,46 +123,76 @@ export function MangaCard({
       ? "w-[200px] md:w-[260px]"
       : "w-[140px] md:w-[190px]";
 
-  const content = (
-    <article className={`flex flex-col ${sizeClass} shrink-0 cursor-pointer snap-start`}>
-      <div className="relative aspect-[2/3] w-full overflow-hidden rounded-md border border-transparent bg-[#141519] shadow-lg transition-all duration-300 group-hover:border-orange-500">
-        {imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={displayTitle}
-            fill
-            sizes="(max-width: 768px) 150px, 200px"
-            className="object-cover transition-all duration-500 group-hover:scale-105 group-hover:opacity-80"
-            loading="lazy"
-          />
-        ) : null}
+  const cardLinkClass = "block";
+  const cardHref = href;
+  const isInternal = Boolean(manga.mangaDexId);
 
-        {themeTag ? (
-          <span className="absolute left-2 top-2 z-10 rounded bg-black/80 px-2 py-0.5 text-[10px] font-bold uppercase text-orange-400">
-            {themeTag}
-          </span>
-        ) : null}
+  const imageContent = (
+    <>
+      {imageUrl ? (
+        <Image
+          src={imageUrl}
+          alt={displayTitle}
+          fill
+          sizes="(max-width: 768px) 150px, 200px"
+          className="object-cover transition-transform duration-500 ease-out group-hover:scale-110"
+          loading="lazy"
+          unoptimized={true}
+        />
+      ) : null}
 
-        {manga.isNsfw ? (
-          <span className="absolute right-2 top-2 z-10 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-black text-white shadow-[0_0_10px_rgba(244,63,94,0.5)]">
-            +18
-          </span>
-        ) : null}
+      {themeTag ? (
+        <span className="absolute left-2 top-2 z-10 rounded bg-black/80 px-2 py-0.5 text-[10px] font-bold uppercase text-orange-400">
+          {themeTag}
+        </span>
+      ) : null}
 
-        {/* Overlay oscuro y Boton de Lectura que SOLO aparece en el hover de esta tarjeta especifica */}
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/0 opacity-0 transition-colors duration-300 group-hover:bg-black/50 group-hover:opacity-100">
-          {/* El circulo oscuro con el icono naranja (Estilo Crunchyroll/Premium) */}
-          <div className="scale-50 rounded-full border border-white/10 bg-[#141519]/90 p-3 text-orange-500 shadow-[0_0_20px_rgba(0,0,0,0.8)] backdrop-blur-md transition-transform duration-300 group-hover:scale-100 md:p-4">
-            <BookOpen size={24} strokeWidth={1.5} />
-          </div>
+      {manga.isNsfw ? (
+        <span className="absolute right-12 top-2 z-10 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-black text-white shadow-[0_0_10px_rgba(244,63,94,0.5)]">
+          +18
+        </span>
+      ) : null}
+
+      <div className="absolute inset-0 z-10 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
+      <div className="absolute inset-0 z-20 flex items-center justify-center">
+        <div className="translate-y-4 scale-95 rounded-full bg-[#141519]/90 p-4 text-orange-500 opacity-0 shadow-2xl backdrop-blur-md transition-all duration-300 ease-out group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100">
+          <BookOpen size={24} strokeWidth={2} />
         </div>
-        <div className="pointer-events-none absolute inset-0 z-30 rounded-md border border-transparent transition-colors duration-300 group-hover:border-orange-500" />
+      </div>
+    </>
+  );
+
+  return (
+    <article className={`group flex flex-col ${sizeClass} shrink-0 cursor-pointer snap-start`}>
+      <div className="relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-[#141519] shadow-lg ring-1 ring-white/5 transition-all duration-300 group-hover:ring-orange-500/50 group-hover:shadow-[0_0_20px_rgba(249,115,22,0.25)]">
+        {isInternal ? (
+          <Link href={cardHref} className={cardLinkClass}>
+            {imageContent}
+          </Link>
+        ) : (
+          <a href={cardHref} target="_blank" rel="noreferrer" className={cardLinkClass}>
+            {imageContent}
+          </a>
+        )}
+
+        <FavoriteButton manga={manga} />
       </div>
 
       <div className="mt-3 flex flex-col px-1">
-        <h3 className="truncate text-sm font-bold text-white transition-colors group-hover:text-orange-500 md:text-base">
-          {displayTitle}
-        </h3>
+        {isInternal ? (
+          <Link href={cardHref} className="min-w-0">
+            <h3 className="truncate text-sm font-bold text-white transition-colors duration-300 group-hover:text-orange-500 md:text-base">
+              {displayTitle}
+            </h3>
+          </Link>
+        ) : (
+          <a href={cardHref} target="_blank" rel="noreferrer" className="min-w-0">
+            <h3 className="truncate text-sm font-bold text-white transition-colors duration-300 group-hover:text-orange-500 md:text-base">
+              {displayTitle}
+            </h3>
+          </a>
+        )}
         <span className="mt-0.5 truncate text-[11px] text-gray-400 md:text-xs">{subtitle}</span>
 
         {/* SECCION DE CAPITULOS (Solo se muestra si showChapters es true y hay datos) */}
@@ -197,20 +228,6 @@ export function MangaCard({
         )}
       </div>
     </article>
-  );
-
-  if (manga.mangaDexId) {
-    return (
-      <Link href={href} className="group block shrink-0 snap-start">
-        {content}
-      </Link>
-    );
-  }
-
-  return (
-    <a href={href} target="_blank" rel="noreferrer" className="group block shrink-0 snap-start">
-      {content}
-    </a>
   );
 }
 

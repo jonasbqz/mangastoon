@@ -3,7 +3,8 @@
 import { jsPDF } from "jspdf";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import BackButton from "../../components/BackButton";
+import { toast } from "sonner";
+import { ArrowLeft, ArrowRight, Download, List } from "lucide-react";
 import { SupportedLanguage, useLanguage } from "../../components/language-provider";
 
 type ScrollSpeed = 1 | 2 | 3;
@@ -29,6 +30,7 @@ type ReaderDictionary = {
   endChapter: string;
   downloadRange: string;
   maxChaptersNotice: string;
+  pdfLimitExceeded: string;
   cancel: string;
   download: string;
   play: string;
@@ -93,6 +95,7 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     endChapter: "Hasta",
     downloadRange: "Rango incluido",
     maxChaptersNotice: "Maximo 50 capitulos por PDF para evitar bloqueos.",
+    pdfLimitExceeded: "No se puede descargar mas de 50 capitulos por PDF.",
     cancel: "Cancelar",
     download: "Descargar",
     play: "Play",
@@ -123,6 +126,7 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     endChapter: "To",
     downloadRange: "Included range",
     maxChaptersNotice: "Maximum 50 chapters per PDF to avoid freezing.",
+    pdfLimitExceeded: "You cannot download more than 50 chapters per PDF.",
     cancel: "Cancel",
     download: "Download",
     play: "Play",
@@ -153,6 +157,7 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     endChapter: "Ate",
     downloadRange: "Intervalo incluido",
     maxChaptersNotice: "Maximo de 50 capitulos por PDF para evitar travamentos.",
+    pdfLimitExceeded: "Nao e possivel baixar mais de 50 capitulos por PDF.",
     cancel: "Cancelar",
     download: "Baixar",
     play: "Play",
@@ -352,7 +357,7 @@ function ToolButton({
       type="button"
       title={title}
       onClick={onClick}
-      className="flex h-14 w-14 items-center justify-center rounded-full bg-neutral-800 text-white shadow-lg transition hover:bg-neutral-700"
+      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-[#18191f]/90 text-gray-200 shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-orange-500/40 hover:bg-orange-500 hover:text-black hover:shadow-orange-900/25"
     >
       {children}
     </button>
@@ -363,17 +368,22 @@ function ChapterNavButton({
   disabled,
   onClick,
   children,
+  variant = "secondary",
 }: {
   disabled?: boolean;
   onClick?: () => void;
   children: React.ReactNode;
+  variant?: "primary" | "secondary";
 }) {
+  const className =
+    "h-12 w-12 rounded-xl border border-white/15 bg-[#1f2027] text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_12px_26px_rgba(0,0,0,0.35)] transition-all hover:border-orange-500/50 hover:bg-orange-500 hover:text-black hover:shadow-[0_14px_30px_rgba(249,115,22,0.18)] disabled:cursor-not-allowed disabled:opacity-40 md:h-[54px] md:w-[54px]";
+
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="flex items-center gap-2 rounded-full bg-neutral-800 px-6 py-2.5 font-medium text-white shadow-lg transition-all hover:bg-orange-500 hover:text-black disabled:cursor-not-allowed disabled:opacity-40"
+      className={`flex items-center justify-center ${className}`}
     >
       {children}
     </button>
@@ -396,20 +406,20 @@ function ChapterNavigation({
   onList: () => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-3">
+    <div className="mt-8 mb-12 flex flex-wrap items-center justify-center gap-4 md:gap-6">
       <ChapterNavButton disabled={!previousChapter} onClick={onPrevious}>
-        <span aria-hidden="true">←</span>
-        <span>{dictionary.previousChapter}</span>
+        <ArrowLeft aria-hidden="true" size={24} strokeWidth={2.6} />
+        <span className="sr-only">{dictionary.previousChapter}</span>
       </ChapterNavButton>
 
       <ChapterNavButton onClick={onList}>
-        <span aria-hidden="true">≡</span>
-        <span>{dictionary.chapterList}</span>
+        <List aria-hidden="true" size={24} strokeWidth={2.6} />
+        <span className="sr-only">{dictionary.chapterList}</span>
       </ChapterNavButton>
 
-      <ChapterNavButton disabled={!nextChapter} onClick={onNext}>
-        <span>{dictionary.nextChapter}</span>
-        <span aria-hidden="true">→</span>
+      <ChapterNavButton disabled={!nextChapter} onClick={onNext} variant="primary">
+        <ArrowRight aria-hidden="true" size={24} strokeWidth={2.6} />
+        <span className="sr-only">{dictionary.nextChapter}</span>
       </ChapterNavButton>
     </div>
   );
@@ -615,6 +625,7 @@ export default function ReadPage() {
   );
   const normalizedPdfStartIndex = Math.max(0, Math.min(pdfStartChapterIndex, pdfEndChapterIndex));
   const normalizedPdfEndIndex = Math.max(pdfStartChapterIndex, pdfEndChapterIndex);
+  const requestedPdfChapterCount = normalizedPdfEndIndex - normalizedPdfStartIndex + 1;
   const maxPdfEndIndex = Math.min(chapters.length - 1, normalizedPdfStartIndex + MAX_PDF_CHAPTERS - 1);
   const allowedPdfEndIndex = Math.min(normalizedPdfEndIndex, maxPdfEndIndex);
   const pdfEndOptions = chapters.slice(normalizedPdfStartIndex, maxPdfEndIndex + 1);
@@ -629,6 +640,11 @@ export default function ReadPage() {
 
   async function handleDownloadPdf() {
     if (!currentChapter || pages.length === 0 || downloading) {
+      return;
+    }
+
+    if (requestedPdfChapterCount > MAX_PDF_CHAPTERS) {
+      toast.error(dictionary.pdfLimitExceeded);
       return;
     }
 
@@ -732,8 +748,7 @@ export default function ReadPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0c] px-4 pb-24 text-white md:px-6">
-      <BackButton label={dictionary.backHome} fixed />
+    <main className="min-h-screen bg-[#0a0a0c] px-3 pb-24 pt-3 text-white md:px-6 md:pt-4">
 
       <div className="fixed right-4 top-1/2 z-50 flex -translate-y-1/2 flex-col gap-3">
         <ToolButton title={dictionary.fullscreen} onClick={toggleFullscreen}>
@@ -801,29 +816,38 @@ export default function ReadPage() {
         </section>
       ) : (
         <>
-          <section className="flex flex-col items-center gap-4 pb-4 pt-8">
-            <div className="flex flex-col items-center gap-1">
-              <p className="text-xs uppercase tracking-[0.24em] text-gray-500">{dictionary.reader}</p>
-              <h1 className="text-center text-2xl font-semibold text-orange-400 md:text-3xl">
-                {mangaTitle}
-              </h1>
-              <p className="text-center text-sm text-gray-400">
-                {getChapterLabel(currentChapter, dictionary)}
-              </p>
+          <section className="mx-auto max-w-5xl pt-2">
+            <div className="mb-6 flex w-full items-center justify-between px-2 md:px-4">
+              <button
+                type="button"
+                onClick={() => router.push("/")}
+                className="flex items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 transition-all duration-300 hover:bg-orange-500 hover:text-white"
+              >
+                <ArrowLeft size={24} />
+                <span className="hidden font-medium sm:inline">{dictionary.backHome}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPdfModal(true)}
+                disabled={downloading || pages.length === 0}
+                className="flex items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 transition-all duration-300 hover:bg-orange-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Download size={24} />
+                <span className="hidden font-medium sm:inline">
+                  {downloading ? dictionary.generatingPdf : dictionary.downloadPdf}
+                </span>
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setShowPdfModal(true)}
-              disabled={downloading || pages.length === 0}
-              className="inline-flex items-center gap-3 rounded-2xl bg-orange-500 px-5 py-3 text-sm font-bold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                <path d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" />
-                <path d="M14 2v6h6" fill="#0a0a0c" opacity=".2" />
-              </svg>
-              <span>{downloading ? dictionary.generatingPdf : dictionary.downloadPdf}</span>
-            </button>
+            <div className="mb-6 flex flex-col items-center justify-center px-4 text-center">
+              <h1 className="mb-2 max-w-4xl text-2xl font-black tracking-tight text-orange-500 md:text-4xl">
+                {mangaTitle}
+              </h1>
+              <h2 className="text-lg font-medium text-white">
+                {getChapterLabel(currentChapter, dictionary)}
+              </h2>
+            </div>
 
             <ChapterNavigation
               dictionary={dictionary}
@@ -835,7 +859,7 @@ export default function ReadPage() {
             />
           </section>
 
-          <section className="pb-16 pt-4">
+          <section className="pb-0 pt-0">
             <div className="mx-auto flex max-w-3xl flex-col">
               {pages.map((pageUrl, index) => (
                 <img
