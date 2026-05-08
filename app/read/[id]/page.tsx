@@ -1,10 +1,11 @@
 "use client";
 
 import { jsPDF } from "jspdf";
+import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Download, List } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, EyeOff, List, SlidersHorizontal } from "lucide-react";
 import { SupportedLanguage, useLanguage } from "../../components/language-provider";
 
 type ScrollSpeed = 1 | 2 | 3;
@@ -39,6 +40,8 @@ type ReaderDictionary = {
   chapter: string;
   scrollTop: string;
   fullscreen: string;
+  controls: string;
+  hideControls: string;
 };
 
 type ChapterFeedItem = {
@@ -92,6 +95,8 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     chapter: "Capitulo",
     scrollTop: "Subir",
     fullscreen: "Pantalla completa",
+    controls: "Controles",
+    hideControls: "Ocultar controles",
   },
   en: {
     reader: "Mangastoon Reader",
@@ -123,6 +128,8 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     chapter: "Chapter",
     scrollTop: "Scroll top",
     fullscreen: "Fullscreen",
+    controls: "Controls",
+    hideControls: "Hide controls",
   },
   pt: {
     reader: "Leitor Mangastoon",
@@ -154,6 +161,8 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     chapter: "Capitulo",
     scrollTop: "Topo",
     fullscreen: "Tela cheia",
+    controls: "Controles",
+    hideControls: "Ocultar controles",
   },
 };
 
@@ -273,14 +282,16 @@ function ToolButton({
   children: React.ReactNode;
 }) {
   return (
-    <button
+    <motion.button
       type="button"
       title={title}
       onClick={onClick}
-      className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-[#18191f]/90 text-gray-200 shadow-lg shadow-black/30 backdrop-blur-md transition-all hover:border-orange-500/40 hover:bg-orange-500 hover:text-black hover:shadow-orange-900/25"
+      whileHover={{ scale: 1.04 }}
+      whileTap={{ scale: 0.9 }}
+      className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-[#1d1e25]/80 text-gray-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_32px_rgba(0,0,0,0.42)] backdrop-blur-md transition-colors hover:border-orange-500/45 hover:bg-orange-500 hover:text-black hover:shadow-orange-900/25"
     >
       {children}
-    </button>
+    </motion.button>
   );
 }
 
@@ -296,17 +307,18 @@ function ChapterNavButton({
   variant?: "primary" | "secondary";
 }) {
   const className =
-    "h-12 w-12 rounded-xl border border-white/15 bg-[#1f2027] text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_12px_26px_rgba(0,0,0,0.35)] transition-all hover:border-orange-500/50 hover:bg-orange-500 hover:text-black hover:shadow-[0_14px_30px_rgba(249,115,22,0.18)] disabled:cursor-not-allowed disabled:opacity-40 md:h-[54px] md:w-[54px]";
+    "h-14 w-14 rounded-2xl border border-white/15 bg-[#20212a] text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(0,0,0,0.42)] transition-all hover:border-orange-500/50 hover:bg-[#292a34] hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
-    <button
+    <motion.button
       type="button"
       disabled={disabled}
       onClick={onClick}
+      whileTap={{ scale: disabled ? 1 : 0.9 }}
       className={`flex items-center justify-center ${className}`}
     >
       {children}
-    </button>
+    </motion.button>
   );
 }
 
@@ -417,7 +429,10 @@ export default function ReadPage() {
   const [pdfEndChapterId, setPdfEndChapterId] = useState("");
   const [autoScroll, setAutoScroll] = useState(false);
   const [scrollSpeed, setScrollSpeed] = useState<ScrollSpeed>(1);
+  const [showReaderTools, setShowReaderTools] = useState(true);
+  const [readerToolsAutoVisible, setReaderToolsAutoVisible] = useState(true);
   const autoScrollIntervalRef = useRef<number | null>(null);
+  const lastScrollYRef = useRef(0);
 
   useEffect(() => {
     if (currentChapter?.id) {
@@ -541,6 +556,30 @@ export default function ReadPage() {
       }
     };
   }, [autoScroll, scrollSpeed]);
+
+  useEffect(() => {
+    lastScrollYRef.current = window.scrollY;
+
+    function handleScroll() {
+      const currentY = window.scrollY;
+      const delta = currentY - lastScrollYRef.current;
+
+      if (Math.abs(delta) < 8) {
+        return;
+      }
+
+      if (delta > 0 && currentY > 120) {
+        setReaderToolsAutoVisible(false);
+      } else {
+        setReaderToolsAutoVisible(true);
+      }
+
+      lastScrollYRef.current = currentY;
+    }
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     if (!currentChapter?.id || !mangaId) {
@@ -718,9 +757,30 @@ export default function ReadPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0c] px-3 pb-20 pt-3 text-white sm:px-4 md:px-6 md:pt-4">
+    <main
+      className="min-h-screen bg-[#0a0a0c] px-4 pb-24 pt-3 text-white sm:px-4 md:px-6 md:pb-20 md:pt-4"
+      onPointerDown={(event) => {
+        const target = event.target as HTMLElement;
+        if (!target.closest("button,a,select,input,textarea")) {
+          setReaderToolsAutoVisible(true);
+        }
+      }}
+    >
 
-      <div className="fixed right-4 top-1/2 z-50 hidden -translate-y-1/2 flex-col gap-3 md:flex">
+      <AnimatePresence>
+      {showReaderTools && readerToolsAutoVisible ? (
+        <motion.div
+          key="reader-tools"
+          initial={{ opacity: 0, x: 18, scale: 0.96 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={{ opacity: 0, x: 18, scale: 0.96 }}
+          transition={{ duration: 0.22 }}
+          className="fixed bottom-20 left-1/2 z-50 flex -translate-x-1/2 flex-row gap-2 rounded-full border border-white/10 bg-[#141519]/88 p-2 shadow-2xl shadow-black/45 backdrop-blur-xl md:bottom-auto md:left-auto md:right-4 md:top-1/2 md:-translate-x-0 md:-translate-y-1/2 md:flex-col md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0"
+        >
+        <ToolButton title={dictionary.hideControls} onClick={() => setShowReaderTools(false)}>
+          <EyeOff className="h-5 w-5" />
+        </ToolButton>
+
         <ToolButton title={dictionary.fullscreen} onClick={toggleFullscreen}>
           <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M8 3H5a2 2 0 0 0-2 2v3" />
@@ -756,6 +816,53 @@ export default function ReadPage() {
             <path d="m5 12 7-7 7 7" />
           </svg>
         </ToolButton>
+        </motion.div>
+      ) : (
+        <motion.div
+          key="reader-tools-toggle"
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.92 }}
+          className="fixed bottom-24 right-3 z-50 hidden md:block md:right-4"
+        >
+          <ToolButton title={dictionary.controls} onClick={() => setShowReaderTools(true)}>
+            <SlidersHorizontal className="h-5 w-5" />
+          </ToolButton>
+        </motion.div>
+      )}
+      </AnimatePresence>
+
+      <div className="fixed bottom-3 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-[#141519]/88 px-2 py-2 shadow-2xl shadow-black/45 backdrop-blur-xl md:hidden">
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => router.back()}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-gray-200 transition-colors hover:bg-orange-500 hover:text-black"
+          aria-label={dictionary.backHome}
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </motion.button>
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.9 }}
+          onClick={openChapterList}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-orange-500 transition-colors hover:bg-orange-500 hover:text-black"
+          aria-label={dictionary.chapterList}
+        >
+          <List className="h-5 w-5" />
+        </motion.button>
+        <motion.button
+          type="button"
+          whileTap={{ scale: 0.9 }}
+          onClick={() => {
+            setReaderToolsAutoVisible(true);
+            setShowReaderTools((current) => (current && readerToolsAutoVisible ? false : true));
+          }}
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-gray-200 transition-colors hover:bg-orange-500 hover:text-black"
+          aria-label={dictionary.controls}
+        >
+          <SlidersHorizontal className="h-5 w-5" />
+        </motion.button>
       </div>
 
       {loading ? (
@@ -772,7 +879,7 @@ export default function ReadPage() {
               <button
                 type="button"
                 onClick={() => router.push("/")}
-                className="flex min-h-11 items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 transition-all duration-300 hover:bg-orange-500 hover:text-white"
+                className="flex min-h-12 items-center gap-2 rounded-full bg-[#1a1b20] px-5 py-2.5 text-sm font-semibold text-gray-300 shadow-lg shadow-black/20 transition-all duration-300 hover:bg-orange-500 hover:text-white"
               >
                 <ArrowLeft size={24} />
                 <span className="hidden font-medium sm:inline">{dictionary.backHome}</span>
@@ -781,7 +888,7 @@ export default function ReadPage() {
               <button
                 type="button"
                 disabled
-                className="flex min-h-11 items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 opacity-50"
+                className="flex min-h-12 items-center gap-2 rounded-full bg-[#1a1b20] px-5 py-2.5 text-sm font-semibold text-gray-300 opacity-50"
               >
                 <Download size={24} />
                 <span className="hidden font-medium sm:inline">{dictionary.downloadPdf}</span>
@@ -833,7 +940,7 @@ export default function ReadPage() {
               <button
                 type="button"
                 onClick={() => router.push("/")}
-                className="flex min-h-11 items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 transition-all duration-300 hover:bg-orange-500 hover:text-white"
+                className="flex min-h-12 items-center gap-2 rounded-full bg-[#1a1b20] px-5 py-2.5 text-sm font-semibold text-gray-300 shadow-lg shadow-black/20 transition-all duration-300 hover:bg-orange-500 hover:text-white"
               >
                 <ArrowLeft size={24} />
                 <span className="hidden font-medium sm:inline">{dictionary.backHome}</span>
@@ -843,7 +950,7 @@ export default function ReadPage() {
                 type="button"
                 onClick={() => setShowPdfModal(true)}
                 disabled={downloading || pages.length === 0}
-                className="flex min-h-11 items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 transition-all duration-300 hover:bg-orange-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-12 items-center gap-2 rounded-full bg-[#1a1b20] px-5 py-2.5 text-sm font-semibold text-gray-300 shadow-lg shadow-black/20 transition-all duration-300 hover:bg-orange-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Download size={24} />
                 <span className="hidden font-medium sm:inline">

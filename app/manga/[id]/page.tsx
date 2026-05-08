@@ -13,6 +13,7 @@ import { getLocalizedTitle } from "../../utils/get-localized-title";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../utils/mangadex-config";
 
 export const revalidate = 3600;
+export const dynamicParams = true;
 
 const MANGADEX_RETRY_DELAY_MS = 1200;
 
@@ -572,12 +573,12 @@ export default async function MangaDetailsPage({
     <main className="min-h-screen bg-[#0a0a0a] text-white">
       <SiteHeader language={currentLanguage} />
 
-      <div className="mx-auto max-w-7xl px-4 py-5 sm:px-5 md:px-6 md:py-8 lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-5 md:px-6 md:py-8 lg:px-8">
         <BackButton />
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12 md:gap-8">
           <aside className="md:col-span-4 lg:col-span-3">
             <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-[150px_minmax(0,1fr)] md:block">
-              <div className="max-w-[180px] overflow-hidden rounded-xl shadow-2xl shadow-black/50 sm:max-w-[220px] md:max-w-none">
+              <div className="max-h-[300px] max-w-[180px] overflow-hidden rounded-xl shadow-2xl shadow-black/50 sm:max-w-[220px] md:max-h-none md:max-w-none">
                 {coverUrl ? (
                   <div className="relative aspect-[2/3] w-full">
                     <Image
@@ -585,7 +586,7 @@ export default async function MangaDetailsPage({
                       alt={displayTitle}
                       fill
                       sizes="(max-width: 640px) 112px, (max-width: 768px) 150px, 320px"
-                      className="object-cover"
+                      className="object-cover object-top"
                       priority
                       unoptimized={true}
                       referrerPolicy="no-referrer"
@@ -655,13 +656,13 @@ export default async function MangaDetailsPage({
                 <div className="border-l-4 border-orange-500 pl-3">
                   <h2 className="text-2xl font-bold text-white">{copy.chapters}</h2>
                 </div>
-                <p className="text-sm text-gray-400">
+                <p className="text-base leading-relaxed text-gray-400">
                   {chapters.length} {copy.totalChapters}
                 </p>
               </div>
 
               <div className="mb-4 flex items-center justify-between rounded-xl bg-[#141519] px-4 py-3">
-                <p className="text-sm text-gray-400">
+                <p className="text-base leading-relaxed text-gray-400">
                   {chapters.length} {copy.totalSuffix}
                 </p>
                 <button
@@ -673,7 +674,7 @@ export default async function MangaDetailsPage({
               </div>
 
               {chapters.length === 0 ? (
-                <div className="rounded-xl bg-[#141519] p-6 text-sm text-gray-400">
+                <div className="rounded-xl bg-[#141519] p-6 text-base leading-relaxed text-gray-400">
                   <p>{bestFallbackLanguage ? copy.noChaptersInLanguage : copy.noChapters}</p>
 
                   {bestFallbackLanguage?.firstChapter ? (
@@ -693,7 +694,7 @@ export default async function MangaDetailsPage({
                       <Link
                         key={chapter.id}
                         href={`/read/${manga.id}?chapter=${chapter.id}`}
-                        className="mb-2 flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/5 p-4 transition-colors hover:bg-white/10"
+                        className="animate-soft-enter mb-2 flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/5 p-4 transition-colors hover:bg-white/10"
                       >
                         <div className="flex min-w-0 items-center gap-3">
                           <BookOpen className="h-5 w-5 shrink-0 text-orange-500" />

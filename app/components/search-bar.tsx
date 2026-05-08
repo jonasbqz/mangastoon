@@ -9,6 +9,7 @@ import { useLanguage } from "./language-provider";
 import { getLocalizedTitle } from "../utils/get-localized-title";
 import {
   appendStandardMangaDexFilters,
+  getAvailableTranslatedLanguageVariants,
   getMangaSynopsis,
   getThemeTags,
   type MangaDexCollectionResponse,
@@ -62,6 +63,24 @@ function getPriorityTheme(themes: string[]) {
   return null;
 }
 
+async function hasReadableChapters(mangaId: string, language: "es" | "en" | "pt") {
+  const params = new URLSearchParams();
+  params.set("limit", "1");
+  params.set("order[readableAt]", "desc");
+  getAvailableTranslatedLanguageVariants(language).forEach((translatedLanguage) => {
+    params.append("translatedLanguage[]", translatedLanguage);
+  });
+
+  const response = await fetch(`/api/mangadex/feed/${mangaId}?${params.toString()}`);
+
+  if (!response.ok) {
+    return false;
+  }
+
+  const payload = (await response.json()) as { total?: number; data?: unknown[] };
+  return (payload.total ?? payload.data?.length ?? 0) > 0;
+}
+
 export default function SearchBar() {
   const router = useRouter();
   const { language, isAdult } = useLanguage();
@@ -102,7 +121,14 @@ export default function SearchBar() {
         }
 
         const payload = (await response.json()) as MangaDexCollectionResponse;
-        setResults(payload.data ?? []);
+        const candidates = payload.data ?? [];
+        const availability = await Promise.all(
+          candidates.map(async (result) => ({
+            result,
+            hasChapters: await hasReadableChapters(result.id, language),
+          }))
+        );
+        setResults(availability.filter((entry) => entry.hasChapters).map((entry) => entry.result));
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
           return;

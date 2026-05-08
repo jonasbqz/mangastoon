@@ -7,10 +7,29 @@ import { useLanguage } from "../components/language-provider";
 import {
   appendStandardMangaDexFilters,
   fetchMangaDexStatistics,
+  getAvailableTranslatedLanguageVariants,
   mapToShowcaseItems,
   type MangaDexCollectionResponse,
   type MangaDexManga,
 } from "../utils/mangadex";
+
+async function hasReadableChapters(mangaId: string, language: "es" | "en" | "pt") {
+  const params = new URLSearchParams();
+  params.set("limit", "1");
+  params.set("order[readableAt]", "desc");
+  getAvailableTranslatedLanguageVariants(language).forEach((translatedLanguage) => {
+    params.append("translatedLanguage[]", translatedLanguage);
+  });
+
+  const response = await fetch(`/api/mangadex/feed/${mangaId}?${params.toString()}`);
+
+  if (!response.ok) {
+    return false;
+  }
+
+  const payload = (await response.json()) as { total?: number; data?: unknown[] };
+  return (payload.total ?? payload.data?.length ?? 0) > 0;
+}
 
 export default function SearchResultsContent() {
   const searchParams = useSearchParams();
@@ -52,7 +71,14 @@ export default function SearchResultsContent() {
         }
 
         const payload = (await response.json()) as MangaDexCollectionResponse;
-        const mangas = payload.data ?? [];
+        const candidates = payload.data ?? [];
+        const availability = await Promise.all(
+          candidates.map(async (manga) => ({
+            manga,
+            hasChapters: await hasReadableChapters(manga.id, language),
+          }))
+        );
+        const mangas = availability.filter((entry) => entry.hasChapters).map((entry) => entry.manga);
 
         if (cancelled) return;
 

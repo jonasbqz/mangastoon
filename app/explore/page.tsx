@@ -386,21 +386,22 @@ export default function ExplorePage() {
         }))
       );
 
-      setMangas(
-        mappedMangas
-          .map((manga) => ({
-            ...manga,
-            latestChapters:
-              chapterPreviews.find((preview) => preview.mangaDexId === manga.mangaDexId)
-                ?.latestChapters ?? [],
-          }))
-          .sort((a, b) => {
-            const aTime = new Date(a.latestChapters[0]?.publishedAt ?? 0).getTime();
-            const bTime = new Date(b.latestChapters[0]?.publishedAt ?? 0).getTime();
+      const visibleMangas = mappedMangas
+        .map((manga) => ({
+          ...manga,
+          latestChapters:
+            chapterPreviews.find((preview) => preview.mangaDexId === manga.mangaDexId)
+              ?.latestChapters ?? [],
+        }))
+        .filter((manga) => manga.latestChapters.length > 0)
+        .sort((a, b) => {
+          const aTime = new Date(a.latestChapters[0]?.publishedAt ?? 0).getTime();
+          const bTime = new Date(b.latestChapters[0]?.publishedAt ?? 0).getTime();
 
-            return bTime - aTime;
-          })
-      );
+          return bTime - aTime;
+        });
+
+      setMangas(visibleMangas);
       setTotalItems(total);
       setLastVisiblePage(Math.max(1, Math.ceil(total / 24)));
     } catch {

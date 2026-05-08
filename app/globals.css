@@ -116,6 +116,21 @@ h6 {
   display: none;
 }
 
+@keyframes soft-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-soft-enter {
+  animation: soft-enter 420ms ease-out both;
+}
+
 /* Age verification modal — shadcn-style animate-in + fade + zoom (Tailwind v4, no plugin) */
 @keyframes luxury-backdrop-enter {
   from {

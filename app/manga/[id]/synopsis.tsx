@@ -17,10 +17,10 @@ export default function SynopsisBlock({
   const isLong = content.length > 280;
 
   return (
-    <section className="mt-6 rounded-xl bg-[#141519] p-6">
+    <section className="mt-6 rounded-xl bg-[#141519] p-5 sm:p-6">
       <h2 className="text-xl font-bold text-white">{title}</h2>
       <div className="mt-4">
-        <p className={`text-sm leading-7 text-gray-300 ${!expanded && isLong ? "line-clamp-3" : ""}`}>
+        <p className={`text-base leading-[1.65] text-gray-300 ${!expanded && isLong ? "line-clamp-3" : ""}`}>
           {content}
         </p>
 

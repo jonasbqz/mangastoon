@@ -123,7 +123,7 @@ export function MangaCard({
       ? "w-[200px] md:w-[260px]"
       : "w-[140px] md:w-[190px]";
 
-  const cardLinkClass = "block";
+  const cardLinkClass = "block relative h-full w-full";
   const cardHref = href;
   const isInternal = Boolean(manga.mangaDexId);
 

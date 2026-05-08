@@ -6,7 +6,9 @@ import {
   fetchMangaDexCollection,
   fetchMangaDexStatistics,
   mapToShowcaseItems,
+  type MangaDexManga,
 } from "./utils/mangadex";
+import { getMangaDexRequestHeaders } from "./utils/mangadex-config";
 
 const UI_COPY: Record<
   SupportedLanguage,
@@ -138,6 +140,7 @@ async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLa
   });
 
   const response = await fetch(`https://api.mangadex.org/manga/${mangaId}/feed?${params.toString()}`, {
+    headers: getMangaDexRequestHeaders(),
     next: { revalidate: 900 },
   });
 
@@ -173,6 +176,20 @@ async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLa
         publishedAt,
       };
     });
+}
+
+async function filterMangasWithReadableChapters(
+  mangas: MangaDexManga[],
+  language: SupportedLanguage
+) {
+  const checks = await Promise.all(
+    mangas.map(async (manga) => ({
+      manga,
+      chapters: await fetchLatestChapterPreviews(manga.id, language),
+    }))
+  );
+
+  return checks.filter((entry) => entry.chapters.length > 0).map((entry) => entry.manga);
 }
 
 export default async function HomePage() {
@@ -225,20 +242,25 @@ export default async function HomePage() {
     fetchMangaDexCollection(latestUrl),
   ]);
 
+  const [topTodayData, topManhwasData, worldTopData, latestData] = await Promise.all([
+    filterMangasWithReadableChapters(topTodayResponse.data, currentLanguage),
+    filterMangasWithReadableChapters(topManhwasResponse.data, currentLanguage),
+    filterMangasWithReadableChapters(worldTopResponse.data, currentLanguage),
+    filterMangasWithReadableChapters(latestResponse.data, currentLanguage),
+  ]);
+
   const uniqueIds = Array.from(
     new Set(
-      [...topTodayResponse.data, ...topManhwasResponse.data, ...worldTopResponse.data, ...latestResponse.data].map(
-        (manga) => manga.id
-      )
+      [...topTodayData, ...topManhwasData, ...worldTopData, ...latestData].map((manga) => manga.id)
     )
   );
 
   const statistics = await fetchMangaDexStatistics(uniqueIds);
 
-  const topToday = mapToShowcaseItems(topTodayResponse.data, statistics, currentLanguage);
-  const topManhwas = mapToShowcaseItems(topManhwasResponse.data, statistics, currentLanguage);
-  const worldTop = mapToShowcaseItems(worldTopResponse.data, statistics, currentLanguage);
-  const latestBase = mapToShowcaseItems(latestResponse.data, statistics, currentLanguage);
+  const topToday = mapToShowcaseItems(topTodayData, statistics, currentLanguage);
+  const topManhwas = mapToShowcaseItems(topManhwasData, statistics, currentLanguage);
+  const worldTop = mapToShowcaseItems(worldTopData, statistics, currentLanguage);
+  const latestBase = mapToShowcaseItems(latestData, statistics, currentLanguage);
   const latestChapterPreviews = await Promise.all(
     latestBase.map(async (manga) => ({
       mangaDexId: manga.mangaDexId,
