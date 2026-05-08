@@ -561,6 +561,12 @@ export default function ReadPage() {
     lastScrollYRef.current = window.scrollY;
 
     function handleScroll() {
+      if (window.innerWidth < 768) {
+        setReaderToolsAutoVisible(true);
+        lastScrollYRef.current = window.scrollY;
+        return;
+      }
+
       const currentY = window.scrollY;
       const delta = currentY - lastScrollYRef.current;
 
@@ -775,7 +781,7 @@ export default function ReadPage() {
           animate={{ opacity: 1, x: 0, scale: 1 }}
           exit={{ opacity: 0, x: 18, scale: 0.96 }}
           transition={{ duration: 0.22 }}
-          className="fixed bottom-20 left-1/2 z-50 flex -translate-x-1/2 flex-row gap-2 rounded-full border border-white/10 bg-[#141519]/88 p-2 shadow-2xl shadow-black/45 backdrop-blur-xl md:bottom-auto md:left-auto md:right-4 md:top-1/2 md:-translate-x-0 md:-translate-y-1/2 md:flex-col md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0"
+          className="fixed bottom-[calc(env(safe-area-inset-bottom)+5rem)] left-1/2 z-50 flex -translate-x-1/2 flex-row gap-2 rounded-full border border-white/10 bg-[#141519]/88 p-2 shadow-2xl shadow-black/45 backdrop-blur-xl md:bottom-auto md:left-auto md:right-4 md:top-1/2 md:-translate-x-0 md:-translate-y-1/2 md:flex-col md:rounded-none md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-0"
         >
         <ToolButton title={dictionary.hideControls} onClick={() => setShowReaderTools(false)}>
           <EyeOff className="h-5 w-5" />
@@ -832,7 +838,7 @@ export default function ReadPage() {
       )}
       </AnimatePresence>
 
-      <div className="fixed bottom-3 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-[#141519]/88 px-2 py-2 shadow-2xl shadow-black/45 backdrop-blur-xl md:hidden">
+      <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+0.75rem)] left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-[#141519]/88 px-2 py-2 shadow-2xl shadow-black/45 backdrop-blur-xl md:hidden">
         <motion.button
           type="button"
           whileTap={{ scale: 0.9 }}

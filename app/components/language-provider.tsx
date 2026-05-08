@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 
 export type SupportedLanguage = "es" | "en" | "pt";
 
@@ -34,17 +35,35 @@ function normalizeLanguage(value: string | null | undefined): SupportedLanguage 
 }
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
   const [language, setLanguageState] = useState<SupportedLanguage>("es");
   const [isAdult, setIsAdult] = useState(false);
 
   useEffect(() => {
     const storedLanguage = normalizeLanguage(window.localStorage.getItem(STORAGE_KEY));
     const storedAdult = window.localStorage.getItem(ADULT_STORAGE_KEY) === "true";
+    const currentCookies = `; ${document.cookie}`;
+    const currentLanguageCookie = currentCookies
+      .split(`; ${COOKIE_NAME}=`)
+      .pop()
+      ?.split(";")[0];
+    const currentAdultCookie = currentCookies
+      .split(`; ${ADULT_COOKIE_NAME}=`)
+      .pop()
+      ?.split(";")[0];
+    const shouldRefresh =
+      normalizeLanguage(currentLanguageCookie) !== storedLanguage ||
+      (currentAdultCookie === "true") !== storedAdult;
+
     setLanguageState(storedLanguage);
     setIsAdult(storedAdult);
     document.cookie = `${COOKIE_NAME}=${storedLanguage}; path=/; max-age=31536000; samesite=lax`;
     document.cookie = `${ADULT_COOKIE_NAME}=${storedAdult}; path=/; max-age=31536000; samesite=lax`;
-  }, []);
+
+    if (shouldRefresh) {
+      router.refresh();
+    }
+  }, [router]);
 
   const value = useMemo<LanguageContextValue>(
     () => ({

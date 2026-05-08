@@ -21,7 +21,9 @@ async function hasReadableChapters(mangaId: string, language: "es" | "en" | "pt"
     params.append("translatedLanguage[]", translatedLanguage);
   });
 
-  const response = await fetch(`/api/mangadex/feed/${mangaId}?${params.toString()}`);
+  const response = await fetch(`/api/mangadex/feed/${mangaId}?${params.toString()}`, {
+    cache: "no-store",
+  });
 
   if (!response.ok) {
     return false;

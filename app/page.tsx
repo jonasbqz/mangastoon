@@ -141,7 +141,7 @@ async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLa
 
   const response = await fetch(`https://api.mangadex.org/manga/${mangaId}/feed?${params.toString()}`, {
     headers: getMangaDexRequestHeaders(),
-    next: { revalidate: 900 },
+    cache: "no-store",
   });
 
   if (!response.ok) {
@@ -149,9 +149,11 @@ async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLa
   }
 
   const payload = (await response.json()) as {
+    total?: number;
     data?: Array<{
       attributes?: {
         chapter?: string | null;
+        translatedLanguage?: string | null;
         readableAt?: string | null;
         publishAt?: string | null;
         updatedAt?: string | null;
@@ -159,8 +161,14 @@ async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLa
       };
     }>;
   };
+  const allowedLanguages = new Set(getChapterLanguageVariants(language));
+
+  if ((payload.total ?? 0) <= 0) {
+    return [];
+  }
 
   return (payload.data ?? [])
+    .filter((chapter) => allowedLanguages.has(chapter.attributes?.translatedLanguage ?? ""))
     .slice(0, 2)
     .map((chapter) => {
       const publishedAt =

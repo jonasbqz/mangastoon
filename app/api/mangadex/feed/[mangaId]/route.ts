@@ -1,7 +1,8 @@
 ﻿import { NextRequest, NextResponse } from "next/server";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../../utils/mangadex-config";
 
-export const revalidate = 900;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const RETRY_DELAY_MS = 1200;
 
@@ -12,7 +13,7 @@ function wait(ms: number) {
 async function fetchWithRetry(url: string, retries = 1) {
   const response = await fetch(url, {
     headers: getMangaDexRequestHeaders(),
-    next: { revalidate: 900 },
+    cache: "no-store",
   });
 
   if (response.status === 429 && retries > 0) {
@@ -40,7 +41,7 @@ export async function GET(
       status: response.status,
       headers: {
         "content-type": response.headers.get("content-type") ?? "application/json",
-        "cache-control": "s-maxage=900, stale-while-revalidate=3600",
+        "cache-control": "no-store",
       },
     });
   } catch {
