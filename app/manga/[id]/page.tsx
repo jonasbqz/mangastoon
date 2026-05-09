@@ -586,8 +586,25 @@ export default async function MangaDetailsPage({
     };
   });
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ComicSeries",
+    name: displayTitle,
+    description,
+    author: {
+      "@type": "Person",
+      name: authorName !== copy.noAuthor ? authorName : "An?nimo",
+    },
+    image: coverUrl || "",
+    inLanguage: currentLanguage,
+  };
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <SiteHeader language={currentLanguage} />
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-5 md:px-6 md:py-8 lg:px-8">
