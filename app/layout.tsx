@@ -41,6 +41,9 @@ export const metadata: Metadata = {
     siteName: "MangaStoon",
     type: "website",
   },
+  other: {
+    monetag: "4022d02a52caca255fe36d90c0a054af",
+  },
 };
 
 export default function RootLayout({
