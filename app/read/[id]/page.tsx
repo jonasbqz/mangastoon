@@ -735,6 +735,7 @@ export default function ReadPage() {
     <main
       className="min-h-screen bg-[#0a0a0c] px-4 pb-10 pt-2 text-white sm:px-4 md:px-6 md:pt-3"
     >
+      {/* Anuncio Vignette de Monetag */}
       <Script id="monetag-vignette" src="https://dd133.com/vignette.min.js" data-zone="10986315" strategy="afterInteractive" />
 
       <AnimatePresence>

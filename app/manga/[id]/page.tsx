@@ -603,13 +603,41 @@ export default async function MangaDetailsPage({
     inLanguage: currentLanguage,
   };
 
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Inicio",
+        "item": siteUrl
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": "Explorar",
+        "item": `${siteUrl}/explore`
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": displayTitle,
+        "item": `${siteUrl}/manga/${manga.id}`
+      }
+    ]
+  };
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* Anuncio Vignette de Monetag */}
       <Script id="monetag-vignette" src="https://dd133.com/vignette.min.js" data-zone="10986315" strategy="afterInteractive" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <SiteHeader language={currentLanguage} />
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-5 md:px-6 md:py-8 lg:px-8">
