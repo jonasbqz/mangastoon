@@ -3,6 +3,7 @@
 import { jsPDF } from "jspdf";
 import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Download, Eye, EyeOff, List } from "lucide-react";
@@ -734,6 +735,7 @@ export default function ReadPage() {
     <main
       className="min-h-screen bg-[#0a0a0c] px-4 pb-10 pt-2 text-white sm:px-4 md:px-6 md:pt-3"
     >
+      <Script id="monetag-vignette" src="https://dd133.com/vignette.min.js" data-zone="10986315" strategy="afterInteractive" />
 
       <AnimatePresence>
         {isReaderUiVisible ? (

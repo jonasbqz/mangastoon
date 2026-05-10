@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import Image from "next/image";
+import Script from "next/script";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowDown, BookOpen, CalendarDays } from "lucide-react";
@@ -96,6 +97,7 @@ export async function generateMetadata({
       return {
         title: "Manga",
         description: "Lee este manga en MangaStoon.",
+        alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL}/manga/${id}` },
       };
     }
 
@@ -122,6 +124,7 @@ export async function generateMetadata({
     return {
       title,
       description,
+      alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL}/manga/${id}` },
       openGraph: {
         title: `${title} | MangaStoon`,
         description,
@@ -132,6 +135,7 @@ export async function generateMetadata({
     return {
       title: "Manga",
       description: "Lee este manga en MangaStoon.",
+      alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL}/manga/${id}` },
     };
   }
 }
@@ -601,6 +605,7 @@ export default async function MangaDetailsPage({
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
+      <Script id="monetag-vignette" src="https://dd133.com/vignette.min.js" data-zone="10986315" strategy="afterInteractive" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

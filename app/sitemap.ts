@@ -14,7 +14,7 @@ type MangaDexSitemapResponse = {
 
 async function getTopMangaRoutes(): Promise<MetadataRoute.Sitemap> {
   const params = new URLSearchParams();
-  params.set("limit", "50");
+  params.set("limit", "100");
   params.set("hasAvailableChapters", "true");
   params.set("order[followedCount]", "desc");
   params.append("contentRating[]", "safe");

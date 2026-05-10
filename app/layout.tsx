@@ -4,7 +4,6 @@ import AppFeedback from "./components/app-feedback";
 import Footer from "./components/Footer";
 import { LanguageProvider } from "./components/language-provider";
 import "./globals.css";
-import Script from "next/script";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
@@ -63,13 +62,6 @@ export default function RootLayout({
           <Footer />
           <AppFeedback />
         </LanguageProvider>
-        {/* Anuncio Vignette de Monetag */}
-        <Script
-          id="monetag-vignette"
-          src="https://dd133.com/vignette.min.js"
-          data-zone="10986315"
-          strategy="afterInteractive"
-        />
       </body>
     </html>
   );
