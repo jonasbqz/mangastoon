@@ -179,12 +179,20 @@ function normalizeReaderLanguage(value: string | null, fallback: SupportedLangua
   return fallback;
 }
 
-async function fetchChapterPages(chapterId: string) {
+async function fetchChapterPages(
+  chapterId: string,
+  context?: { mangaTitle?: string; chapter?: ChapterFeedItem | null }
+) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), READER_REQUEST_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`/api/read/chapter/${chapterId}`, { signal: controller.signal, cache: "no-store" });
+    const search = new URLSearchParams();
+    if (context?.mangaTitle) search.set("mangaTitle", context.mangaTitle);
+    if (context?.chapter?.attributes?.title) search.set("chapterTitle", context.chapter.attributes.title);
+    if (context?.chapter?.attributes?.chapter) search.set("chapterNumber", context.chapter.attributes.chapter);
+    const query = search.toString();
+    const response = await fetch(`/api/read/chapter/${chapterId}${query ? `?${query}` : ""}`, { signal: controller.signal, cache: "no-store" });
 
     if (!response.ok) {
       throw new Error("Failed to fetch chapter pages.");
@@ -649,7 +657,7 @@ export default function ReadPage() {
 
       for (const chapter of chaptersToExport) {
         const chapterPages =
-          chapter.id === currentChapter.id ? pages : await fetchChapterPages(chapter.id);
+          chapter.id === currentChapter.id ? pages : await fetchChapterPages(chapter.id, { mangaTitle, chapter });
 
         for (const pageUrl of chapterPages) {
           const image = await loadImageForPdf(pageUrl);

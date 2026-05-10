@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../utils/mangadex-config";
+import {
+  buildMonlineChapterSegments,
+  fetchMonlinePagesFromRoute,
+  toMonlineSegment,
+  uniqueNonEmpty,
+} from "../../../utils/monline";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -28,6 +34,7 @@ type MangaDetailsResponse = {
   data?: {
     attributes?: {
       title?: Record<string, string>;
+      altTitles?: Record<string, string>[];
     };
   };
 };
@@ -102,15 +109,22 @@ function buildFeedUrl(mangaId: string, lang: SupportedLanguage, limit: number, o
   return `https://api.mangadex.org/manga/${mangaId}/feed?${search.toString()}`;
 }
 
-async function fetchMangaTitle(mangaId: string) {
+async function fetchMangaIdentity(mangaId: string) {
   const response = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}`);
 
-  if (!response.ok) return "Mangastoon";
+  if (!response.ok) return { title: "Mangastoon", segments: ["mangastoon"] };
 
   const payload = (await response.json()) as MangaDetailsResponse;
-  const titles = payload.data?.attributes?.title ?? {};
+  const attributes = payload.data?.attributes;
+  const titles = attributes?.title ?? {};
+  const title = titles.en ?? titles.es ?? titles["es-la"] ?? titles.pt ?? Object.values(titles)[0] ?? "Mangastoon";
+  const mainTitles = Object.values(titles);
+  const altTitles = (attributes?.altTitles ?? []).flatMap((titleMap) => Object.values(titleMap));
 
-  return titles.en ?? titles.es ?? titles["es-la"] ?? titles.pt ?? Object.values(titles)[0] ?? "Mangastoon";
+  return {
+    title,
+    segments: uniqueNonEmpty([title, ...mainTitles, ...altTitles].map(toMonlineSegment)),
+  };
 }
 
 async function fetchAllChapters(mangaId: string, lang: SupportedLanguage) {
@@ -136,7 +150,19 @@ async function fetchAllChapters(mangaId: string, lang: SupportedLanguage) {
   return chapters;
 }
 
-async function fetchChapterPages(chapterId: string) {
+async function fetchChapterPages(
+  chapterId: string,
+  options?: { mangaSegments?: string[]; chapter?: ChapterFeedItem | null }
+) {
+  const monlinePages = await fetchMonlinePagesFromRoute({
+    mangaSegments: options?.mangaSegments ?? [],
+    chapterSegments: buildMonlineChapterSegments(options?.chapter ?? { id: chapterId }),
+  });
+
+  if (monlinePages.length > 0) {
+    return monlinePages;
+  }
+
   // Si no es un UUID de MangaDex, significa que viene de Consumet
   const isMangaDexUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chapterId);
 
@@ -167,7 +193,8 @@ async function fetchChapterPages(chapterId: string) {
 
 async function findReadableChapterWithPages(
   chapters: ChapterFeedItem[],
-  preferredChapter: ChapterFeedItem | null
+  preferredChapter: ChapterFeedItem | null,
+  mangaSegments: string[]
 ) {
   const preferredIndex = preferredChapter
     ? chapters.findIndex((chapter) => chapter.id === preferredChapter.id)
@@ -187,7 +214,7 @@ async function findReadableChapterWithPages(
     seen.add(chapter.id);
 
     try {
-      const pages = await fetchChapterPages(chapter.id);
+      const pages = await fetchChapterPages(chapter.id, { mangaSegments, chapter });
 
       if (pages.length > 0) {
         return { chapter, pages };
@@ -239,11 +266,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const chapterId = request.nextUrl.searchParams.get("chapter");
 
   try {
-    const [mangaTitle, chapters, requestedChapter] = await Promise.all([
-      fetchMangaTitle(id),
+    const [mangaIdentity, chapters, requestedChapter] = await Promise.all([
+      fetchMangaIdentity(id),
       fetchAllChapters(id, lang),
       chapterId ? fetchChapterDetails(chapterId) : Promise.resolve(null),
     ]);
+    const mangaTitle = mangaIdentity.title;
+    const mangaSegments = mangaIdentity.segments;
 
     let finalChapters = chapters;
     let isExternalSource = false;
@@ -286,7 +315,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     currentChapter = currentChapter ?? finalChapters[0] ?? null;
     const readableChapter = isExternalSource
       ? { chapter: currentChapter, pages: [] }
-      : await findReadableChapterWithPages(finalChapters, currentChapter);
+      : await findReadableChapterWithPages(finalChapters, currentChapter, mangaSegments);
     currentChapter = readableChapter.chapter;
     const pages = readableChapter.pages;
 

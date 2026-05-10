@@ -3,16 +3,16 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Script from "next/script";
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { ArrowDown, BookOpen, CalendarDays } from "lucide-react";
 import BackButton from "../../components/BackButton";
 import ContinueReadingButton from "../../components/ContinueReadingButton";
 import FavoriteButton from "../../components/FavoriteButton";
 import SiteHeader, { type SupportedLanguage } from "../../components/site-header";
 import SynopsisBlock from "./synopsis";
-import { getLocalizedTitle } from "../../utils/get-localized-title";
+import { getLocalizedTitle, getLocalizedTitleAsync } from "../../utils/get-localized-title";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../utils/mangadex-config";
 import { translateTagName } from "../../utils/tagTranslations";
+import { forceTranslate } from "../../utils/translation";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -83,6 +83,76 @@ type ChapterLanguageFallback = {
   firstChapter: ChapterFeedItem | null;
 };
 
+type MangaDetails = NonNullable<MangaDetailsResponse["data"]>;
+type OriginalContentDictionary = Pick<(typeof UI_COPY)[SupportedLanguage], "noSynopsis">;
+
+function cleanSynopsisText(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  return value
+    .replace(/\[(?:\/)?(?:b|i|u|s|hr|center|quote|spoiler|list|\*)\]/gi, " ")
+    .replace(/\[(?:url|img|color|size|font)(?:=[^\]]*)?\]/gi, " ")
+    .replace(/\[\/\w+\]/g, " ")
+    .replace(/\r?\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+async function translateEnglishSynopsis(text: string, targetLang: SupportedLanguage) {
+  const cleanText = cleanSynopsisText(text);
+
+  if (!cleanText) {
+    return "";
+  }
+
+  return targetLang === "en"
+    ? cleanText
+    : cleanSynopsisText(await forceTranslate(cleanText, targetLang));
+}
+
+async function getOriginalContent(
+  manga: MangaDetails | null | undefined,
+  lang: SupportedLanguage,
+  dict: OriginalContentDictionary
+) {
+  const descriptionMap = manga?.attributes?.description ?? {};
+  const directDescription = cleanSynopsisText(
+    lang === "es"
+      ? descriptionMap.es ?? descriptionMap["es-la"]
+      : lang === "pt"
+        ? descriptionMap.pt ?? descriptionMap["pt-br"]
+        : descriptionMap.en
+  );
+
+  if (directDescription) {
+    return directDescription;
+  }
+
+  const englishDescription = cleanSynopsisText(descriptionMap.en);
+
+  if (englishDescription) {
+    return translateEnglishSynopsis(englishDescription, lang);
+  }
+
+  const genres = (manga?.attributes?.tags ?? [])
+    .filter((tag) => tag.attributes?.group === "genre")
+    .map((tag) => translateTagName(getLocalizedTagName(tag, lang), lang))
+    .filter(Boolean)
+    .slice(0, 5);
+
+  if (genres.length > 0) {
+    return lang === "pt"
+      ? `Sinopse não disponível. Gêneros: ${genres.join(", ")}.`
+      : lang === "en"
+        ? `Synopsis unavailable. Genres: ${genres.join(", ")}.`
+        : `Sinopsis no disponible. Géneros: ${genres.join(", ")}.`;
+  }
+
+  return dict.noSynopsis;
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -103,18 +173,13 @@ export async function generateMetadata({
 
     const payload = (await response.json()) as MangaDetailsResponse;
     const manga = payload.data;
-    const title =
-      manga?.attributes?.title?.en ??
-      manga?.attributes?.title?.["es-la"] ??
-      manga?.attributes?.title?.es ??
-      "Manga";
-    const rawDescription =
-      manga?.attributes?.description?.es ??
-      manga?.attributes?.description?.["es-la"] ??
-      manga?.attributes?.description?.en ??
-      "Lee este manga en MangaStoon.";
+    const metadataLanguage: SupportedLanguage = "es";
+    const title = manga ? await getLocalizedTitleAsync(manga, metadataLanguage) : "Manga";
+    const originalContent = (await getOriginalContent(manga, metadataLanguage, UI_COPY[metadataLanguage]))
+      .replace(/\s+/g, " ")
+      .trim();
     const description =
-      rawDescription.length > 150 ? `${rawDescription.slice(0, 150)}...` : rawDescription;
+      originalContent.length > 155 ? `${originalContent.slice(0, 155)}...` : originalContent;
     const coverArt = manga?.relationships?.find((relationship) => relationship.type === "cover_art");
     const coverFileName = coverArt?.attributes?.fileName;
     const imageUrl = coverFileName
@@ -122,11 +187,13 @@ export async function generateMetadata({
       : "";
 
     return {
-      title,
+      title: `Leer ${title} Manga Online Gratis - MangaStoon`,
       description,
-      alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL}/manga/${id}` },
+      alternates: {
+        canonical: `${process.env.NEXT_PUBLIC_SITE_URL}/manga/${id}`,
+      },
       openGraph: {
-        title: `${title} | MangaStoon`,
+        title: `Leer ${title} Manga Online Gratis - MangaStoon`,
         description,
         images: imageUrl ? [{ url: imageUrl }] : [],
       },
@@ -414,6 +481,10 @@ async function fetchMangaDetails(id: string) {
     }
 
     const payload = (await response.json()) as MangaDetailsResponse;
+    if (!payload.data) {
+      console.warn(`[MangaStoon] MangaDex devolvió detalles vacíos para manga ${id}`);
+    }
+
     return payload.data ?? null;
   } catch {
     return null;
@@ -529,6 +600,45 @@ async function fetchConsumetChaptersFallback(title: string) {
   }
 }
 
+function MangaMaintenance({ language }: { language: SupportedLanguage }) {
+  const copy = {
+    es: {
+      title: "Manga en mantenimiento",
+      body: "No pudimos cargar los datos de este manga ahora mismo. Puede que MangaDex o la fuente externa esté respondiendo vacío temporalmente.",
+      action: "Volver a explorar",
+    },
+    en: {
+      title: "Manga under maintenance",
+      body: "We could not load this manga data right now. MangaDex or the external source may be returning empty data temporarily.",
+      action: "Back to explore",
+    },
+    pt: {
+      title: "Mangá em manutenção",
+      body: "Não conseguimos carregar os dados deste mangá agora. MangaDex ou a fonte externa pode estar retornando dados vazios temporariamente.",
+      action: "Voltar para explorar",
+    },
+  }[language];
+
+  return (
+    <main className="min-h-screen bg-[#0a0a0a] text-white">
+      <SiteHeader language={language} />
+      <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center px-4 text-center">
+        <div className="rounded-3xl border border-white/10 bg-[#141519] p-8 shadow-2xl shadow-black/30">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-500">MangaStoon</p>
+          <h1 className="mt-4 text-2xl font-semibold text-white">{copy.title}</h1>
+          <p className="mt-3 text-base leading-7 text-gray-400">{copy.body}</p>
+          <Link
+            href="/explore"
+            className="mt-6 inline-flex rounded-full bg-orange-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-orange-400"
+          >
+            {copy.action}
+          </Link>
+        </div>
+      </div>
+    </main>
+  );
+}
+
 export default async function MangaDetailsPage({
   params,
 }: {
@@ -545,10 +655,13 @@ export default async function MangaDetailsPage({
   ]);
 
   if (!manga) {
-    notFound();
+    return <MangaMaintenance language={currentLanguage} />;
   }
 
-  const displayTitle = getLocalizedTitle(manga, currentLanguage);
+  const displayTitle = await getLocalizedTitleAsync(manga, currentLanguage);
+  if (displayTitle === "Título Desconocido") {
+    console.warn(`[MangaStoon] Manga sin título utilizable: ${manga.id}`);
+  }
   let chapters = initialChapters;
 
   // Si MangaDex no tiene cap?tulos, inyectamos los de Consumet en la UI
@@ -562,14 +675,13 @@ export default async function MangaDetailsPage({
   const bestFallbackLanguage =
     chapters.length === 0 ? await findBestChapterLanguageFallback(id, currentLanguage) : null;
 
-  const description =
-    getLocalizedDescription(manga.attributes?.description, currentLanguage) ?? copy.noSynopsis;
   const tags = (manga.attributes?.tags ?? [])
     .filter((tag) => tag.attributes?.group === "genre")
     .map((tag) => ({
     id: tag.id,
     name: translateTagName(getLocalizedTagName(tag, currentLanguage), currentLanguage),
   }));
+  const description = await getOriginalContent(manga, currentLanguage, copy);
   const isExplicitContent =
     manga.attributes?.contentRating === "erotica" ||
     manga.attributes?.contentRating === "pornographic" ||

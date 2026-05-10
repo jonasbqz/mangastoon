@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../../utils/mangadex-config";
+import { fetchMonlinePagesFromRoute, toMonlineSegment, uniqueNonEmpty } from "../../../../utils/monline";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,11 +46,26 @@ async function fetchMangaDex(url: string, retries = 1) {
   return response;
 }
 
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ chapterId: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ chapterId: string }> }) {
   const { chapterId } = await params;
+  const mangaSegments = uniqueNonEmpty([
+    ...request.nextUrl.searchParams.getAll("mangaSegment"),
+    toMonlineSegment(request.nextUrl.searchParams.get("mangaTitle")),
+  ]);
+  const chapterSegments = uniqueNonEmpty([
+    ...request.nextUrl.searchParams.getAll("chapterSegment"),
+    toMonlineSegment(request.nextUrl.searchParams.get("chapterTitle")),
+    toMonlineSegment(request.nextUrl.searchParams.get("chapterNumber")),
+    toMonlineSegment(chapterId),
+  ]);
+  const monlinePages = await fetchMonlinePagesFromRoute({ mangaSegments, chapterSegments });
+
+  if (monlinePages.length > 0) {
+    return NextResponse.json({ pages: monlinePages }, { headers: { "Cache-Control": "no-store" } });
+  }
 
   // Si no es un UUID de MangaDex, significa que viene de Consumet
-  const isMangaDexUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chapterId);
+  const isMangaDexUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chapterId);
 
   if (!isMangaDexUuid) {
     try {
