@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import Image from "next/image";
+import Script from "next/script";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowDown, BookOpen, CalendarDays } from "lucide-react";
@@ -505,6 +506,29 @@ async function findBestChapterLanguageFallback(
     .sort((a, b) => b.total - a.total)[0] ?? null;
 }
 
+async function fetchConsumetChaptersFallback(title: string) {
+  try {
+    const searchRes = await fetch(`https://consumet-api-one.vercel.app/manga/manganato/${encodeURIComponent(title)}`);
+    const searchData = await searchRes.json();
+    const mangaId = searchData.results?.[0]?.id;
+    if (!mangaId) return [];
+
+    const infoRes = await fetch(`https://consumet-api-one.vercel.app/manga/manganato/info?id=${mangaId}`);
+    const infoData = await infoRes.json();
+
+    return infoData.chapters?.map((ch: any) => ({
+      id: ch.id,
+      attributes: {
+        chapter: ch.number?.toString() || ch.title?.match(/\d+/)?.[0] || "1",
+        title: ch.title,
+        translatedLanguage: "es"
+      }
+    })) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
 export default async function MangaDetailsPage({
   params,
 }: {
@@ -515,7 +539,7 @@ export default async function MangaDetailsPage({
   const currentLanguage = normalizeLanguage(cookieStore.get("lang")?.value);
   const copy = UI_COPY[currentLanguage];
 
-  const [manga, chapters] = await Promise.all([
+  const [manga, initialChapters] = await Promise.all([
     fetchMangaDetails(id),
     fetchMangaChapters(id, currentLanguage),
   ]);
@@ -524,10 +548,20 @@ export default async function MangaDetailsPage({
     notFound();
   }
 
+  const displayTitle = getLocalizedTitle(manga, currentLanguage);
+  let chapters = initialChapters;
+
+  // Si MangaDex no tiene cap?tulos, inyectamos los de Consumet en la UI
+  if (chapters.length === 0) {
+    const fallbackChapters = await fetchConsumetChaptersFallback(displayTitle);
+    if (fallbackChapters.length > 0) {
+      chapters = fallbackChapters;
+    }
+  }
+
   const bestFallbackLanguage =
     chapters.length === 0 ? await findBestChapterLanguageFallback(id, currentLanguage) : null;
 
-  const displayTitle = getLocalizedTitle(manga, currentLanguage);
   const description =
     getLocalizedDescription(manga.attributes?.description, currentLanguage) ?? copy.noSynopsis;
   const tags = (manga.attributes?.tags ?? [])
@@ -630,6 +664,8 @@ export default async function MangaDetailsPage({
 
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
+      {/* Anuncio Vignette de Monetag */}
+      <Script id="monetag-vignette" src="https://dd133.com/vignette.min.js" data-zone="10986315" strategy="afterInteractive" />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}

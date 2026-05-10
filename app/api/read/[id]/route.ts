@@ -4,6 +4,8 @@ import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../utils/mang
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const CONSUMET_API_URL = "https://consumet-api-one.vercel.app/manga/manganato";
+
 type SupportedLanguage = "es" | "en" | "pt";
 
 type ChapterFeedItem = {
@@ -135,6 +137,16 @@ async function fetchAllChapters(mangaId: string, lang: SupportedLanguage) {
 }
 
 async function fetchChapterPages(chapterId: string) {
+  // Si no es un UUID de MangaDex, significa que viene de Consumet
+  const isMangaDexUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chapterId);
+
+  if (!isMangaDexUuid) {
+    const res = await fetch(`https://consumet-api-one.vercel.app/manga/manganato/read?chapterId=${chapterId}`);
+    if (!res.ok) throw new Error("CONSUMET_FAILED");
+    const data = await res.json();
+    return data?.map((p: any) => p.img) || [];
+  }
+
   const response = await fetchMangaDex(`https://api.mangadex.org/at-home/server/${chapterId}`);
 
   if (!response.ok) {
@@ -233,7 +245,19 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       chapterId ? fetchChapterDetails(chapterId) : Promise.resolve(null),
     ]);
 
-    let currentChapter = chapters.find((chapter) => chapter.id === chapterId) ?? null;
+    let finalChapters = chapters;
+    let isExternalSource = false;
+
+    // Si MangaDex no devolvi? cap?tulos, intentamos con Consumet
+    if (finalChapters.length === 0) {
+      const backupChapters = await fetchConsumetChapters(mangaTitle);
+      if (backupChapters && backupChapters.length > 0) {
+        finalChapters = backupChapters;
+        isExternalSource = true;
+      }
+    }
+
+    let currentChapter = finalChapters.find((chapter) => chapter.id === chapterId) ?? null;
 
     if (!currentChapter && requestedChapter?.attributes?.chapter) {
       currentChapter = await findChapterByNumber(id, lang, requestedChapter.attributes.chapter);
@@ -249,7 +273,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json(
         {
           mangaTitle,
-          chapters,
+          chapters: finalChapters,
           currentChapter: requestedChapter,
           pages: [],
           englishFallbackChapter,
@@ -259,13 +283,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       );
     }
 
-    currentChapter = currentChapter ?? chapters[0] ?? null;
-    const readableChapter = await findReadableChapterWithPages(chapters, currentChapter);
+    currentChapter = currentChapter ?? finalChapters[0] ?? null;
+    const readableChapter = isExternalSource
+      ? { chapter: currentChapter, pages: [] }
+      : await findReadableChapterWithPages(finalChapters, currentChapter);
     currentChapter = readableChapter.chapter;
     const pages = readableChapter.pages;
 
     return NextResponse.json(
-      { mangaTitle, chapters, currentChapter, pages, englishFallbackChapter: null, fallbackReason: null },
+      { mangaTitle, chapters: finalChapters, currentChapter, pages, englishFallbackChapter: null, fallbackReason: null, isExternalSource },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
@@ -281,5 +307,33 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=86400" },
       }
     );
+  }
+}
+
+async function fetchConsumetChapters(title: string) {
+  try {
+    // Paso 1: Buscar el manga por t?tulo para obtener su ID en Manganato
+    const searchRes = await fetch(`${CONSUMET_API_URL}/${encodeURIComponent(title)}`);
+    const searchData = await searchRes.json();
+    const mangaId = searchData.results?.[0]?.id;
+
+    if (!mangaId) return null;
+
+    // Paso 2: Obtener la lista de cap?tulos usando ese ID
+    const infoRes = await fetch(`https://consumet-api-one.vercel.app/manga/manganato/info?id=${mangaId}`);
+    const infoData = await infoRes.json();
+    
+    return infoData.chapters?.map((ch: any) => ({
+      id: ch.id,
+      attributes: {
+        chapter: ch.number?.toString() || ch.title?.match(/\d+/)?.[0] || "1",
+        title: ch.title,
+        translatedLanguage: "es" // Lo marcamos como es para que el front lo acepte
+      },
+      isConsumet: true // Bandera para saber que viene de fuente externa
+    })) || [];
+  } catch (e) {
+    console.error("Error en Consumet Fallback:", e);
+    return null;
   }
 }

@@ -48,6 +48,21 @@ async function fetchMangaDex(url: string, retries = 1) {
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ chapterId: string }> }) {
   const { chapterId } = await params;
 
+  // Si no es un UUID de MangaDex, significa que viene de Consumet
+  const isMangaDexUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chapterId);
+
+  if (!isMangaDexUuid) {
+    try {
+      const res = await fetch(`https://consumet-api-one.vercel.app/manga/manganato/read?chapterId=${chapterId}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const pages = data?.map((p: any) => p.img) || [];
+      return NextResponse.json({ pages }, { headers: { "Cache-Control": "no-store" } });
+    } catch {
+      return NextResponse.json({ pages: [], error: "No se pudieron cargar las p?ginas", code: "CONSUMET_FAILED" }, { status: 503 });
+    }
+  }
+
   try {
     const response = await fetchMangaDex(`https://api.mangadex.org/at-home/server/${chapterId}`);
 

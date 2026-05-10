@@ -1,16 +1,20 @@
-﻿import { NextResponse } from "next/server";
+﻿import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const mangaDexApiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "https://api.mangadex.org").replace(/\/$/, "");
 
-export async function GET(request: Request, context: any) {
+// Usamos 'any' en el context para que Next.js no se queje en el build
+export async function GET(_request: NextRequest, context: any) {
   const params = await context.params;
-  const id = params.id;
-  const sitemapId = parseInt(id, 10);
+  // Como la carpeta ahora se llama [id], si Google pide /sitemap/0.xml, 
+  // el valor de id será "0.xml". Le quitamos la extensión.
+  const idRaw = params?.id || "0";
+  const cleanId = idRaw.replace(".xml", "");
+  const sitemapId = parseInt(cleanId, 10);
 
-  if (isNaN(sitemapId) || sitemapId < 0 || sitemapId >= 10) {
+  if (isNaN(sitemapId) || sitemapId < 0 || sitemapId >= 200) {
     return new NextResponse("Not Found", { status: 404 });
   }
 
@@ -24,26 +28,25 @@ export async function GET(request: Request, context: any) {
   searchParams.set("order[followedCount]", "desc");
   searchParams.append("availableTranslatedLanguage[]", "es");
   searchParams.append("availableTranslatedLanguage[]", "es-la");
+  searchParams.append("availableTranslatedLanguage[]", "en");
+  searchParams.append("availableTranslatedLanguage[]", "pt");
+  searchParams.append("availableTranslatedLanguage[]", "pt-br");
 
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
 
-  // Las rutas estáticas solo van en el primer sitemap
   if (sitemapId === 0) {
     xml += `  <url>\n    <loc>${siteUrl}</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
-    xml += `  <url>\n    <loc>${siteUrl}/explore</loc>\n    <changefreq>daily</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
-    xml += `  <url>\n    <loc>${siteUrl}/favoritos</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.5</priority>\n  </url>\n`;
   }
 
   try {
     const response = await fetch(`${mangaDexApiUrl}/manga?${searchParams.toString()}`, {
       headers: { "User-Agent": "Mangastoon/1.0.0" },
-      next: { revalidate: 86400 } // Caché de 24 horas para no estresar a MangaDex
+      next: { revalidate: 86400 }
     });
 
     if (response.ok) {
       const payload = await response.json();
       const mangas = payload.data ?? [];
-
       for (const manga of mangas) {
         if (manga.id) {
           const lastMod = manga.attributes?.updatedAt ? new Date(manga.attributes.updatedAt).toISOString() : new Date().toISOString();
@@ -52,7 +55,7 @@ export async function GET(request: Request, context: any) {
       }
     }
   } catch (e) {
-    console.error("Error fetching sitemap", e);
+    console.error("Error sitemap:", e);
   }
 
   xml += `</urlset>`;
@@ -60,7 +63,7 @@ export async function GET(request: Request, context: any) {
   return new NextResponse(xml, {
     headers: {
       "Content-Type": "application/xml",
-      "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate"
+      "Cache-Control": "public, max-age=86400, s-maxage=86400"
     },
   });
 }
