@@ -5,8 +5,9 @@ export const dynamic = "force-dynamic";
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const mangaDexApiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "https://api.mangadex.org").replace(/\/$/, "");
 
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+export async function GET(request: Request, context: any) {
+  const params = await context.params;
+  const id = params.id;
   const sitemapId = parseInt(id, 10);
 
   if (isNaN(sitemapId) || sitemapId < 0 || sitemapId >= 10) {
