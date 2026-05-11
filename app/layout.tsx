@@ -22,6 +22,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   viewportFit: "cover",
+  themeColor: "#ff6b00",
 };
 
 export const metadata: Metadata = {
@@ -49,7 +50,7 @@ export const metadata: Metadata = {
   creator: SITE_NAME,
   publisher: SITE_NAME,
   alternates: {
-    canonical: "/",
+    canonical: SITE_URL,
   },
   openGraph: {
     title: {
@@ -76,8 +77,15 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     images: [SITE_IMAGE],
   },
+  manifest: "/manifest.json",
   icons: {
     icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
+  appleWebApp: {
+    capable: true,
+    title: SITE_NAME,
+    statusBarStyle: "black-translucent",
   },
   robots: {
     index: true,
@@ -92,6 +100,9 @@ export const metadata: Metadata = {
   },
   other: {
     monetag: "4022d02a52caca255fe36d90c0a054af",
+    "mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-capable": "yes",
+    "apple-mobile-web-app-title": SITE_NAME,
   },
 };
 

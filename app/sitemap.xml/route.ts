@@ -46,7 +46,7 @@ export async function GET() {
 
   for (let page = 0; page < dynamicPageCount; page += 1) {
     sitemaps.push(
-      `  <sitemap>\n    <loc>${escapeXml(`${SITE_URL}/sitemap/${page}.xml`)}</loc>\n    <lastmod>${now}</lastmod>\n  </sitemap>`
+      `  <sitemap>\n    <loc>${escapeXml(`${SITE_URL}/sitemap/${page}`)}</loc>\n    <lastmod>${now}</lastmod>\n  </sitemap>`
     );
   }
 

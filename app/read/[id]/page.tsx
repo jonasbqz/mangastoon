@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Download, Eye, EyeOff, List } from "lucide-react";
 import { SupportedLanguage, useLanguage } from "../../components/language-provider";
+import { useHistoryStore } from "../../store/useHistoryStore";
 
 type ScrollSpeed = 1 | 2 | 3;
 
@@ -43,6 +44,8 @@ type ReaderDictionary = {
   fullscreen: string;
   controls: string;
   hideControls: string;
+  nextChapterCta: string;
+  backToSeries: string;
 };
 
 type ChapterFeedItem = {
@@ -56,6 +59,7 @@ type ChapterFeedItem = {
 
 type ReaderApiResponse = {
   mangaTitle?: string;
+  coverImage?: string;
   chapters?: ChapterFeedItem[];
   currentChapter?: ChapterFeedItem | null;
   pages?: string[];
@@ -98,6 +102,8 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     fullscreen: "Pantalla completa",
     controls: "Controles",
     hideControls: "Ocultar controles",
+    nextChapterCta: "Siguiente Capítulo",
+    backToSeries: "Volver a la serie",
   },
   en: {
     reader: "Mangastoon Reader",
@@ -131,6 +137,8 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     fullscreen: "Fullscreen",
     controls: "Controls",
     hideControls: "Hide controls",
+    nextChapterCta: "Next Chapter",
+    backToSeries: "Back to series",
   },
   pt: {
     reader: "Leitor Mangastoon",
@@ -164,6 +172,8 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     fullscreen: "Tela cheia",
     controls: "Controles",
     hideControls: "Ocultar controles",
+    nextChapterCta: "Próximo Capítulo",
+    backToSeries: "Voltar para a série",
   },
 };
 
@@ -424,8 +434,10 @@ export default function ReadPage() {
   const currentChapterParam = searchParams.get("chapter");
   const readerLanguage = normalizeReaderLanguage(searchParams.get("lang"), language);
   const dictionary = UI_COPY[readerLanguage];
+  const addHistory = useHistoryStore((state) => state.addHistory);
 
   const [mangaTitle, setMangaTitle] = useState("Mangastoon");
+  const [coverImage, setCoverImage] = useState("");
   const [chapters, setChapters] = useState<ChapterFeedItem[]>([]);
   const [currentChapter, setCurrentChapter] = useState<ChapterFeedItem | null>(null);
   const [pages, setPages] = useState<string[]>([]);
@@ -491,6 +503,7 @@ export default function ReadPage() {
         const chapterPages = payload.pages ?? [];
 
         setMangaTitle(payload.mangaTitle ?? "Mangastoon");
+        setCoverImage(payload.coverImage ?? "");
         setChapters(feed);
         setCurrentChapter(selectedChapter);
         setEnglishFallbackChapter(payload.englishFallbackChapter ?? null);
@@ -565,9 +578,20 @@ export default function ReadPage() {
   }, [autoScroll, scrollSpeed]);
 
   useEffect(() => {
-    if (!currentChapter?.id || !mangaId) {
+    if (!currentChapter?.id || !mangaId || pages.length === 0) {
       return;
     }
+
+    const chapterNumber = getChapterNumber(currentChapter);
+
+    addHistory({
+      mangaId,
+      mangaTitle,
+      chapterId: currentChapter.id,
+      chapterNumber,
+      coverImage,
+      timestamp: Date.now(),
+    });
 
     try {
       const storedProgress = JSON.parse(
@@ -586,7 +610,7 @@ export default function ReadPage() {
     } catch {
       // Reading progress is a convenience feature; never block the reader if storage fails.
     }
-  }, [currentChapter, dictionary, mangaId, mangaTitle]);
+  }, [addHistory, coverImage, currentChapter, dictionary, mangaId, mangaTitle, pages.length]);
 
   const readableChapters = dedupeChaptersByNumber(chapters);
   const currentChapterIndex = findChapterIndexByIdOrNumber(
@@ -938,7 +962,7 @@ export default function ReadPage() {
             </div>
           </section>
 
-          <section className="mx-auto max-w-5xl pb-8 pt-6">
+          <section className="mx-auto max-w-5xl px-4 pb-10 pt-6">
             <ChapterNavigation
               dictionary={dictionary}
               previousChapter={previousChapter}
@@ -947,6 +971,26 @@ export default function ReadPage() {
               onNext={() => nextChapter && handleChapterNavigation(nextChapter.id)}
               onList={openChapterList}
             />
+
+            <div className="mx-auto mt-6 max-w-3xl">
+              {nextChapter ? (
+                <button
+                  type="button"
+                  onClick={() => handleChapterNavigation(nextChapter.id)}
+                  className="flex w-full items-center justify-center rounded-3xl bg-[#ff6b00] px-6 py-5 text-lg font-extrabold text-black shadow-[0_20px_60px_rgba(255,107,0,0.22)] transition hover:bg-orange-400 md:text-xl"
+                >
+                  {dictionary.nextChapterCta}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => router.push(`/manga/${mangaId}`)}
+                  className="flex w-full items-center justify-center rounded-3xl border border-[#ff6b00]/40 bg-white/5 px-6 py-5 text-lg font-bold text-[#ff6b00] transition hover:bg-[#ff6b00] hover:text-black md:text-xl"
+                >
+                  {dictionary.backToSeries}
+                </button>
+              )}
+            </div>
           </section>
 
           {showPdfModal ? (

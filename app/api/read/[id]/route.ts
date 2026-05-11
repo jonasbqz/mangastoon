@@ -32,10 +32,17 @@ type ChapterFeedResponse = {
 
 type MangaDetailsResponse = {
   data?: {
+    id?: string;
     attributes?: {
       title?: Record<string, string>;
       altTitles?: Record<string, string>[];
     };
+    relationships?: Array<{
+      type: string;
+      attributes?: {
+        fileName?: string;
+      };
+    }>;
   };
 };
 
@@ -110,9 +117,9 @@ function buildFeedUrl(mangaId: string, lang: SupportedLanguage, limit: number, o
 }
 
 async function fetchMangaIdentity(mangaId: string) {
-  const response = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}`);
+  const response = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}?includes[]=cover_art`);
 
-  if (!response.ok) return { title: "Mangastoon", segments: ["mangastoon"] };
+  if (!response.ok) return { title: "Mangastoon", coverImage: "", segments: ["mangastoon"] };
 
   const payload = (await response.json()) as MangaDetailsResponse;
   const attributes = payload.data?.attributes;
@@ -120,9 +127,12 @@ async function fetchMangaIdentity(mangaId: string) {
   const title = titles.en ?? titles.es ?? titles["es-la"] ?? titles.pt ?? Object.values(titles)[0] ?? "Mangastoon";
   const mainTitles = Object.values(titles);
   const altTitles = (attributes?.altTitles ?? []).flatMap((titleMap) => Object.values(titleMap));
+  const coverFileName = payload.data?.relationships?.find((relationship) => relationship.type === "cover_art")
+    ?.attributes?.fileName;
 
   return {
     title,
+    coverImage: coverFileName ? `https://uploads.mangadex.org/covers/${mangaId}/${coverFileName}` : "",
     segments: uniqueNonEmpty([title, ...mainTitles, ...altTitles].map(toMonlineSegment)),
   };
 }
@@ -272,6 +282,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       chapterId ? fetchChapterDetails(chapterId) : Promise.resolve(null),
     ]);
     const mangaTitle = mangaIdentity.title;
+    const coverImage = mangaIdentity.coverImage;
     const mangaSegments = mangaIdentity.segments;
 
     let finalChapters = chapters;
@@ -302,6 +313,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json(
         {
           mangaTitle,
+          coverImage,
           chapters: finalChapters,
           currentChapter: requestedChapter,
           pages: [],
@@ -320,7 +332,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const pages = readableChapter.pages;
 
     return NextResponse.json(
-      { mangaTitle, chapters: finalChapters, currentChapter, pages, englishFallbackChapter: null, fallbackReason: null, isExternalSource },
+      { mangaTitle, coverImage, chapters: finalChapters, currentChapter, pages, englishFallbackChapter: null, fallbackReason: null, isExternalSource },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (error) {
