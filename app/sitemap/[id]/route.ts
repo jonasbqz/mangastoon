@@ -1,52 +1,63 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import {
+  MANGADEX_API_URL,
+  MAX_MANGADEX_SITEMAP_PAGES,
+  SITEMAP_PAGE_SIZE,
+  absoluteUrl,
+  escapeXml,
+  xmlResponse,
+} from "../../utils/seo";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 3600;
 
-const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.mangastoon.com").replace(/\/$/, "");
-const mangaDexApiUrl = "https://api.mangadex.org";
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: idRaw = "0" } = await params;
+  const sitemapId = Number.parseInt(idRaw.replace(/\.xml$/, ""), 10);
 
-export async function GET(request: NextRequest, context: any) {
-  const resolvedParams = await context.params;
-  const idRaw = resolvedParams?.id || "0";
-  
-  // Si Google pide "0.xml", esto lo convierte en "0"
-  const cleanId = idRaw.replace(".xml", "");
-  const sitemapId = parseInt(cleanId, 10);
-
-  // Seguridad para los 200 sitemaps
-  if (isNaN(sitemapId) || sitemapId < 0 || sitemapId >= 200) {
-    return new NextResponse("Not Found", { status: 404 });
+  if (!Number.isInteger(sitemapId) || sitemapId < 0 || sitemapId >= MAX_MANGADEX_SITEMAP_PAGES) {
+    return new Response("Not Found", { status: 404 });
   }
 
-  const limit = 100;
-  const offset = sitemapId * limit;
-
   const searchParams = new URLSearchParams();
-  searchParams.set("limit", limit.toString());
-  searchParams.set("offset", offset.toString());
+  searchParams.set("limit", SITEMAP_PAGE_SIZE.toString());
+  searchParams.set("offset", (sitemapId * SITEMAP_PAGE_SIZE).toString());
   searchParams.set("hasAvailableChapters", "true");
   searchParams.append("availableTranslatedLanguage[]", "es");
   searchParams.append("availableTranslatedLanguage[]", "en");
   searchParams.append("availableTranslatedLanguage[]", "pt");
 
-  let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
+  const urls: string[] = [];
 
   try {
-    const res = await fetch(`${mangaDexApiUrl}/manga?${searchParams.toString()}`);
-    if (res.ok) {
-      const payload = await res.json();
-      const mangas = payload.data ?? [];
-      for (const manga of mangas) {
-        xml += `  <url>\n    <loc>${siteUrl}/manga/${manga.id}</loc>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
-      }
+    const response = await fetch(`${MANGADEX_API_URL}/manga?${searchParams.toString()}`, {
+      next: { revalidate: 3600 },
+    });
+
+    if (!response.ok) {
+      throw new Error(`MangaDex sitemap page failed: ${response.status}`);
     }
-  } catch (e) {
-    console.error("Error sitemap id:", sitemapId, e);
+
+    const payload = (await response.json()) as {
+      data?: Array<{ id: string; attributes?: { updatedAt?: string | null } }>;
+    };
+
+    for (const manga of payload.data ?? []) {
+      const lastmod = manga.attributes?.updatedAt
+        ? new Date(manga.attributes.updatedAt).toISOString()
+        : new Date().toISOString();
+
+      urls.push(
+        `  <url>\n    <loc>${escapeXml(absoluteUrl(`/manga/${manga.id}`))}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`
+      );
+    }
+  } catch (error) {
+    console.error("Error fetching sitemap page:", sitemapId, error);
   }
 
-  xml += `</urlset>`;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>`;
 
-  return new NextResponse(xml, {
-    headers: { "Content-Type": "application/xml" },
-  });
+  return xmlResponse(xml, 3600);
 }

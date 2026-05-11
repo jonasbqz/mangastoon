@@ -13,6 +13,7 @@ import { getLocalizedTitle, getLocalizedTitleAsync } from "../../utils/get-local
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../utils/mangadex-config";
 import { translateTagName } from "../../utils/tagTranslations";
 import { forceTranslate } from "../../utils/translation";
+import { SITE_IMAGE, SITE_NAME, absoluteUrl } from "../../utils/seo";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -167,7 +168,7 @@ export async function generateMetadata({
       return {
         title: "Manga",
         description: "Lee este manga en MangaStoon.",
-        alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL}/manga/${id}` },
+        alternates: { canonical: absoluteUrl(`/manga/${id}`) },
       };
     }
 
@@ -184,25 +185,28 @@ export async function generateMetadata({
     const coverFileName = coverArt?.attributes?.fileName;
     const imageUrl = coverFileName
       ? `https://uploads.mangadex.org/covers/${id}/${coverFileName}`
-      : "";
+      : SITE_IMAGE;
 
     return {
-      title: `Leer ${title} Manga Online Gratis - MangaStoon`,
+      title: `Leer ${title} Manga Online Gratis - ${SITE_NAME}`,
       description,
       alternates: {
-        canonical: `${process.env.NEXT_PUBLIC_SITE_URL}/manga/${id}`,
+        canonical: absoluteUrl(`/manga/${id}`),
       },
       openGraph: {
-        title: `Leer ${title} Manga Online Gratis - MangaStoon`,
+        title: `Leer ${title} Manga Online Gratis - ${SITE_NAME}`,
         description,
-        images: imageUrl ? [{ url: imageUrl }] : [],
+        url: absoluteUrl(`/manga/${id}`),
+        type: "article",
+        siteName: SITE_NAME,
+        images: [{ url: imageUrl, width: 1200, height: 630, alt: title }],
       },
     };
   } catch {
     return {
       title: "Manga",
       description: "Lee este manga en MangaStoon.",
-      alternates: { canonical: `${process.env.NEXT_PUBLIC_SITE_URL}/manga/${id}` },
+      alternates: { canonical: absoluteUrl(`/manga/${id}`) },
     };
   }
 }

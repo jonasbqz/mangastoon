@@ -10,10 +10,31 @@ const nextConfig = {
       },
       {
         protocol: "https",
+        hostname: "images.weserv.nl",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
         hostname: "**",
         pathname: "/data/**",
       },
     ],
+  },
+
+  // Explicit in Next 16 and keeps local/dev behavior aligned with lector-comics.
+  turbopack: {},
+
+  async rewrites() {
+    return {
+      beforeFiles: [],
+      afterFiles: [
+        {
+          source: "/image-optimized/:path*",
+          destination: "https://images.weserv.nl/:path*",
+        },
+      ],
+      fallback: [],
+    };
   },
 };
 
