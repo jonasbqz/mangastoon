@@ -1,8 +1,9 @@
 ﻿const MONLINE_API_URL = (
   process.env.NEXT_PUBLIC_API_URL ??
-  "http://127.0.0.1:8085"
+  "http://46.224.213.127:8085" // Ponemos tu IP de Hetzner por si la variable falla
 ).replace(/\/$/, "");
-const MONLINE_TIMEOUT_MS = 2500;
+
+const MONLINE_TIMEOUT_MS = 8000; // 👈 LO SUBIMOS A 8 SEGUNDOS (Hetzner lo necesita)
 
 export type MonlineRouteResponse = {
   data?: {
@@ -70,6 +71,9 @@ export async function fetchMonlinePagesFromRoute({
       const timeout = setTimeout(() => controller.abort(), MONLINE_TIMEOUT_MS);
 
       try {
+        // 👈 IMPORTANTE: Agregamos logs para que veas en Dokploy qué está pasando
+        console.log(`🔎 Buscando en API: ${comicSegment} / ${chapterSegment}`);
+
         const routeUrl = new URL(`${MONLINE_API_URL}/api/chapters/route`);
         routeUrl.searchParams.set("comicSegment", comicSegment);
         routeUrl.searchParams.set("chapterSegment", chapterSegment);
@@ -77,17 +81,21 @@ export async function fetchMonlinePagesFromRoute({
         const routeResponse = await fetch(routeUrl.toString(), {
           cache: "no-store",
           signal: controller.signal,
+          // 👈 Quitamos headers raros para evitar bloqueos
         });
+        
         if (!routeResponse.ok) continue;
 
         const routePayload = (await routeResponse.json()) as MonlineRouteResponse;
         const monlineId = routePayload.data?.id;
+        
         if (monlineId === undefined || monlineId === null || monlineId === "") continue;
 
         const pagesResponse = await fetch(
           `${MONLINE_API_URL}/api/chapters/${encodeURIComponent(String(monlineId))}/pages`,
           { cache: "no-store", signal: controller.signal }
         );
+        
         if (!pagesResponse.ok) continue;
 
         const pagesPayload = (await pagesResponse.json()) as MonlinePagesResponse;
@@ -96,8 +104,12 @@ export async function fetchMonlinePagesFromRoute({
           ? rawPages.filter((url): url is string => typeof url === "string" && url.length > 0)
           : [];
 
-        if (pages.length > 0) return pages;
-      } catch {
+        if (pages.length > 0) {
+          console.log(`✅ ¡Encontrado! ${pages.length} páginas.`);
+          return pages;
+        }
+      } catch (err: any) {
+        console.error(`❌ Fallo en intento: ${err.message}`);
         continue;
       } finally {
         clearTimeout(timeout);
