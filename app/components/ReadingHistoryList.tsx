@@ -9,6 +9,20 @@ function formatChapterLabel(chapterNumber: string) {
   return chapterNumber ? `Capitulo ${chapterNumber}` : "Continuar leyendo";
 }
 
+function normalizeStoredCoverImage(value: string) {
+  if (!value.includes("/api/proxy-image") || !value.includes("dashboard.olympusbiblioteca.com")) {
+    return value;
+  }
+
+  try {
+    const url = new URL(value, window.location.origin);
+    const target = url.searchParams.get("url");
+    return target?.includes("dashboard.olympusbiblioteca.com") ? target : value;
+  } catch {
+    return value;
+  }
+}
+
 export default function ReadingHistoryList() {
   const history = useHistoryStore((state) => state.history);
   const removeHistory = useHistoryStore((state) => state.removeHistory);
@@ -39,7 +53,7 @@ export default function ReadingHistoryList() {
               <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-xl bg-zinc-900 ring-1 ring-white/10">
                 {item.coverImage ? (
                   <Image
-                    src={item.coverImage}
+                    src={normalizeStoredCoverImage(item.coverImage)}
                     alt={item.mangaTitle}
                     fill
                     sizes="56px"
