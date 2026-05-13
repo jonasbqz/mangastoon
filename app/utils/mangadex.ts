@@ -342,6 +342,8 @@ function normalizeLocalImageUrl(value: string, apiBaseUrl: string) {
         ? `https:${value}`
         : `${apiBaseUrl.replace(/\/$/, "")}/${value.replace(/^\/+/, "")}`;
 
+  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) return imageUrl;
+
   return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 

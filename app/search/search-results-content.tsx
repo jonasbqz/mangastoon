@@ -89,6 +89,8 @@ function normalizeMonlineImageUrl(value: string) {
         ? `https:${value}`
         : `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
 
+  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) return imageUrl;
+
   return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 
