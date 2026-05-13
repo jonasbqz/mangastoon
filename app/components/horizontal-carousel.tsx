@@ -90,6 +90,7 @@ export default function HorizontalCarousel({
             isFeatured={featuredCards}
             showChapters={showChapters}
             latestChapters={manga.latestChapters}
+            priorityImage={index < 4}
           />
         ))}
       </div>

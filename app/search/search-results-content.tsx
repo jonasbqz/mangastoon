@@ -2,35 +2,160 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { MangaCard } from "../components/home-carousel";
+import { MangaCard, type MangaShowcaseItem } from "../components/home-carousel";
 import { useLanguage } from "../components/language-provider";
+import { getLocalizedTitle } from "../utils/get-localized-title";
 import {
   appendStandardMangaDexFilters,
   fetchMangaDexStatistics,
-  getAvailableTranslatedLanguageVariants,
   mapToShowcaseItems,
   type MangaDexCollectionResponse,
   type MangaDexManga,
 } from "../utils/mangadex";
 
-async function hasReadableChapters(mangaId: string, language: "es" | "en" | "pt") {
-  const params = new URLSearchParams();
-  params.set("limit", "1");
-  params.set("order[readableAt]", "desc");
-  getAvailableTranslatedLanguageVariants(language).forEach((translatedLanguage) => {
-    params.append("translatedLanguage[]", translatedLanguage);
-  });
+const MONLINE_API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://127.0.0.1:8085"
+).replace(/\/$/, "");
 
-  const response = await fetch(`/api/mangadex/feed/${mangaId}?${params.toString()}`, {
-    cache: "no-store",
-  });
+type MonlineComic = Record<string, unknown>;
+type MonlineComicsResponse = {
+  data?: MonlineComic[] | { comics?: MonlineComic[]; items?: MonlineComic[]; results?: MonlineComic[] };
+  comics?: MonlineComic[];
+  items?: MonlineComic[];
+  results?: MonlineComic[];
+};
 
-  if (!response.ok) {
-    return false;
+function getStringValue(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function getGenres(source: MonlineComic) {
+  const rawGenres = source.genres ?? source.genre ?? source.tags ?? source.categories;
+  const values = Array.isArray(rawGenres)
+    ? rawGenres
+    : typeof rawGenres === "string"
+      ? rawGenres.split(",")
+      : [];
+
+  return values
+    .map((genre) => {
+      if (typeof genre === "string") return genre.trim();
+      if (genre && typeof genre === "object") {
+        return getStringValue(genre as Record<string, unknown>, ["name", "title", "slug"]);
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function getMonlineTitleMap(source: MonlineComic) {
+  const title = getStringValue(source, ["title", "name", "comic_title", "original_title"]);
+  const englishTitle = getStringValue(source, ["english_title", "title_en", "en_title"]);
+  const spanishTitle = getStringValue(source, ["spanish_title", "title_es", "es_title"]);
+  const portugueseTitle = getStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
+
+  return {
+    ...(title ? { en: title } : {}),
+    ...(englishTitle ? { en: englishTitle } : {}),
+    ...(spanishTitle ? { es: spanishTitle } : {}),
+    ...(portugueseTitle ? { pt: portugueseTitle } : {}),
+  };
+}
+
+function extractMonlineComics(payload: MonlineComicsResponse) {
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.data?.comics)) return payload.data.comics;
+  if (Array.isArray(payload.data?.items)) return payload.data.items;
+  if (Array.isArray(payload.data?.results)) return payload.data.results;
+  if (Array.isArray(payload.comics)) return payload.comics;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.results)) return payload.results;
+  return [];
+}
+
+function normalizeMonlineImageUrl(value: string) {
+  if (!value) return "";
+  const imageUrl =
+    value.startsWith("http://") || value.startsWith("https://")
+      ? value
+      : value.startsWith("//")
+        ? `https:${value}`
+        : `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
+
+  return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+}
+
+function mapMonlineComicsToShowcase(comics: MonlineComic[], language: "es" | "en" | "pt") {
+  return comics.map((comic, index): MangaShowcaseItem => {
+    const titleMap = getMonlineTitleMap(comic);
+    const rawTitle = getStringValue(comic, ["title", "name", "comic_title", "original_title"]);
+    const title = rawTitle || getLocalizedTitle({ titleMap }, language) || "MangaStoon";
+    const slug = getStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
+    const coverImage = normalizeMonlineImageUrl(
+      getStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
+    );
+    const genres = getGenres(comic);
+
+    return {
+      mal_id: index + 1,
+      title,
+      score: null,
+      url: slug ? `/manga/${slug}` : "#",
+      mangaDexId: slug || null,
+      titleMap,
+      genres: genres.map((genre, genreIndex) => ({ mal_id: genreIndex + 1, name: genre })),
+      tags: genres,
+      isLocal: true,
+      images: {
+        webp: { large_image_url: coverImage, image_url: coverImage },
+        jpg: { large_image_url: coverImage, image_url: coverImage },
+      },
+    };
+  });
+}
+
+async function fetchSearchResults(query: string, language: "es" | "en" | "pt", isAdult: boolean, signal?: AbortSignal) {
+  let localResults: MangaShowcaseItem[] = [];
+
+  if (language === "es") {
+    const params = new URLSearchParams();
+    params.set("title", query);
+    params.set("limit", "24");
+
+    const response = await fetch(`${MONLINE_API_URL}/api/comics?${params.toString()}`, {
+      cache: "no-store",
+      signal,
+    });
+
+    if (response.ok) {
+      const payload = (await response.json()) as MonlineComicsResponse;
+      localResults = mapMonlineComicsToShowcase(extractMonlineComics(payload), language);
+    }
   }
 
-  const payload = (await response.json()) as { total?: number; data?: unknown[] };
-  return (payload.total ?? payload.data?.length ?? 0) > 0;
+  const remaining = Math.max(1, 24 - Math.min(localResults.length, 24));
+  const mangaDexParams = new URLSearchParams();
+  mangaDexParams.set("title", query);
+  mangaDexParams.set("limit", String(remaining));
+  mangaDexParams.set("order[relevance]", "desc");
+  appendStandardMangaDexFilters(mangaDexParams, isAdult, language);
+
+  const mangaDexResponse = await fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal });
+  const mangaDexPayload = mangaDexResponse.ok
+    ? ((await mangaDexResponse.json()) as MangaDexCollectionResponse)
+    : { data: [] };
+  const rawMangaDex = mangaDexPayload.data ?? [];
+  const statistics = await fetchMangaDexStatistics(rawMangaDex.map((manga) => manga.id), signal);
+  const mangaDexResults = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
+
+  return [...localResults, ...mangaDexResults].slice(0, 24);
 }
 
 export default function SearchResultsContent() {
@@ -38,7 +163,7 @@ export default function SearchResultsContent() {
   const { language, isAdult } = useLanguage();
   const query = searchParams.get("q")?.trim() ?? "";
 
-  const [results, setResults] = useState<ReturnType<typeof mapToShowcaseItems>>([]);
+  const [results, setResults] = useState<MangaShowcaseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -55,42 +180,15 @@ export default function SearchResultsContent() {
       }
 
       setIsLoading(true);
+      setResults([]);
       setError("");
 
       try {
-        const params = new URLSearchParams();
-        params.set("title", query);
-        params.set("limit", "24");
-        params.set("order[relevance]", "desc");
-        appendStandardMangaDexFilters(params, isAdult, language);
-
-        const response = await fetch(`/api/mangadex/manga?${params.toString()}`, {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          throw new Error("No se pudo completar la busqueda.");
-        }
-
-        const payload = (await response.json()) as MangaDexCollectionResponse;
-        const candidates = payload.data ?? [];
-        const availability = await Promise.all(
-          candidates.map(async (manga) => ({
-            manga,
-            hasChapters: await hasReadableChapters(manga.id, language),
-          }))
-        );
-        const mangas = availability.filter((entry) => entry.hasChapters).map((entry) => entry.manga);
+        const mangas = await fetchSearchResults(query, language, isAdult, controller.signal);
 
         if (cancelled) return;
 
-        setResults(mapToShowcaseItems(mangas as MangaDexManga[], {}, language));
-
-        const statistics = await fetchMangaDexStatistics(mangas.map((manga) => manga.id));
-
-        if (cancelled) return;
-
-        setResults(mapToShowcaseItems(mangas as MangaDexManga[], statistics, language));
+        setResults(mangas);
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           return;

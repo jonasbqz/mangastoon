@@ -3,18 +3,23 @@
 import { Loader2, Search } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { MangaShowcaseItem } from "./home-carousel";
 import { useLanguage } from "./language-provider";
 import { getLocalizedTitle } from "../utils/get-localized-title";
 import {
   appendStandardMangaDexFilters,
-  getAvailableTranslatedLanguageVariants,
-  getMangaSynopsis,
-  getThemeTags,
+  fetchMangaDexStatistics,
+  mapToShowcaseItems,
   type MangaDexCollectionResponse,
   type MangaDexManga,
 } from "../utils/mangadex";
+
+const MONLINE_API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://127.0.0.1:8085"
+).replace(/\/$/, "");
 
 const PRIORITY_THEMES = [
   "Isekai",
@@ -44,6 +49,16 @@ const UI_COPY = {
   },
 } as const;
 
+type MonlineComic = Record<string, unknown>;
+type MonlineComicsResponse = {
+  data?: MonlineComic[] | { comics?: MonlineComic[]; items?: MonlineComic[]; results?: MonlineComic[] };
+  comics?: MonlineComic[];
+  items?: MonlineComic[];
+  results?: MonlineComic[];
+};
+
+type MonlineShowcaseItem = MangaShowcaseItem & { synopsis?: string };
+
 function getPriorityTheme(themes: string[]) {
   const normalizedThemes = themes.map((theme) => ({
     raw: theme,
@@ -63,36 +78,240 @@ function getPriorityTheme(themes: string[]) {
   return null;
 }
 
-async function hasReadableChapters(mangaId: string, language: "es" | "en" | "pt") {
-  const params = new URLSearchParams();
-  params.set("limit", "1");
-  params.set("order[readableAt]", "desc");
-  getAvailableTranslatedLanguageVariants(language).forEach((translatedLanguage) => {
-    params.append("translatedLanguage[]", translatedLanguage);
-  });
+function getStringValue(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim().length > 0) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
 
-  const response = await fetch(`/api/mangadex/feed/${mangaId}?${params.toString()}`, {
-    cache: "no-store",
-  });
+function getGenres(source: MonlineComic) {
+  const rawGenres = source.genres ?? source.genre ?? source.tags ?? source.categories;
+  const values = Array.isArray(rawGenres)
+    ? rawGenres
+    : typeof rawGenres === "string"
+      ? rawGenres.split(",")
+      : [];
 
-  if (!response.ok) {
-    return false;
+  return values
+    .map((genre) => {
+      if (typeof genre === "string") return genre.trim();
+      if (genre && typeof genre === "object") {
+        return getStringValue(genre as Record<string, unknown>, ["name", "title", "slug"]);
+      }
+      return "";
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function getMonlineTitleMap(source: MonlineComic) {
+  const title = getStringValue(source, ["title", "name", "comic_title", "original_title"]);
+  const englishTitle = getStringValue(source, ["english_title", "title_en", "en_title"]);
+  const spanishTitle = getStringValue(source, ["spanish_title", "title_es", "es_title"]);
+  const portugueseTitle = getStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
+
+  return {
+    ...(title ? { en: title } : {}),
+    ...(englishTitle ? { en: englishTitle } : {}),
+    ...(spanishTitle ? { es: spanishTitle } : {}),
+    ...(portugueseTitle ? { pt: portugueseTitle } : {}),
+  };
+}
+
+function extractMonlineComics(payload: MonlineComicsResponse) {
+  if (Array.isArray(payload.data)) return payload.data;
+  if (Array.isArray(payload.data?.comics)) return payload.data.comics;
+  if (Array.isArray(payload.data?.items)) return payload.data.items;
+  if (Array.isArray(payload.data?.results)) return payload.data.results;
+  if (Array.isArray(payload.comics)) return payload.comics;
+  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.results)) return payload.results;
+  return [];
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function localComicMatchesQuery(comic: MonlineComic, query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return true;
+
+  return ["title", "name", "comic_title", "original_title", "titleAlternative", "slug"]
+    .map((key) => comic[key])
+    .filter((value): value is string | number => typeof value === "string" || typeof value === "number")
+    .some((value) => normalizeSearchText(String(value)).includes(normalizedQuery));
+}
+
+function normalizeMonlineImageUrl(value: string) {
+  if (!value) return "";
+  const imageUrl =
+    value.startsWith("http://") || value.startsWith("https://")
+      ? value
+      : value.startsWith("//")
+        ? `https:${value}`
+        : `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
+
+  return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+}
+
+function mapMonlineComicsToShowcase(comics: MonlineComic[], language: "es" | "en" | "pt") {
+  return comics.map((comic, index): MonlineShowcaseItem => {
+    const titleMap = getMonlineTitleMap(comic);
+    const rawTitle = getStringValue(comic, ["title", "name", "comic_title", "original_title"]);
+    const title = rawTitle || getLocalizedTitle({ titleMap }, language) || "MangaStoon";
+    const slug = getStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
+    const coverImage = normalizeMonlineImageUrl(
+      getStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
+    );
+    const genres = getGenres(comic);
+
+    return {
+      mal_id: index + 1,
+      title,
+      score: null,
+      url: slug ? `/manga/${slug}` : "#",
+      mangaDexId: slug || null,
+      titleMap,
+      genres: genres.map((genre, genreIndex) => ({ mal_id: genreIndex + 1, name: genre })),
+      tags: genres,
+      isLocal: true,
+      synopsis: getStringValue(comic, ["synopsis", "description", "summary"]),
+      images: {
+        webp: { large_image_url: coverImage, image_url: coverImage },
+        jpg: { large_image_url: coverImage, image_url: coverImage },
+      },
+    };
+  });
+}
+
+async function fetchMonlineSearch(query: string, language: "es" | "en" | "pt", isAdult: boolean, signal?: AbortSignal) {
+  let localResults: MonlineShowcaseItem[] = [];
+
+  if (language === "es") {
+    const params = new URLSearchParams();
+    params.set("limit", "100");
+
+    const response = await fetch(`${MONLINE_API_URL}/api/comics?${params.toString()}`, {
+      cache: "no-store",
+      signal,
+    });
+
+    if (response.ok) {
+      const payload = (await response.json()) as MonlineComicsResponse;
+      localResults = mapMonlineComicsToShowcase(
+        extractMonlineComics(payload).filter((comic) => localComicMatchesQuery(comic, query)).slice(0, 5),
+        language
+      );
+    }
+
   }
 
-  const payload = (await response.json()) as { total?: number; data?: unknown[] };
-  return (payload.total ?? payload.data?.length ?? 0) > 0;
+  const remaining = Math.max(0, 5 - localResults.length);
+  if (remaining === 0) return localResults;
+
+  const mangaDexParams = new URLSearchParams();
+  mangaDexParams.set("title", query);
+  mangaDexParams.set("limit", String(remaining));
+  mangaDexParams.set("order[relevance]", "desc");
+  appendStandardMangaDexFilters(mangaDexParams, isAdult, language);
+
+  const mangaDexResponse = await fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal });
+  const mangaDexPayload = mangaDexResponse.ok
+    ? ((await mangaDexResponse.json()) as MangaDexCollectionResponse)
+    : { data: [] };
+  const rawMangaDex = mangaDexPayload.data ?? [];
+  const statistics = await fetchMangaDexStatistics(rawMangaDex.map((manga) => manga.id), signal);
+  const mangaDexResults = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
+
+  return [...localResults, ...mangaDexResults].slice(0, 5);
+}
+
+function getResultImage(result: MangaShowcaseItem) {
+  return (
+    result.images?.webp?.large_image_url ??
+    result.images?.jpg?.large_image_url ??
+    result.images?.webp?.image_url ??
+    result.images?.jpg?.image_url ??
+    ""
+  );
 }
 
 export default function SearchBar() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { language, isAdult } = useLanguage();
   const copy = UI_COPY[language];
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<MangaDexManga[]>([]);
+  const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [results, setResults] = useState<MangaShowcaseItem[]>([]);
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
+    if (pathname !== "/explore") {
+      return;
+    }
+
+    setOpen(false);
+    setResults([]);
+    setIsLoading(false);
+
+    const urlQuery = searchParams.get("q") ?? "";
+    if (urlQuery !== query) {
+      setQuery(urlQuery);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, searchParams]);
+
+  useEffect(() => {
+    if (pathname !== "/explore") {
+      return;
+    }
+
+    const trimmedQuery = query.trim();
+    const currentUrlQuery = searchParams.get("q") ?? "";
+
+    if (trimmedQuery === currentUrlQuery) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      const params = new URLSearchParams(searchParams.toString());
+
+      if (trimmedQuery) {
+        params.set("q", trimmedQuery);
+      } else {
+        params.delete("q");
+      }
+
+      params.delete("page");
+      const queryString = params.toString();
+      if (queryString === searchParams.toString()) {
+        return;
+      }
+
+      router.replace(queryString ? `/explore?${queryString}` : "/explore", { scroll: false });
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [pathname, query, router, searchParams]);
+
+  useEffect(() => {
+    if (pathname === "/explore") {
+      setResults([]);
+      setOpen(false);
+      setIsLoading(false);
+      return;
+    }
+
     if (!query.trim()) {
       setResults([]);
       setOpen(false);
@@ -107,64 +326,40 @@ export default function SearchBar() {
       setOpen(true);
 
       try {
-        const params = new URLSearchParams();
-        params.set("title", query.trim());
-        params.set("limit", "5");
-        params.set("order[relevance]", "desc");
-        appendStandardMangaDexFilters(params, isAdult, language);
-
-        const response = await fetch(`/api/mangadex/manga?${params.toString()}`, {
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          setResults([]);
-          return;
-        }
-
-        const payload = (await response.json()) as MangaDexCollectionResponse;
-        const candidates = payload.data ?? [];
-        const availability = await Promise.all(
-          candidates.map(async (result) => ({
-            result,
-            hasChapters: await hasReadableChapters(result.id, language),
-          }))
-        );
-        setResults(availability.filter((entry) => entry.hasChapters).map((entry) => entry.result));
+        const nextResults = await fetchMonlineSearch(query.trim(), language, isAdult, controller.signal);
+        if (controller.signal.aborted) return;
+        setResults(nextResults);
       } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          return;
-        }
-
+        if (error instanceof Error && error.name === "AbortError") return;
         setResults([]);
       } finally {
         if (!controller.signal.aborted) {
           setIsLoading(false);
         }
       }
-    }, 300);
+    }, 500);
 
     return () => {
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [isAdult, language, query]);
+  }, [isAdult, language, pathname, query]);
 
-  function getResultImage(result: MangaDexManga) {
-    const coverArt = result.relationships?.find((relationship) => relationship.type === "cover_art");
-    const fileName = coverArt?.attributes?.fileName;
-
-    if (!fileName) {
-      return "";
-    }
-
-    return `https://uploads.mangadex.org/covers/${result.id}/${fileName}`;
-  }
-
-  function handleSelect(result: MangaDexManga) {
+  function handleSelect(result: MangaShowcaseItem) {
     setOpen(false);
     setQuery(getLocalizedTitle(result, language));
-    router.push(`/manga/${result.id}`);
+    router.push(result.url || (result.mangaDexId ? `/manga/${result.mangaDexId}` : "/explore"));
+  }
+
+  function handleExploreSearch() {
+    const trimmedQuery = query.trim();
+
+    if (!trimmedQuery) {
+      return;
+    }
+
+    setOpen(false);
+    router.push(`/explore?q=${encodeURIComponent(trimmedQuery)}`);
   }
 
   return (
@@ -174,7 +369,21 @@ export default function SearchBar() {
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          onFocus={() => setOpen(Boolean(query.trim() || results.length))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              handleExploreSearch();
+            }
+          }}
+          onFocus={() => {
+            if (pathname !== "/explore") {
+              setOpen(Boolean(query.trim() || results.length));
+            }
+          }}
+          onBlur={() => {
+            if (pathname === "/explore") {
+              setOpen(false);
+            }
+          }}
           placeholder={copy.placeholder}
           className="w-full bg-transparent pr-8 text-sm text-white outline-none placeholder:text-gray-500"
         />
@@ -193,12 +402,12 @@ export default function SearchBar() {
           {results.map((result) => {
             const imageUrl = getResultImage(result);
             const displayTitle = getLocalizedTitle(result, language);
-            const synopsis = getMangaSynopsis(result, language);
-            const priorityTheme = getPriorityTheme(getThemeTags(result, language));
+            const synopsis = (result as { synopsis?: string | null }).synopsis;
+            const priorityTheme = getPriorityTheme(result.tags ?? []);
 
             return (
               <button
-                key={result.id}
+                key={result.url || result.mangaDexId || result.title}
                 type="button"
                 onClick={() => handleSelect(result)}
                 className="flex w-full items-start gap-3 p-3 text-left transition-colors hover:bg-white/5"
@@ -237,7 +446,7 @@ export default function SearchBar() {
           ) : null}
 
           <Link
-            href={`/search?q=${encodeURIComponent(query)}`}
+            href={`/explore?q=${encodeURIComponent(query.trim())}`}
             className="block w-full border-t border-white/10 p-3 text-center text-sm text-orange-500 transition-colors hover:bg-white/5"
             onClick={() => setOpen(false)}
           >

@@ -1,20 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, ArrowRight, Search, SlidersHorizontal } from "lucide-react";
 import { MangaCard } from "../components/home-carousel";
+import type { MangaShowcaseItem } from "../components/home-carousel";
 import SiteHeader from "../components/site-header";
 import { useLanguage, type SupportedLanguage } from "../components/language-provider";
 import {
   appendStandardMangaDexFilters,
+  extractLocalApiComics,
+  fetchLocalChapterPreviews,
   fetchMangaDexStatistics,
-  getAvailableTranslatedLanguageVariants,
+  getLocalApiTotal,
+  mapLocalApiComicsToShowcaseItems,
   mapToShowcaseItems,
+  type LocalApiComicsResponse,
   type MangaDexCollectionResponse,
   type MangaDexManga,
 } from "../utils/mangadex";
 import { translateTagName } from "../utils/tagTranslations";
+
+const MONLINE_API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://127.0.0.1:8085"
+).replace(/\/$/, "");
 
 const TYPE_FILTERS = [
   { value: "all", label: { es: "Todo", en: "All", pt: "Todos" } },
@@ -82,6 +92,52 @@ const ORDER_OPTIONS = [
   },
   { value: "title", label: { es: "Titulo", en: "Title", pt: "Titulo" } },
 ] as const;
+
+const DEFAULT_ORDER_BY = "latestUploadedChapter";
+const DEFAULT_SORT_DIR = "desc";
+const DEFAULT_TYPE = "all";
+
+type OrderByValue = (typeof ORDER_OPTIONS)[number]["value"];
+type SortDirValue = "asc" | "desc";
+type TypeFilterValue = (typeof TYPE_FILTERS)[number]["value"];
+type MonlineComicsResponse = LocalApiComicsResponse;
+
+function isOrderByValue(value: string | null): value is OrderByValue {
+  return ORDER_OPTIONS.some((option) => option.value === value);
+}
+
+function isSortDirValue(value: string | null): value is SortDirValue {
+  return value === "asc" || value === "desc";
+}
+
+function isTypeFilterValue(value: string | null): value is TypeFilterValue {
+  return TYPE_FILTERS.some((option) => option.value === value);
+}
+
+function parsePageParam(value: string | null) {
+  const page = Number(value);
+  return Number.isInteger(page) && page > 0 ? page : 1;
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function localComicMatchesQuery(comic: Record<string, unknown>, query: string) {
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return true;
+
+  const candidates = ["title", "name", "comic_title", "original_title", "titleAlternative", "slug"]
+    .map((key) => comic[key])
+    .filter((value): value is string | number => typeof value === "string" || typeof value === "number")
+    .map((value) => normalizeSearchText(String(value)));
+
+  return candidates.some((candidate) => candidate.includes(normalizedQuery));
+}
 
 const UI_COPY: Record<
   SupportedLanguage,
@@ -180,53 +236,6 @@ const UI_COPY: Record<
   },
 };
 
-function formatRelativeTime(dateString: string | null | undefined, language: SupportedLanguage) {
-  if (!dateString) {
-    return language === "en" ? "Recently" : language === "pt" ? "Recentemente" : "Reciente";
-  }
-
-  const date = new Date(dateString);
-
-  if (Number.isNaN(date.getTime())) {
-    return language === "en" ? "Recently" : language === "pt" ? "Recentemente" : "Reciente";
-  }
-
-  const diffMs = Date.now() - date.getTime();
-  const minutes = Math.max(1, Math.floor(diffMs / 60000));
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  const months = Math.floor(days / 30);
-  const years = Math.floor(days / 365);
-
-  if (years >= 1) {
-    if (language === "en") return `${years} ${years === 1 ? "year" : "years"} ago`;
-    if (language === "pt") return `Ha ${years} ${years === 1 ? "ano" : "anos"}`;
-    return `Hace ${years} ${years === 1 ? "año" : "años"}`;
-  }
-
-  if (months >= 1) {
-    if (language === "en") return `${months} ${months === 1 ? "month" : "months"} ago`;
-    if (language === "pt") return `Ha ${months} ${months === 1 ? "mes" : "meses"}`;
-    return `Hace ${months} ${months === 1 ? "mes" : "meses"}`;
-  }
-
-  if (days >= 1) {
-    if (language === "en") return `${days} ${days === 1 ? "day" : "days"} ago`;
-    if (language === "pt") return `Ha ${days} ${days === 1 ? "dia" : "dias"}`;
-    return `Hace ${days} ${days === 1 ? "dia" : "dias"}`;
-  }
-
-  if (hours >= 1) {
-    if (language === "en") return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
-    if (language === "pt") return `Ha ${hours}h`;
-    return `Hace ${hours}h`;
-  }
-
-  if (language === "en") return `${minutes} min ago`;
-  if (language === "pt") return `Ha ${minutes} min`;
-  return `Hace ${minutes} min`;
-}
-
 function getTranslatedFilterLabel(
   label: Record<SupportedLanguage, string>,
   language: SupportedLanguage
@@ -252,100 +261,103 @@ function getSpecialTagGroups(language: SupportedLanguage) {
   return Array.from(groups.values());
 }
 
-async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLanguage) {
-  const params = new URLSearchParams();
-  params.set("limit", "2");
-  params.set("order[readableAt]", "desc");
-
-  getAvailableTranslatedLanguageVariants(language).forEach((translatedLanguage) => {
-    params.append("translatedLanguage[]", translatedLanguage);
-  });
-
-  const response = await fetch(`/api/mangadex/feed/${mangaId}?${params.toString()}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    return [];
-  }
-
-  const payload = (await response.json()) as {
-    total?: number;
-    data?: Array<{
-      attributes?: {
-        chapter?: string | null;
-        translatedLanguage?: string | null;
-        readableAt?: string | null;
-        publishAt?: string | null;
-        updatedAt?: string | null;
-        createdAt?: string | null;
-      };
-    }>;
-  };
-  const allowedLanguages = new Set(getAvailableTranslatedLanguageVariants(language));
-
-  if ((payload.total ?? 0) <= 0) {
-    return [];
-  }
-
-  return (payload.data ?? [])
-    .filter((chapter) => allowedLanguages.has(chapter.attributes?.translatedLanguage ?? ""))
-    .slice(0, 2)
-    .map((chapter) => {
-    const publishedAt =
-      chapter.attributes?.readableAt ??
-      chapter.attributes?.publishAt ??
-      chapter.attributes?.updatedAt ??
-      chapter.attributes?.createdAt ??
-      null;
-
-    return {
-      chapter: chapter.attributes?.chapter?.trim() || "?",
-      timeAgo: formatRelativeTime(publishedAt, language),
-      publishedAt,
-    };
-  });
-}
-
 export default function ExplorePage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const { language, isAdult } = useLanguage();
   const copy = UI_COPY[language];
   const previousFilterKeyRef = useRef<string | null>(null);
   const initializedFromUrlRef = useRef(false);
+  const isApplyingUrlStateRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [orderBy, setOrderBy] = useState("latestUploadedChapter");
-  const [sortDir, setSortDir] = useState("desc");
+  const [searchDraft, setSearchDraft] = useState("");
+  const [orderBy, setOrderBy] = useState<OrderByValue>(DEFAULT_ORDER_BY);
+  const [sortDir, setSortDir] = useState<SortDirValue>(DEFAULT_SORT_DIR);
   const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [selectedSpecialTags, setSelectedSpecialTags] = useState<string[]>([]);
-  const [selectedType, setSelectedType] = useState<(typeof TYPE_FILTERS)[number]["value"]>("all");
+  const [selectedType, setSelectedType] = useState<TypeFilterValue>(DEFAULT_TYPE);
   const [currentPage, setCurrentPage] = useState(1);
-  const [mangas, setMangas] = useState<ReturnType<typeof mapToShowcaseItems>>([]);
+  const [mangas, setMangas] = useState<MangaShowcaseItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalItems, setTotalItems] = useState(0);
   const [lastVisiblePage, setLastVisiblePage] = useState(1);
   const [error, setError] = useState("");
+  const [urlHydrated, setUrlHydrated] = useState(false);
 
   useEffect(() => {
-    if (initializedFromUrlRef.current) {
-      return;
-    }
-
-    initializedFromUrlRef.current = true;
-
+    isApplyingUrlStateRef.current = true;
     const urlTagIds = searchParams.getAll("includedTags");
-
-    if (urlTagIds.length === 0) {
-      return;
-    }
-
     const genreIds = GENRE_TAGS.map((genre) => genre.id as string);
     const specialIds = SPECIAL_TAGS.map((tag) => tag.id as string);
+    const nextOrderBy = searchParams.get("order_by");
+    const nextSortDir = searchParams.get("sort");
+    const nextType = searchParams.get("type");
 
+    const nextQuery = searchParams.get("q") ?? "";
+    setSearchQuery(nextQuery);
+    setSearchDraft(nextQuery);
+    setOrderBy(isOrderByValue(nextOrderBy) ? nextOrderBy : DEFAULT_ORDER_BY);
+    setSortDir(isSortDirValue(nextSortDir) ? nextSortDir : DEFAULT_SORT_DIR);
+    setSelectedType(isTypeFilterValue(nextType) ? nextType : DEFAULT_TYPE);
+    setCurrentPage(parsePageParam(searchParams.get("page")));
     setSelectedGenres(urlTagIds.filter((tagId) => genreIds.includes(tagId)));
     setSelectedSpecialTags(urlTagIds.filter((tagId) => specialIds.includes(tagId)));
+    initializedFromUrlRef.current = true;
+    setUrlHydrated(true);
   }, [searchParams]);
+
+  const exploreQueryString = useMemo(() => {
+    const params = new URLSearchParams();
+    const trimmedQuery = searchQuery.trim();
+
+    if (trimmedQuery) {
+      params.set("q", trimmedQuery);
+    }
+
+    if (orderBy !== DEFAULT_ORDER_BY) {
+      params.set("order_by", orderBy);
+    }
+
+    if (sortDir !== DEFAULT_SORT_DIR) {
+      params.set("sort", sortDir);
+    }
+
+    if (selectedType !== DEFAULT_TYPE) {
+      params.set("type", selectedType);
+    }
+
+    [...selectedGenres, ...selectedSpecialTags].forEach((tagId) => {
+      params.append("includedTags", tagId);
+    });
+
+    if (currentPage > 1) {
+      params.set("page", String(currentPage));
+    }
+
+    return params.toString();
+  }, [currentPage, orderBy, searchQuery, selectedGenres, selectedSpecialTags, selectedType, sortDir]);
+
+  useEffect(() => {
+    if (!urlHydrated) {
+      return;
+    }
+
+    if (isApplyingUrlStateRef.current) {
+      isApplyingUrlStateRef.current = false;
+      return;
+    }
+
+    const currentQueryString = searchParams.toString();
+
+    if (currentQueryString === exploreQueryString) {
+      return;
+    }
+
+    router.push(exploreQueryString ? `/explore?${exploreQueryString}` : "/explore", {
+      scroll: false,
+    });
+  }, [exploreQueryString, router, searchParams, urlHydrated]);
 
   const paginationPages = useMemo(
     () =>
@@ -365,7 +377,7 @@ export default function ExplorePage() {
         isAdult,
         language,
         orderBy,
-        searchQuery: searchQuery.trim(),
+    searchQuery: searchQuery.trim(),
         selectedGenres,
         selectedSpecialTags,
         selectedType,
@@ -374,12 +386,11 @@ export default function ExplorePage() {
     [isAdult, language, orderBy, searchQuery, selectedGenres, selectedSpecialTags, selectedType, sortDir]
   );
 
-  async function fetchMangas(targetPage = currentPage) {
+  async function fetchMangas(targetPage = currentPage, signal?: AbortSignal) {
     const params = new URLSearchParams();
     params.set("limit", "24");
+    params.set("page", String(targetPage));
     params.set("offset", String((targetPage - 1) * 24));
-    params.set(`order[${orderBy}]`, sortDir);
-    appendStandardMangaDexFilters(params, isAdult, language);
 
     const normalizedQuery = searchQuery.trim();
     if (normalizedQuery) {
@@ -387,74 +398,167 @@ export default function ExplorePage() {
     }
 
     if (selectedType !== "all") {
-      params.append("originalLanguage[]", selectedType);
+      const typeMap: Record<Exclude<TypeFilterValue, "all">, string> = {
+        ja: "manga",
+        ko: "manhwa",
+        zh: "manhua",
+      };
+      params.set("type", typeMap[selectedType]);
     }
 
+    const orderMap: Record<OrderByValue, string> = {
+      followedCount: "views",
+      rating: "rating",
+      latestUploadedChapter: "updated_at",
+      title: "title",
+    };
+    params.set("order", orderMap[orderBy]);
+    params.set("sort", sortDir);
 
-    const selectedTags = [...selectedGenres, ...selectedSpecialTags];
-    if (selectedTags.length > 0) {
-      selectedTags.forEach((tagId) => {
-        params.append("includedTags[]", tagId);
-      });
-    }
+    selectedGenres.forEach((tagId) => {
+      const genre = GENRE_TAGS.find((item) => item.id === tagId);
+      if (genre) params.append("genres[]", getTranslatedFilterLabel(genre.label, language));
+    });
 
+    selectedSpecialTags.forEach((tagId) => {
+      const tag = SPECIAL_TAGS.find((item) => item.id === tagId);
+      if (tag) params.append("tags[]", getTranslatedFilterLabel(tag.label, language));
+    });
 
     try {
-      const response = await fetch(`/api/mangadex/manga?${params.toString()}`);
+      let localTotal = 0;
+      let localMangas: MangaShowcaseItem[] = [];
 
-      if (!response.ok) {
+      if (language === "es") {
+        try {
+        if (normalizedQuery) {
+          params.set("limit", "100");
+          params.set("page", "1");
+          params.delete("offset");
+        }
+
+        const response = await fetch(`${MONLINE_API_URL}/api/comics?${params.toString()}`, {
+          cache: "no-store",
+          signal,
+        });
+
+        if (response.ok) {
+          const payload = (await response.json()) as MonlineComicsResponse;
+          const comics = extractLocalApiComics(payload);
+          const filteredComics = normalizedQuery
+            ? comics.filter((comic) => localComicMatchesQuery(comic, normalizedQuery))
+            : comics;
+          localTotal = normalizedQuery ? filteredComics.length : getLocalApiTotal(payload, comics.length);
+          const pageComics = normalizedQuery
+            ? filteredComics.slice((targetPage - 1) * 24, targetPage * 24)
+            : filteredComics;
+          const mappedLocalMangas = mapLocalApiComicsToShowcaseItems(pageComics, language, MONLINE_API_URL);
+          localMangas = await Promise.all(
+            mappedLocalMangas.map(async (manga, index) => ({
+              ...manga,
+              latestChapters: await fetchLocalChapterPreviews(pageComics[index], MONLINE_API_URL, signal),
+            }))
+          );
+        } else if (response.status === 429) {
+          setError(copy.rateLimit);
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          return;
+        }
+      }
+      }
+
+      const mangaDexParams = new URLSearchParams();
+      const pageStart = (targetPage - 1) * 24;
+      const mangaDexOffset = Math.max(0, pageStart - localTotal);
+      mangaDexParams.set("limit", String(Math.max(1, 24 - Math.min(localMangas.length, 24))));
+      mangaDexParams.set("offset", String(mangaDexOffset));
+      mangaDexParams.set(
+        `order[${
+          orderBy === "followedCount"
+            ? "followedCount"
+            : orderBy === "rating"
+              ? "rating"
+              : orderBy === "title"
+                ? "title"
+                : "latestUploadedChapter"
+        }]`,
+        sortDir
+      );
+      appendStandardMangaDexFilters(mangaDexParams, isAdult, language);
+
+      if (normalizedQuery) {
+        mangaDexParams.set("title", normalizedQuery);
+      }
+
+      if (selectedType !== "all") {
+        mangaDexParams.append("originalLanguage[]", selectedType);
+      }
+
+      [...selectedGenres, ...selectedSpecialTags].forEach((tagId) => {
+        mangaDexParams.append("includedTags[]", tagId);
+      });
+
+      const canFetchMangaDex = mangaDexOffset <= 10_000;
+      const mangaDexResponse = canFetchMangaDex
+        ? await fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal })
+        : null;
+      const mangaDexPayload = mangaDexResponse?.ok
+        ? ((await mangaDexResponse.json()) as MangaDexCollectionResponse)
+        : { data: [], total: 0 };
+      const rawMangaDex = mangaDexPayload.data ?? [];
+      const statistics = rawMangaDex.length
+        ? await fetchMangaDexStatistics(rawMangaDex.map((manga) => manga.id), signal)
+        : {};
+      const mangaDexMangas = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
+      const localSlugs = new Set(localMangas.map((manga) => manga.mangaDexId ?? manga.url));
+      const mixedMangas = [
+        ...localMangas,
+        ...mangaDexMangas.filter((manga) => !localSlugs.has(manga.mangaDexId ?? manga.url)),
+      ].slice(0, 24);
+      const total = localTotal + (mangaDexPayload.total ?? mangaDexPayload.pagination?.total ?? 0);
+
+      if (signal?.aborted) return;
+
+      const nextLastVisiblePage = Math.max(1, Math.ceil(total / 24));
+
+      setTotalItems(total);
+      setLastVisiblePage(nextLastVisiblePage);
+
+      if (targetPage > nextLastVisiblePage) {
         setMangas([]);
-        setTotalItems(0);
-        setLastVisiblePage(1);
-        setError(response.status === 429 ? copy.rateLimit : copy.genericError);
+        setCurrentPage(nextLastVisiblePage);
+        setError("");
         return;
       }
 
-      const payload = (await response.json()) as MangaDexCollectionResponse;
-      const rawMangas = payload.data ?? [];
-      const statistics = await fetchMangaDexStatistics(rawMangas.map((manga) => manga.id));
-      const total = payload.total ?? payload.pagination?.total ?? 0;
+      setMangas(mixedMangas);
+      setError("");
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
 
-      const mappedMangas = mapToShowcaseItems(rawMangas as MangaDexManga[], statistics, language);
-      const chapterPreviews = await Promise.all(
-        mappedMangas.map(async (manga) => ({
-          mangaDexId: manga.mangaDexId,
-          latestChapters: manga.mangaDexId
-            ? await fetchLatestChapterPreviews(manga.mangaDexId, language)
-            : [],
-        }))
-      );
-
-      const visibleMangas = mappedMangas
-        .map((manga) => ({
-          ...manga,
-          latestChapters:
-            chapterPreviews.find((preview) => preview.mangaDexId === manga.mangaDexId)
-              ?.latestChapters ?? [],
-        }))
-        .filter((manga) => manga.latestChapters.length > 0)
-        .sort((a, b) => {
-          const aTime = new Date(a.latestChapters[0]?.publishedAt ?? 0).getTime();
-          const bTime = new Date(b.latestChapters[0]?.publishedAt ?? 0).getTime();
-
-          return bTime - aTime;
-        });
-
-      setMangas(visibleMangas);
-      setTotalItems(total);
-      setLastVisiblePage(Math.max(1, Math.ceil(total / 24)));
-    } catch {
       setMangas([]);
       setTotalItems(0);
       setLastVisiblePage(1);
       setError(copy.genericError);
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    const filtersChanged = previousFilterKeyRef.current !== filterKey;
+    if (!urlHydrated) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const filtersChanged =
+      previousFilterKeyRef.current !== null && previousFilterKeyRef.current !== filterKey;
     previousFilterKeyRef.current = filterKey;
 
     setMangas([]);
@@ -468,37 +572,53 @@ export default function ExplorePage() {
       return;
     }
 
-    fetchMangas(filtersChanged ? 1 : currentPage);
+    fetchMangas(filtersChanged ? 1 : currentPage, controller.signal);
+
+    return () => {
+      controller.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, filterKey]);
+  }, [currentPage, filterKey, urlHydrated]);
 
   function handleSearch() {
+    const nextQuery = searchDraft.trim();
     setError("");
     setMangas([]);
     setTotalItems(0);
     setLastVisiblePage(1);
     setIsLoading(true);
+    setSearchQuery(nextQuery);
 
     if (currentPage !== 1) {
       setCurrentPage(1);
       return;
     }
 
-    fetchMangas(1);
+    setCurrentPage(1);
   }
 
   function handleClearFilters() {
     setSearchQuery("");
-    setOrderBy("latestUploadedChapter");
-    setSortDir("desc");
+    setSearchDraft("");
+    setOrderBy(DEFAULT_ORDER_BY);
+    setSortDir(DEFAULT_SORT_DIR);
     setSelectedGenres([]);
     setSelectedSpecialTags([]);
-    setSelectedType("all");
+    setSelectedType(DEFAULT_TYPE);
     setError("");
     setCurrentPage(1);
   }
 
+  function handlePrev() {
+    setCurrentPage((page) => Math.max(1, page - 1));
+  }
+
+  function handleNext() {
+    setCurrentPage((page) => Math.min(lastVisiblePage, page + 1));
+  }
+
   function toggleGenre(tagId: string) {
+    setCurrentPage(1);
     setSelectedGenres((current) => {
       if (current.includes(tagId)) {
         return current.filter((id) => id !== tagId);
@@ -509,6 +629,7 @@ export default function ExplorePage() {
   }
 
   function toggleSpecialTag(tagId: string) {
+    setCurrentPage(1);
     setSelectedSpecialTags((current) => {
       if (current.includes(tagId)) {
         return current.filter((id) => id !== tagId);
@@ -523,6 +644,7 @@ export default function ExplorePage() {
   }
 
   function toggleSpecialTagGroup(tagIds: string[]) {
+    setCurrentPage(1);
     setSelectedSpecialTags((current) => {
       const isActive = tagIds.some((tagId) => current.includes(tagId));
 
@@ -561,45 +683,63 @@ export default function ExplorePage() {
               </span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-300">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage <= 1}
-                className="rounded-full border border-white/10 bg-white/5 p-3 transition-colors hover:border-[#ff6b00]/40 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-
-              {paginationPages.map((pageNumber) => (
+            {/* Contenedor Principal Centrado */}
+            <div className="flex w-full flex-col items-center my-12 xl:my-0 xl:w-auto">
+              {/* La P?ldora Glassmorphism */}
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-800 bg-[#141519]/80 p-1.5 shadow-lg backdrop-blur-md">
+                {/* Bot?n Anterior (Flecha) */}
                 <button
-                  key={pageNumber}
                   type="button"
-                  onClick={() => setCurrentPage(pageNumber)}
-                  className={`rounded-full px-5 py-3 font-medium transition-colors ${
-                    pageNumber === currentPage
-                      ? "bg-[#ff6b00] text-white hover:bg-orange-600"
-                      : "border border-white/10 bg-white/5 text-gray-200 hover:border-[#ff6b00]/40 hover:text-orange-400"
-                  }`}
+                  onClick={handlePrev}
+                  disabled={currentPage === 1}
+                  className="rounded-full p-2 text-gray-400 transition-all hover:bg-gray-800 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
                 >
-                  {pageNumber}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
                 </button>
-              ))}
 
-              {lastVisiblePage > paginationPages[paginationPages.length - 1] ? (
-                <span className="px-2 text-gray-500">...</span>
-              ) : null}
+                {paginationPages.map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setCurrentPage(pageNumber)}
+                    className={
+                      pageNumber === currentPage
+                        ? "flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 text-sm font-bold text-white shadow-[0_0_12px_rgba(249,115,22,0.4)]"
+                        : "flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-gray-400 transition-all hover:bg-gray-800 hover:text-white"
+                    }
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
 
-              <span className="text-gray-300">{lastVisiblePage}</span>
+                {lastVisiblePage > paginationPages[paginationPages.length - 1] ? (
+                  <>
+                    <span className="px-2 text-sm text-gray-500">...</span>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentPage(lastVisiblePage)}
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-gray-400 transition-all hover:bg-gray-800 hover:text-white"
+                    >
+                      {lastVisiblePage}
+                    </button>
+                  </>
+                ) : null}
 
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.min(lastVisiblePage, page + 1))}
-                disabled={currentPage >= lastVisiblePage}
-                className="rounded-full border border-white/10 bg-white/5 p-3 transition-colors hover:border-[#ff6b00]/40 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </button>
+                {/* Bot?n Siguiente (Flecha) */}
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={currentPage === lastVisiblePage}
+                  className="rounded-full p-2 text-gray-400 transition-all hover:bg-gray-800 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                </button>
+              </div>
+
+              {/* Texto de informaci?n minimalista */}
+              <div className="mt-4 text-center text-[11px] font-semibold uppercase tracking-widest text-gray-500">
+                P?gina {currentPage} de {lastVisiblePage}
+              </div>
             </div>
           </div>
         </div>
@@ -626,8 +766,15 @@ export default function ExplorePage() {
                 ))}
               </div>
             ) : mangas.length === 0 ? (
-              <div className="flex min-h-[50vh] items-center justify-center rounded-[28px] border border-white/6 bg-[#111316] p-10 text-center">
+              <div className="flex min-h-[50vh] flex-col items-center justify-center rounded-[28px] border border-white/6 bg-[#111316] p-10 text-center">
                 <p className="text-lg text-gray-400">{error || copy.noResults}</p>
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="mt-6 rounded-full bg-[#ff6b00] px-6 py-3 text-sm font-bold text-black shadow-[0_14px_40px_rgba(255,107,0,0.22)] transition hover:bg-orange-400"
+                >
+                  {copy.clearFilters}
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-6">
@@ -645,17 +792,26 @@ export default function ExplorePage() {
           </section>
 
           <aside className="order-2 xl:order-2">
-            <div className="rounded-[28px] border border-white/6 bg-[#111316] p-6 shadow-2xl shadow-black/20 xl:sticky xl:top-24">
-              <div className="mb-6 flex items-center gap-3">
-                <div className="rounded-full bg-[#ff6b00]/12 p-3 text-[#ff6b00]">
-                  <SlidersHorizontal className="h-5 w-5" />
+            <div className="rounded-2xl border border-white/6 bg-[#111316] p-4 shadow-2xl shadow-black/20 xl:sticky xl:top-24">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="rounded-full bg-[#ff6b00]/12 p-2 text-[#ff6b00]">
+                    <SlidersHorizontal className="h-4 w-4" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-white">{copy.filters}</h2>
                 </div>
-                <h2 className="text-xl font-semibold text-white">{copy.filters}</h2>
+                <button
+                  type="button"
+                  onClick={handleClearFilters}
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold text-gray-300 transition-colors hover:border-[#ff6b00]/30 hover:text-orange-400"
+                >
+                  {copy.clearFilters}
+                </button>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-4">
                 <div>
-                  <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
                     {copy.typeTitle}
                   </label>
                   <div className="flex flex-wrap gap-2">
@@ -666,11 +822,14 @@ export default function ExplorePage() {
                         <button
                           key={typeOption.value}
                           type="button"
-                          onClick={() => setSelectedType(typeOption.value)}
-                          className={`rounded-full border px-4 py-2 text-sm transition-colors ${
+                          onClick={() => {
+                            setSelectedType(typeOption.value);
+                            setCurrentPage(1);
+                          }}
+                          className={`rounded-full border px-3 py-1.5 text-xs transition-all ${
                             active
-                              ? "border-[#ff6b00] bg-[#ff6b00]/20 text-[#ff6b00]"
-                              : "border-white/10 bg-[#171a1f] text-gray-300 hover:border-[#ff6b00]/30 hover:text-orange-400"
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-gray-700 bg-gray-800/50 text-gray-300 hover:bg-orange-500 hover:text-white"
                           }`}
                         >
                           {typeOption.label[language]}
@@ -681,24 +840,31 @@ export default function ExplorePage() {
                 </div>
 
                 <div>
-                  <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
                     {copy.searchTitle}
                   </label>
-                  <div className="flex gap-3">
+                  <div className="flex gap-2">
                     <div className="relative flex-1">
-                      <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+                      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
                       <input
                         type="text"
-                        value={searchQuery}
-                        onChange={(event) => setSearchQuery(event.target.value)}
+                        value={searchDraft}
+                        onChange={(event) => {
+                          setSearchDraft(event.target.value);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter") {
+                            handleSearch();
+                          }
+                        }}
                         placeholder={copy.searchPlaceholder}
-                        className="h-14 w-full rounded-full border border-white/10 bg-[#171a1f] pl-12 pr-4 text-sm text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#ff6b00]/40"
+                        className="h-10 w-full rounded-full border border-white/10 bg-[#171a1f] pl-9 pr-3 text-xs text-white outline-none transition-colors placeholder:text-gray-500 focus:border-[#ff6b00]/40"
                       />
                     </div>
                     <button
                       type="button"
                       onClick={handleSearch}
-                      className="rounded-full bg-[#ff6b00] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+                      className="rounded-full bg-[#ff6b00] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-orange-600"
                     >
                       {copy.searchButton}
                     </button>
@@ -706,13 +872,18 @@ export default function ExplorePage() {
                 </div>
 
                 <div>
-                  <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
                     {copy.orderBy}
                   </label>
                   <select
                     value={orderBy}
-                    onChange={(event) => setOrderBy(event.target.value)}
-                    className="h-14 w-full rounded-2xl border border-white/10 bg-[#171a1f] px-4 text-sm text-white outline-none transition-colors focus:border-[#ff6b00]/40"
+                    onChange={(event) => {
+                      if (isOrderByValue(event.target.value)) {
+                        setOrderBy(event.target.value);
+                        setCurrentPage(1);
+                      }
+                    }}
+                    className="h-10 w-full rounded-xl border border-white/10 bg-[#171a1f] px-3 text-xs text-white outline-none transition-colors focus:border-[#ff6b00]/40"
                   >
                     {ORDER_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -723,13 +894,18 @@ export default function ExplorePage() {
                 </div>
 
                 <div>
-                  <label className="mb-3 block text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
+                  <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
                     {copy.direction}
                   </label>
                   <select
                     value={sortDir}
-                    onChange={(event) => setSortDir(event.target.value)}
-                    className="h-14 w-full rounded-2xl border border-white/10 bg-[#171a1f] px-4 text-sm text-white outline-none transition-colors focus:border-[#ff6b00]/40"
+                    onChange={(event) => {
+                      if (isSortDirValue(event.target.value)) {
+                        setSortDir(event.target.value);
+                        setCurrentPage(1);
+                      }
+                    }}
+                    className="h-10 w-full rounded-xl border border-white/10 bg-[#171a1f] px-3 text-xs text-white outline-none transition-colors focus:border-[#ff6b00]/40"
                   >
                     <option value="desc">{copy.descending}</option>
                     <option value="asc">{copy.ascending}</option>
@@ -737,54 +913,52 @@ export default function ExplorePage() {
                 </div>
 
                 <div>
-                  <div className="mb-3 flex items-center justify-between">
-                    <label className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
                       {copy.genreTitle}
                     </label>
-                    <span className="rounded-full border border-[#ff6b00]/20 bg-[#ff6b00]/10 px-3 py-1 text-xs font-medium text-[#ff6b00]">
+                    <span className="rounded-full border border-[#ff6b00]/20 bg-[#ff6b00]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#ff6b00]">
                       {selectedGenres.length}
                     </span>
                   </div>
 
-                  <div className="max-h-[220px] overflow-y-auto pr-1">
-                    <div className="flex flex-wrap gap-2">
-                      {GENRE_TAGS.map((genre) => {
-                        const active = selectedGenres.includes(genre.id);
-                        const label = getTranslatedFilterLabel(genre.label, language);
-                        const selectedIndex = selectedGenres.indexOf(genre.id);
+                  <div className="max-h-[220px] overflow-y-auto pr-2 custom-scrollbar flex flex-wrap gap-2">
+                    {GENRE_TAGS.map((genre) => {
+                      const active = selectedGenres.includes(genre.id);
+                      const label = getTranslatedFilterLabel(genre.label, language);
+                      const selectedIndex = selectedGenres.indexOf(genre.id);
 
-                        return (
-                          <button
-                            key={genre.id}
-                            type="button"
-                            onClick={() => toggleGenre(genre.id)}
-                            className={`rounded-full border px-4 py-2 text-sm transition-colors ${
-                              active
-                                ? "border-[#ff6b00] bg-[#ff6b00]/20 text-[#ff6b00]"
-                                : "border-white/10 bg-[#171a1f] text-gray-300 hover:border-[#ff6b00]/30 hover:text-orange-400"
+                      return (
+                        <button
+                          key={genre.id}
+                          type="button"
+                          onClick={() => toggleGenre(genre.id)}
+                          className={`rounded-full border px-3 py-1.5 text-xs transition-all ${
+                            active
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-gray-700 bg-gray-800/50 text-gray-300 hover:bg-orange-500 hover:text-white"
                           }`}
                         >
-                            {active ? `${label} +${selectedIndex + 1}` : label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                          {active ? `${label} +${selectedIndex + 1}` : label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
                 <div>
-                  <div className="mb-3 flex items-center justify-between">
-                    <label className="text-xs font-semibold uppercase tracking-[0.22em] text-gray-500">
+                  <div className="mb-2 flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">
                       {copy.specialTagTitle}
                     </label>
-                    <span className="rounded-full border border-[#ff6b00]/20 bg-[#ff6b00]/10 px-3 py-1 text-xs font-medium text-[#ff6b00]">
+                    <span className="rounded-full border border-[#ff6b00]/20 bg-[#ff6b00]/10 px-2.5 py-0.5 text-[11px] font-medium text-[#ff6b00]">
                       {selectedSpecialTagGroupCount}/3
                     </span>
                   </div>
 
-                  <p className="mb-4 text-xs text-gray-500">{copy.selectedGenres}</p>
+                  <p className="mb-2 text-[11px] text-gray-500">{copy.selectedGenres}</p>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="max-h-[220px] overflow-y-auto pr-2 custom-scrollbar flex flex-wrap gap-2">
                     {getSpecialTagGroups(language).map((tag) => {
                       const active = tag.ids.some((tagId) => selectedSpecialTags.includes(tagId));
                       const selectedIndex = getSpecialTagGroups(language)
@@ -796,10 +970,10 @@ export default function ExplorePage() {
                           key={tag.label}
                           type="button"
                           onClick={() => toggleSpecialTagGroup(tag.ids)}
-                          className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          className={`rounded-full border px-3 py-1.5 text-xs transition-all ${
                             active
-                              ? "border-[#ff6b00] bg-[#ff6b00]/20 text-[#ff6b00]"
-                              : "border-white/10 bg-[#171a1f] text-gray-300 hover:border-[#ff6b00]/30 hover:text-orange-400"
+                              ? "border-orange-500 bg-orange-500 text-white"
+                              : "border-gray-700 bg-gray-800/50 text-gray-300 hover:bg-orange-500 hover:text-white"
                           }`}
                         >
                           {active ? `${tag.label} +${selectedIndex + 1}` : tag.label}
@@ -809,20 +983,13 @@ export default function ExplorePage() {
                   </div>
                 </div>
 
-                <div className="flex gap-3">
+                <div>
                   <button
                     type="button"
                     onClick={handleSearch}
-                    className="flex-1 rounded-full bg-[#ff6b00] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+                    className="w-full rounded-full bg-[#ff6b00] px-5 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-orange-600"
                   >
                     {copy.searchButton}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearFilters}
-                    className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-gray-300 transition-colors hover:border-[#ff6b00]/30 hover:text-orange-400"
-                  >
-                    {copy.clearFilters}
                   </button>
                 </div>
               </div>

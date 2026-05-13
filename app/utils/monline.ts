@@ -1,7 +1,6 @@
 ﻿const MONLINE_API_URL = (
-  process.env.MONLINE_API_URL ??
-  process.env.NEXT_PUBLIC_MONLINE_API_URL ??
-  "http://localhost:8085"
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://127.0.0.1:8085"
 ).replace(/\/$/, "");
 const MONLINE_TIMEOUT_MS = 2500;
 
@@ -71,7 +70,7 @@ export async function fetchMonlinePagesFromRoute({
       const timeout = setTimeout(() => controller.abort(), MONLINE_TIMEOUT_MS);
 
       try {
-        const routeUrl = new URL(`${MONLINE_API_URL}/chapters/route`);
+        const routeUrl = new URL(`${MONLINE_API_URL}/api/chapters/route`);
         routeUrl.searchParams.set("comicSegment", comicSegment);
         routeUrl.searchParams.set("chapterSegment", chapterSegment);
 
@@ -86,7 +85,7 @@ export async function fetchMonlinePagesFromRoute({
         if (monlineId === undefined || monlineId === null || monlineId === "") continue;
 
         const pagesResponse = await fetch(
-          `${MONLINE_API_URL}/chapters/${encodeURIComponent(String(monlineId))}/pages`,
+          `${MONLINE_API_URL}/api/chapters/${encodeURIComponent(String(monlineId))}/pages`,
           { cache: "no-store", signal: controller.signal }
         );
         if (!pagesResponse.ok) continue;

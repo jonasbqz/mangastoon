@@ -2,7 +2,7 @@
 
 import { Search, SlidersHorizontal } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type SupportedLanguage = "es" | "en" | "pt";
 
@@ -56,9 +56,9 @@ function buildExploreHref({
     searchParams.set("q", query.trim());
   }
 
-  if (genres.length > 0) {
-    searchParams.set("genres", genres.join(","));
-  }
+  genres.forEach((genreId) => {
+    searchParams.append("includedTags", genreId);
+  });
 
   if (orderBy) {
     searchParams.set("order_by", orderBy);
@@ -87,6 +87,7 @@ export default function ExploreFilters({
   const [selectedGenres, setSelectedGenres] = useState<string[]>(initialGenres);
   const [orderBy, setOrderBy] = useState(initialOrder);
   const [sort, setSort] = useState(initialSort);
+  const mountedRef = useRef(false);
 
   const activeCount = selectedGenres.length;
   const canApply = useMemo(
@@ -123,21 +124,46 @@ export default function ExploreFilters({
     );
   }
 
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+
+    router.push(
+      buildExploreHref({
+        query,
+        genres: selectedGenres,
+        orderBy,
+        sort,
+      })
+    );
+  }, [orderBy, query, router, selectedGenres, sort]);
+
   function handleClear() {
     setQuery("");
     setSelectedGenres([]);
-    setOrderBy("popularity");
+    setOrderBy("latestUploadedChapter");
     setSort("desc");
     router.push("/explore");
   }
 
   return (
     <div className="rounded-[28px] border border-white/6 bg-[#111316] p-6 shadow-2xl shadow-black/20 xl:sticky xl:top-24">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="rounded-full bg-orange-500/12 p-3 text-orange-500">
-          <SlidersHorizontal className="h-5 w-5" />
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="rounded-full bg-orange-500/12 p-3 text-orange-500">
+            <SlidersHorizontal className="h-5 w-5" />
+          </div>
+          <h2 className="text-2xl font-bold text-white">{copy.filters}</h2>
         </div>
-        <h2 className="text-2xl font-bold text-white">{copy.filters}</h2>
+        <button
+          type="button"
+          onClick={handleClear}
+          className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-semibold text-gray-300 transition-colors hover:border-orange-500/30 hover:text-orange-400"
+        >
+          {copy.clearFilters}
+        </button>
       </div>
 
       <div className="space-y-6">
@@ -209,49 +235,40 @@ export default function ExploreFilters({
 
           <p className="mb-4 text-xs text-gray-500">{copy.selectedGenres}</p>
 
-          <div className="max-h-[340px] overflow-y-auto pr-2">
-            <div className="flex flex-wrap gap-2">
-              {genres.map((genre) => {
-                const active = selectedGenres.includes(genre.id);
-                const blocked = !active && selectedGenres.length >= 3;
+          <div className="max-h-[220px] overflow-y-auto pr-2 custom-scrollbar flex flex-wrap gap-2">
+            {genres.map((genre) => {
+              const active = selectedGenres.includes(genre.id);
+              const blocked = !active && selectedGenres.length >= 3;
 
-                return (
-                  <button
-                    key={genre.id}
-                    type="button"
-                    onClick={() => toggleGenre(genre.id)}
-                    disabled={blocked}
-                    className={`rounded-full border px-4 py-2 text-sm transition-colors ${
-                      active
-                        ? "border-orange-500/30 bg-orange-500/12 text-orange-500"
-                        : blocked
-                          ? "cursor-not-allowed border-white/5 bg-white/[0.03] text-gray-600"
-                          : "border-white/8 bg-white/5 text-gray-300 hover:border-orange-500/30 hover:text-orange-400"
-                    }`}
-                  >
-                    {genre.label[language]}
-                  </button>
-                );
-              })}
-            </div>
+              return (
+                <button
+                  key={genre.id}
+                  type="button"
+                  onClick={() => toggleGenre(genre.id)}
+                  disabled={blocked}
+                  className={`rounded-full border px-3 py-1.5 text-xs transition-all ${
+                    active
+                      ? "border-orange-500 bg-orange-500 text-white"
+                      : blocked
+                        ? "cursor-not-allowed border-white/5 bg-white/[0.03] text-gray-600"
+                        : "border-gray-700 bg-gray-800/50 text-gray-300 hover:bg-orange-500 hover:text-white"
+                  }`}
+                >
+                  {genre.label[language]}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        <div className="flex gap-3">
+        <div>
           <button
             type="button"
             onClick={handleApply}
             disabled={!canApply}
-            className="flex-1 rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {copy.searchButton}
-          </button>
-          <button
-            type="button"
-            onClick={handleClear}
-            className="rounded-full border border-white/10 bg-white/5 px-5 py-3 text-sm font-medium text-gray-300 transition-colors hover:border-orange-500/30 hover:text-orange-400"
-          >
-            {copy.clearFilters}
           </button>
         </div>
       </div>

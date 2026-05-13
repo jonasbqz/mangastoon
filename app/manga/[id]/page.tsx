@@ -26,6 +26,7 @@ export const revalidate = 3600;
 export const dynamicParams = true;
 
 const MANGADEX_RETRY_DELAY_MS = 1200;
+const LOCAL_API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8085").replace(/\/$/, "");
 
 type MangaDexLocalizedText = Record<string, string>;
 
@@ -45,6 +46,7 @@ type MangaDetailsResponse = {
         };
       }>;
     };
+    author?: string | null;
     relationships?: Array<{
       id: string;
       type: string;
@@ -112,6 +114,155 @@ type ChapterLanguageFallback = {
 
 type MangaDetails = NonNullable<MangaDetailsResponse["data"]>;
 type OriginalContentDictionary = Pick<(typeof UI_COPY)[SupportedLanguage], "noSynopsis">;
+type LocalApiComic = Record<string, unknown>;
+type LocalComicScan = Record<string, unknown> & {
+  scanGroup?: Record<string, unknown>;
+  chapters?: unknown;
+};
+
+function isMangaDexUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+function getLocalStringValue(source: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+
+  return "";
+}
+
+function extractLocalComics(payload: unknown): LocalApiComic[] {
+  if (Array.isArray(payload)) return payload.filter((item): item is LocalApiComic => Boolean(item) && typeof item === "object");
+  if (!payload || typeof payload !== "object") return [];
+
+  const record = payload as Record<string, unknown>;
+  if (Array.isArray(record.data)) return record.data.filter((item): item is LocalApiComic => Boolean(item) && typeof item === "object");
+  if (record.data && typeof record.data === "object") return extractLocalComics(record.data);
+  if (Array.isArray(record.comics)) return record.comics.filter((item): item is LocalApiComic => Boolean(item) && typeof item === "object");
+  if (Array.isArray(record.items)) return record.items.filter((item): item is LocalApiComic => Boolean(item) && typeof item === "object");
+  if (Array.isArray(record.results)) return record.results.filter((item): item is LocalApiComic => Boolean(item) && typeof item === "object");
+  if ("id" in record || "slug" in record || "title" in record) return [record];
+
+  return [];
+}
+
+function normalizeLocalImageUrl(value: string) {
+  if (!value) return "";
+  const imageUrl =
+    value.startsWith("http://") || value.startsWith("https://")
+      ? value
+      : `${LOCAL_API_URL}/${value.replace(/^\/+/, "")}`;
+
+  return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+}
+
+function getLocalGenres(source: LocalApiComic) {
+  const rawGenres = source.genres ?? source.genre ?? source.tags ?? source.categories;
+  const values = Array.isArray(rawGenres) ? rawGenres : typeof rawGenres === "string" ? rawGenres.split(",") : [];
+
+  return values
+    .map((genre) => {
+      if (typeof genre === "string") return genre.trim();
+      if (genre && typeof genre === "object") return getLocalStringValue(genre as Record<string, unknown>, ["name", "title", "slug"]);
+      return "";
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+async function fetchLocalComicBySlug(slug: string) {
+  try {
+    const listResponse = await fetch(`${LOCAL_API_URL}/api/comics?limit=100`, { cache: "no-store" });
+    if (!listResponse.ok) return null;
+
+    const comics = extractLocalComics(await listResponse.json());
+    const summary = comics.find((comic) => getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]) === slug);
+    const numericId = getLocalStringValue(summary ?? {}, ["id"]);
+
+    if (!summary || !numericId) return null;
+
+    const detailResponse = await fetch(`${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`, { cache: "no-store" });
+    if (!detailResponse.ok) return summary;
+
+    return extractLocalComics(await detailResponse.json())[0] ?? summary;
+  } catch {
+    return null;
+  }
+}
+
+function mapLocalComicToMangaDetails(comic: LocalApiComic): MangaDetails | null {
+  const slug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
+  if (!slug) return null;
+
+  const title = getLocalStringValue(comic, ["title", "name", "comic_title", "original_title"]) || slug;
+  const description = getLocalStringValue(comic, ["synopsis", "description", "summary"]);
+  const coverImage = normalizeLocalImageUrl(getLocalStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"]));
+  const genres = getLocalGenres(comic);
+  const author = getLocalStringValue(comic, ["author", "artist", "creator"]);
+
+  return {
+    id: slug,
+    author,
+    attributes: {
+      title: { es: title, en: title },
+      altTitles: [],
+      description: description ? { es: description, en: description } : {},
+      contentRating: comic.isNsfw || comic.nsfw || comic.adult ? "erotica" : "safe",
+      tags: genres.map((genre, index) => ({
+        id: `local-${index}-${genre.toLowerCase().replace(/\s+/g, "-")}`,
+        attributes: { name: { es: genre, en: genre }, group: "genre" },
+      })),
+    },
+    relationships: [
+      ...(coverImage ? [{ id: slug, type: "cover_art", attributes: { fileName: coverImage } }] : []),
+      {
+        id: "local-author",
+        type: "author",
+        attributes: { name: author || "Autor desconocido" },
+      },
+    ],
+  };
+}
+
+function getLocalComicScanChapters(source: LocalApiComic): ChapterFeedItem[] {
+  const scans = Array.isArray(source.comicScans)
+    ? source.comicScans.filter((scan): scan is LocalComicScan => Boolean(scan) && typeof scan === "object")
+    : [];
+
+  return scans.flatMap((scan) => {
+    const chapters = Array.isArray(scan.chapters)
+      ? scan.chapters.filter((chapter): chapter is Record<string, unknown> => Boolean(chapter) && typeof chapter === "object")
+      : [];
+    const scanName = getLocalStringValue(scan.scanGroup ?? {}, ["name", "title", "slug"]);
+
+    return chapters
+      .sort((a, b) => Number(getLocalStringValue(b, ["chapterNumber", "chapter_number", "chapter", "number"])) - Number(getLocalStringValue(a, ["chapterNumber", "chapter_number", "chapter", "number"])))
+      .flatMap((chapter) => {
+        const chapterId = getLocalStringValue(chapter, ["id", "chapterId", "chapter_id"]);
+        const chapterNumber = getLocalStringValue(chapter, ["chapterNumber", "chapter_number", "chapter", "number"]);
+        const releaseDate = getLocalStringValue(chapter, ["releaseDate", "release_date", "publishedAt", "published_at", "createdAt", "created_at"]);
+
+        if (!chapterId || !chapterNumber) return [];
+
+        return [{
+          id: chapterId,
+          attributes: {
+            chapter: chapterNumber,
+            title: getLocalStringValue(chapter, ["title", "name"]) || null,
+            translatedLanguage: "es",
+            readableAt: releaseDate || null,
+            publishAt: releaseDate || null,
+            createdAt: releaseDate || null,
+            updatedAt: releaseDate || null,
+          },
+          relationships: scanName ? [{ id: "local-scan", type: "scanlation_group", attributes: { name: scanName } }] : [],
+        }];
+      });
+  });
+}
 
 function cleanSynopsisText(value: string | null | undefined) {
   if (!value) {
@@ -435,6 +586,13 @@ function formatRating(value: number) {
 }
 
 async function fetchMangaRatingSummary(id: string): Promise<MangaRatingSummary> {
+  if (!isMangaDexUuid(id)) {
+    return {
+      ratingValue: formatRating(getDeterministicFallbackRating(id)),
+      ratingCount: String(getDeterministicFallbackCount(id)),
+    };
+  }
+
   try {
     const response = await fetchMangaDex(`https://api.mangadex.org/statistics/manga/${id}`);
 
@@ -453,9 +611,7 @@ async function fetchMangaRatingSummary(id: string): Promise<MangaRatingSummary> 
       ratingValue: formatRating(realRating ?? getDeterministicFallbackRating(id)),
       ratingCount: String(follows > 0 ? follows : getDeterministicFallbackCount(id)),
     };
-  } catch (error) {
-    console.error("Error fetching manga statistics:", id, error);
-
+  } catch {
     return {
       ratingValue: formatRating(getDeterministicFallbackRating(id)),
       ratingCount: String(getDeterministicFallbackCount(id)),
@@ -542,12 +698,38 @@ function getCoverUrl(mangaId: string, relationships: MangaRelationship) {
     return "";
   }
 
+  if (fileName.startsWith("http://") || fileName.startsWith("https://") || fileName.startsWith("/")) {
+    return fileName;
+  }
+
   return `https://uploads.mangadex.org/covers/${mangaId}/${fileName}`;
 }
 
-function getAuthorName(relationships: MangaRelationship) {
-  const author = relationships?.find((relationship) => relationship.type === "author");
-  return author?.attributes?.name ?? null;
+async function fetchAuthorName(mangaTitle: string) {
+  const title = mangaTitle.trim();
+  if (!title) return null;
+
+  try {
+    const response = await fetch(
+      `https://api.jikan.moe/v4/manga?q=${encodeURIComponent(title)}&limit=1`,
+      { next: { revalidate: 86_400 } }
+    );
+
+    if (!response.ok) return null;
+
+    const payload = (await response.json()) as {
+      data?: Array<{
+        authors?: Array<{ name?: string | null }>;
+      }>;
+    };
+
+    const authors = payload.data?.[0]?.authors ?? [];
+    const author = authors.find((item) => item.name?.trim())?.name?.trim();
+
+    return author || null;
+  } catch {
+    return null;
+  }
 }
 
 function getScanGroupName(chapter: ChapterFeedItem | null) {
@@ -603,6 +785,13 @@ function buildChapterNumberLabel(
 }
 
 async function fetchMangaDetails(id: string) {
+  const localComic = await fetchLocalComicBySlug(id);
+  const localManga = localComic ? mapLocalComicToMangaDetails(localComic) : null;
+
+  if (localManga) {
+    return localManga;
+  }
+
   try {
     const response = await fetchMangaDex(
       `https://api.mangadex.org/manga/${id}?includes[]=cover_art&includes[]=author`
@@ -624,6 +813,12 @@ async function fetchMangaDetails(id: string) {
 }
 
 async function fetchMangaChapters(id: string, language: SupportedLanguage) {
+  const localComic = await fetchLocalComicBySlug(id);
+
+  if (localComic) {
+    return getLocalComicScanChapters(localComic);
+  }
+
   const limit = 100;
   let offset = 0;
   let total = 0;
@@ -768,6 +963,22 @@ async function fetchSimilarMangas(
   return [];
 }
 
+async function fetchSuggestedLocalMangas(currentMangaId: string) {
+  try {
+    const response = await fetch(`${LOCAL_API_URL}/api/comics?limit=15`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) return [];
+
+    return extractLocalComics(await response.json())
+      .filter((comic) => getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]) !== currentMangaId)
+      .slice(0, 15);
+  } catch {
+    return [];
+  }
+}
+
 
 function MangaMaintenance({ language }: { language: SupportedLanguage }) {
   const copy = {
@@ -859,6 +1070,7 @@ export default async function MangaDetailsPage({
     currentLanguage,
     isAdult
   );
+  const suggestedMangas = await fetchSuggestedLocalMangas(manga.id);
   const isExplicitContent =
     manga.attributes?.contentRating === "erotica" ||
     manga.attributes?.contentRating === "pornographic" ||
@@ -879,7 +1091,15 @@ export default async function MangaDetailsPage({
     genres: tags.map((tag, index) => ({ mal_id: index, name: tag.name })),
     images: coverUrl ? { webp: { large_image_url: coverUrl } } : {},
   };
-  const authorName = getAuthorName(manga.relationships) ?? copy.noAuthor;
+  const databaseAuthor =
+    manga.author &&
+    manga.author.trim() &&
+    manga.author !== "MangaStoon" &&
+    manga.author.toLowerCase() !== "autor desconocido"
+      ? manga.author.trim()
+      : null;
+  const realAuthor = databaseAuthor ?? (await fetchAuthorName(displayTitle));
+  const authorSearchQuery = realAuthor ? `${realAuthor} manga creator` : `${displayTitle} oficial`;
   const activeScanGroup = getScanGroupName(chapters[0] ?? null) ?? copy.noScan;
   const chapterTotals = new Map<string, number>();
   chapters.forEach((chapter) => {
@@ -929,7 +1149,7 @@ export default async function MangaDetailsPage({
     aggregateRating,
     author: {
       "@type": "Person",
-      name: authorName !== copy.noAuthor ? authorName : "Anónimo",
+      name: realAuthor || "No disponible en DB",
     },
     image: coverUrl || "",
     url: absoluteUrl(`/manga/${manga.id}`),
@@ -1038,7 +1258,24 @@ export default async function MangaDetailsPage({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 md:text-[11px]">
                     {copy.author}
                   </p>
-                  <p className="mt-2 text-sm text-white">{authorName}</p>
+                  <p className="mt-2 text-sm text-white">{realAuthor || "No disponible en DB"}</p>
+                  <a
+                    href={
+                      "https://twitter.com/search?q=" +
+                      encodeURIComponent(authorSearchQuery)
+                    }
+                    target="_blank"
+                    className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1 transition-colors"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 24 24"
+                      className="h-3 w-3 fill-current"
+                    >
+                      <path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-7.4L6.4 22H3.3l7.3-8.4L2.9 2h6.4l4.4 6.6L18.9 2Zm-1.1 17.9h1.7L8.4 4H6.6l11.2 15.9Z" />
+                    </svg>
+                    Apoyar en X
+                  </a>
                 </div>
 
                 <div className="mt-4 md:mt-5">
@@ -1162,9 +1399,44 @@ export default async function MangaDetailsPage({
                 </div>
               </section>
             ) : null}
+
+            {suggestedMangas.length > 0 ? (
+              <section className="mt-16 border-t border-gray-800 pt-10">
+                <h2 className="mb-6 text-2xl font-bold text-white">Más contenido similar</h2>
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
+                  {suggestedMangas.map((suggested) => {
+                    const slug = getLocalStringValue(suggested, ["slug", "manga_slug", "comic_slug", "id"]);
+                    const title = getLocalStringValue(suggested, ["title", "name", "comic_title", "original_title"]) || "MangaStoon";
+                    const coverImage = normalizeLocalImageUrl(
+                      getLocalStringValue(suggested, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
+                    );
+
+                    if (!slug) return null;
+
+                    return (
+                      <Link key={slug} href={`/manga/${slug}`} className="group block">
+                        <div className="aspect-[2/3] overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
+                          {coverImage ? (
+                            <img
+                              src={coverImage}
+                              alt={title}
+                              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                            />
+                          ) : null}
+                        </div>
+                        <p className="mt-2 line-clamp-2 text-sm font-semibold text-white group-hover:text-orange-400">
+                          {title}
+                        </p>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            ) : null}
           </section>
         </div>
       </div>
     </main>
   );
 }
+

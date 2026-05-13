@@ -1,14 +1,14 @@
-"use client";
+﻿"use client";
 
-import { jsPDF } from "jspdf";
 import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Download, Eye, EyeOff, List } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, Eye, EyeOff, FileText, List } from "lucide-react";
 import { SupportedLanguage, useLanguage } from "../../components/language-provider";
 import { useHistoryStore } from "../../store/useHistoryStore";
+import { generateMangaPDF } from "../../utils/pdfGenerator";
 
 type ScrollSpeed = 1 | 2 | 3;
 
@@ -179,6 +179,7 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
 
 const MAX_PDF_CHAPTERS = 50;
 const READING_PROGRESS_KEY = "mangastoon_reading_progress";
+const SIDEBAR_VISIBILITY_KEY = "mangastoon_sidebar_is_hidden";
 const READER_REQUEST_TIMEOUT_MS = 20000;
 
 function normalizeReaderLanguage(value: string | null, fallback: SupportedLanguage) {
@@ -230,6 +231,15 @@ function getChapterNavigationKey(chapter: ChapterFeedItem | null) {
   return chapter?.attributes?.chapter?.trim() || chapter?.id || "";
 }
 
+function normalizeChapterNumber(chapter: ChapterFeedItem | null) {
+  return chapter?.attributes?.chapter?.trim() ?? "";
+}
+
+function parseChapterNumber(chapter: ChapterFeedItem | null) {
+  const value = Number(normalizeChapterNumber(chapter));
+  return Number.isFinite(value) ? value : null;
+}
+
 function dedupeChaptersByNumber(chapters: ChapterFeedItem[]) {
   const seen = new Set<string>();
   const uniqueChapters: ChapterFeedItem[] = [];
@@ -253,18 +263,42 @@ function findChapterIndexByIdOrNumber(
   chapterId: string | null | undefined,
   fallbackChapter: ChapterFeedItem | null
 ) {
+  const fallbackNumber = normalizeChapterNumber(fallbackChapter);
+  const shouldPreferNumber = !chapterId || chapterId === fallbackChapter?.id;
+
+  if (fallbackNumber && shouldPreferNumber) {
+    const byNumber = chapters.findIndex((chapter) => normalizeChapterNumber(chapter) === fallbackNumber);
+
+    if (byNumber >= 0) {
+      return byNumber;
+    }
+  }
+
   const byId = chapterId ? chapters.findIndex((chapter) => chapter.id === chapterId) : -1;
 
   if (byId >= 0) {
     return byId;
   }
 
-  const fallbackKey = getChapterNavigationKey(fallbackChapter);
-  return fallbackKey
-    ? chapters.findIndex((chapter) => getChapterNavigationKey(chapter) === fallbackKey)
+  return fallbackNumber
+    ? chapters.findIndex((chapter) => normalizeChapterNumber(chapter) === fallbackNumber)
     : -1;
 }
 
+function findChapterByNumberDelta(
+  chapters: ChapterFeedItem[],
+  currentChapter: ChapterFeedItem | null,
+  delta: -1 | 1
+) {
+  const currentNumber = parseChapterNumber(currentChapter);
+
+  if (currentNumber === null) {
+    return null;
+  }
+
+  const targetNumber = String(currentNumber + delta);
+  return chapters.find((chapter) => normalizeChapterNumber(chapter) === targetNumber) ?? null;
+}
 
 function buildReaderUrl(mangaId: string, chapterId?: string, lang?: SupportedLanguage) {
   const search = new URLSearchParams();
@@ -319,14 +353,19 @@ function ChapterNavButton({
   onClick,
   children,
   variant = "secondary",
+  hiddenWhenDisabled = false,
 }: {
   disabled?: boolean;
   onClick?: () => void;
   children: React.ReactNode;
   variant?: "primary" | "secondary";
+  hiddenWhenDisabled?: boolean;
 }) {
   const className =
-    "h-14 w-14 rounded-2xl border border-white/15 bg-[#20212a] text-orange-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(0,0,0,0.42)] transition-all hover:border-orange-500/50 hover:bg-[#292a34] hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-40";
+    variant === "primary"
+      ? "h-12 w-12 rounded-full bg-orange-600 text-white shadow-lg transition-all hover:scale-105 hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
+      : "h-12 w-12 rounded-full border border-gray-800 text-gray-500 transition-all hover:border-orange-500/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
+  const hiddenClass = disabled && hiddenWhenDisabled ? "hidden" : "";
 
   return (
     <motion.button
@@ -334,7 +373,8 @@ function ChapterNavButton({
       disabled={disabled}
       onClick={onClick}
       whileTap={{ scale: disabled ? 1 : 0.9 }}
-      className={`flex items-center justify-center ${className}`}
+      className={`flex items-center justify-center ${className} ${hiddenClass}`}
+      aria-hidden={disabled && hiddenWhenDisabled ? true : undefined}
     >
       {children}
     </motion.button>
@@ -358,7 +398,7 @@ function ChapterNavigation({
 }) {
   return (
     <div className="my-4 flex flex-wrap items-center justify-center gap-3 md:my-5 md:gap-4">
-      <ChapterNavButton disabled={!previousChapter} onClick={onPrevious}>
+      <ChapterNavButton disabled={!previousChapter} hiddenWhenDisabled onClick={onPrevious}>
         <ArrowLeft aria-hidden="true" size={24} strokeWidth={2.6} />
         <span className="sr-only">{dictionary.previousChapter}</span>
       </ChapterNavButton>
@@ -368,7 +408,7 @@ function ChapterNavigation({
         <span className="sr-only">{dictionary.chapterList}</span>
       </ChapterNavButton>
 
-      <ChapterNavButton disabled={!nextChapter} onClick={onNext} variant="primary">
+      <ChapterNavButton disabled={!nextChapter} hiddenWhenDisabled onClick={onNext} variant="primary">
         <ArrowRight aria-hidden="true" size={24} strokeWidth={2.6} />
         <span className="sr-only">{dictionary.nextChapter}</span>
       </ChapterNavButton>
@@ -445,6 +485,7 @@ export default function ReadPage() {
   const [error, setError] = useState("");
   const [englishFallbackChapter, setEnglishFallbackChapter] = useState<ChapterFeedItem | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState(0);
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfStartChapterId, setPdfStartChapterId] = useState("");
   const [pdfEndChapterId, setPdfEndChapterId] = useState("");
@@ -452,6 +493,24 @@ export default function ReadPage() {
   const [scrollSpeed, setScrollSpeed] = useState<ScrollSpeed>(1);
   const [isReaderUiVisible, setIsReaderUiVisible] = useState(true);
   const autoScrollIntervalRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    try {
+      setIsReaderUiVisible(localStorage.getItem(SIDEBAR_VISIBILITY_KEY) !== "true");
+    } catch {
+      // Sidebar visibility is a preference; keep the default if storage is unavailable.
+    }
+  }, []);
+
+  function setReaderUiVisibility(isVisible: boolean) {
+    setIsReaderUiVisible(isVisible);
+
+    try {
+      localStorage.setItem(SIDEBAR_VISIBILITY_KEY, String(!isVisible));
+    } catch {
+      // Never block reading if storage is unavailable.
+    }
+  }
 
   useEffect(() => {
     if (currentChapter?.id) {
@@ -618,11 +677,17 @@ export default function ReadPage() {
     currentChapter?.id,
     currentChapter
   );
-  const previousChapter = currentChapterIndex > 0 ? readableChapters[currentChapterIndex - 1] : null;
-  const nextChapter =
-    currentChapterIndex >= 0 && currentChapterIndex < readableChapters.length - 1
+  const currentChapterNumber = parseChapterNumber(currentChapter);
+  const previousChapter =
+    findChapterByNumberDelta(readableChapters, currentChapter, -1) ??
+    (currentChapterNumber === null && currentChapterIndex >= 0 && currentChapterIndex < readableChapters.length - 1
       ? readableChapters[currentChapterIndex + 1]
-      : null;
+      : null);
+  const nextChapter =
+    findChapterByNumberDelta(readableChapters, currentChapter, 1) ??
+    (currentChapterNumber === null && currentChapterIndex > 0
+      ? readableChapters[currentChapterIndex - 1]
+      : null);
   const pdfStartChapterIndex = Math.max(
     0,
     findChapterIndexByIdOrNumber(
@@ -665,57 +730,17 @@ export default function ReadPage() {
     }
 
     setDownloading(true);
-    setShowPdfModal(false);
+    setPdfProgress(0);
 
     try {
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "pt",
-        format: "a4",
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
       const chaptersToExport = selectedPdfChapters.length > 0 ? selectedPdfChapters : [currentChapter];
-      let pageIndex = 0;
+      const allImages: string[] = [];
 
       for (const chapter of chaptersToExport) {
         const chapterPages =
           chapter.id === currentChapter.id ? pages : await fetchChapterPages(chapter.id, { mangaTitle, chapter });
 
-        for (const pageUrl of chapterPages) {
-          const image = await loadImageForPdf(pageUrl);
-          const canvas = document.createElement("canvas");
-          const context = canvas.getContext("2d");
-
-          if (!context) {
-            throw new Error("Canvas context unavailable.");
-          }
-
-          canvas.width = image.naturalWidth;
-          canvas.height = image.naturalHeight;
-          context.drawImage(image, 0, 0);
-
-          const imageData = canvas.toDataURL("image/jpeg", 0.92);
-          const imageRatio = image.naturalWidth / image.naturalHeight;
-          let renderWidth = pdfWidth;
-          let renderHeight = renderWidth / imageRatio;
-
-          if (renderHeight > pdfHeight) {
-            renderHeight = pdfHeight;
-            renderWidth = renderHeight * imageRatio;
-          }
-
-          const x = (pdfWidth - renderWidth) / 2;
-          const y = (pdfHeight - renderHeight) / 2;
-
-          if (pageIndex > 0) {
-            pdf.addPage();
-          }
-
-          pdf.addImage(imageData, "JPEG", x, y, renderWidth, renderHeight);
-          pageIndex += 1;
-        }
+        allImages.push(...chapterPages);
       }
 
       const firstExportedChapter = chaptersToExport[0] ?? currentChapter;
@@ -724,12 +749,14 @@ export default function ReadPage() {
         chaptersToExport.length === 1
           ? chapterName
           : getChapterNumber(chaptersToExport[chaptersToExport.length - 1] ?? currentChapter);
-      const fileSuffix =
-        chaptersToExport.length === 1 ? `cap-${chapterName}` : `cap-${chapterName}-to-${endChapterName}`;
+      const chapterLabel =
+        chaptersToExport.length === 1 ? chapterName : `${chapterName}-to-${endChapterName}`;
 
-      pdf.save(`mangastoon-${mangaTitle}-${fileSuffix}.pdf`);
+      await generateMangaPDF(mangaTitle, chapterLabel, allImages, setPdfProgress);
+      setShowPdfModal(false);
     } finally {
       setDownloading(false);
+      setPdfProgress(0);
     }
   }
 
@@ -780,7 +807,7 @@ export default function ReadPage() {
             transition={{ duration: 0.22 }}
             className="fixed right-3 top-1/2 z-50 flex -translate-y-1/2 flex-col gap-3 rounded-2xl border border-white/10 bg-[#141519]/78 p-2 shadow-2xl shadow-black/45 backdrop-blur-xl md:right-4"
           >
-            <ToolButton title={dictionary.hideControls} onClick={() => setIsReaderUiVisible(false)}>
+            <ToolButton title={dictionary.hideControls} onClick={() => setReaderUiVisibility(false)}>
               <EyeOff className="h-5 w-5" />
             </ToolButton>
 
@@ -829,7 +856,7 @@ export default function ReadPage() {
             transition={{ duration: 0.22 }}
             className="fixed right-3 top-1/2 z-50 -translate-y-1/2 md:right-4"
           >
-            <ToolButton title={dictionary.controls} onClick={() => setIsReaderUiVisible(true)}>
+            <ToolButton title={dictionary.controls} onClick={() => setReaderUiVisibility(true)}>
               <Eye className="h-5 w-5" />
             </ToolButton>
           </motion.div>
@@ -962,35 +989,36 @@ export default function ReadPage() {
             </div>
           </section>
 
-          <section className="mx-auto max-w-5xl px-4 pb-10 pt-6">
-            <ChapterNavigation
-              dictionary={dictionary}
-              previousChapter={previousChapter}
-              nextChapter={nextChapter}
-              onPrevious={() => previousChapter && handleChapterNavigation(previousChapter.id)}
-              onNext={() => nextChapter && handleChapterNavigation(nextChapter.id)}
-              onList={openChapterList}
-            />
+          <section className="mx-auto max-w-5xl px-4">
+            {nextChapter ? (
+              <div className="mt-10 mb-20 flex items-center justify-center gap-6">
+                {previousChapter ? (
+                  <button
+                    type="button"
+                    onClick={() => handleChapterNavigation(previousChapter.id)}
+                    className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-800 text-gray-500 transition-all hover:border-orange-500/50 hover:text-white"
+                    aria-label={dictionary.previousChapter}
+                  >
+                    <ArrowLeft aria-hidden="true" className="h-5 w-5" />
+                  </button>
+                ) : null}
 
-            <div className="mx-auto mt-6 max-w-3xl">
-              {nextChapter ? (
                 <button
                   type="button"
                   onClick={() => handleChapterNavigation(nextChapter.id)}
-                  className="flex w-full items-center justify-center rounded-3xl bg-[#ff6b00] px-6 py-5 text-lg font-extrabold text-black shadow-[0_20px_60px_rgba(255,107,0,0.22)] transition hover:bg-orange-400 md:text-xl"
+                  className="flex items-center gap-3 rounded-full bg-orange-600 px-6 py-3 text-white shadow-lg transition-transform hover:scale-105 hover:bg-orange-500"
                 >
-                  {dictionary.nextChapterCta}
+                  <span className="text-sm font-bold">
+                    Cap?tulo Siguiente ? {getChapterLabel(nextChapter, dictionary)}
+                  </span>
+                  <ArrowRight aria-hidden="true" className="h-5 w-5" />
                 </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => router.push(`/manga/${mangaId}`)}
-                  className="flex w-full items-center justify-center rounded-3xl border border-[#ff6b00]/40 bg-white/5 px-6 py-5 text-lg font-bold text-[#ff6b00] transition hover:bg-[#ff6b00] hover:text-black md:text-xl"
-                >
-                  {dictionary.backToSeries}
-                </button>
-              )}
-            </div>
+              </div>
+            ) : (
+              <p className="py-8 text-center text-sm italic text-gray-500">
+                ?Has llegado al final de los cap?tulos disponibles! Pr?ximamente m?s...
+              </p>
+            )}
           </section>
 
           {showPdfModal ? (
@@ -1075,9 +1103,10 @@ export default function ReadPage() {
                     type="button"
                     onClick={handleDownloadPdf}
                     disabled={downloading}
-                    className="flex-1 rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-black transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-orange-500 px-5 py-3 text-sm font-bold text-black shadow-lg shadow-orange-950/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {downloading ? dictionary.generatingPdf : dictionary.download}
+                    <FileText aria-hidden="true" className="h-4 w-4" />
+                    <span>{downloading ? `${dictionary.generatingPdf} ${pdfProgress}%` : dictionary.download}</span>
                   </button>
                 </div>
               </div>
@@ -1088,3 +1117,4 @@ export default function ReadPage() {
     </main>
   );
 }
+

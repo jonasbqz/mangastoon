@@ -1,22 +1,29 @@
-import { cookies } from "next/headers";
+﻿import { cookies } from "next/headers";
 import HorizontalCarousel from "./components/horizontal-carousel";
 import ReadingHistoryList from "./components/ReadingHistoryList";
 import type { MangaShowcaseItem } from "./components/MangaCard";
 import SiteHeader, { type SupportedLanguage } from "./components/site-header";
+import { getLocalizedTitle } from "./utils/get-localized-title";
 import {
   buildMangaDexMangaUrl,
   fetchMangaDexCollection,
   fetchMangaDexStatistics,
+  fetchLocalTop,
+  fetchLocalChapterPreviews,
+  getAvailableTranslatedLanguageVariants,
+  extractLocalApiComics,
+  mapLocalApiComicsToShowcaseItems,
   mapToShowcaseItems,
+  type LocalApiComicsResponse,
   type MangaDexManga,
 } from "./utils/mangadex";
+import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "./utils/mangadex-config";
 
 const MONLINE_API_URL = (
-  process.env.MONLINE_API_URL ??
-  process.env.NEXT_PUBLIC_MONLINE_API_URL ??
-  "http://localhost:8085"
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://127.0.0.1:8085"
 ).replace(/\/$/, "");
-const MONLINE_HOME_TIMEOUT_MS = 2000;
+const MONLINE_HOME_TIMEOUT_MS = 5000;
 
 const UI_COPY: Record<
   SupportedLanguage,
@@ -32,31 +39,31 @@ const UI_COPY: Record<
   }
 > = {
   es: {
-    worldTop: "Top Mundial de Monline",
-    worldTopSubtitle: "Los comics más vistos de la biblioteca de Monline",
-    topManhwas: "Top 10 Manhuas Mundiales",
-    topManhwasSubtitle: "Los manhwas con más vistas en Monline",
-    latestReleases: "Recién agregados en Monline",
+    worldTop: "Top Mundial de MangaStoon",
+    worldTopSubtitle: "Los comics más vistos de nuestra biblioteca",
+    topManhwas: "Top Manhuas Mundiales",
+    topManhwasSubtitle: "Los manhuas chinos con más vistas en MangaStoon",
+    latestReleases: "Recién agregados en MangaStoon",
     latestReleasesSubtitle: "Nuevas series incorporadas a la biblioteca",
     homeUnavailable: "Mangastoon",
     homeUnavailableBody: "No pudimos cargar las filas principales en este momento.",
   },
   en: {
-    worldTop: "Monline Global Top",
-    worldTopSubtitle: "The most viewed comics from the Monline library",
-    topManhwas: "Top 10 Global Manhwas",
-    topManhwasSubtitle: "The most viewed manhwas on Monline",
-    latestReleases: "Recently Added on Monline",
+    worldTop: "MangaStoon Global Top",
+    worldTopSubtitle: "The most viewed comics from our library",
+    topManhwas: "Global Top Manhuas",
+    topManhwasSubtitle: "The most viewed Chinese manhuas on MangaStoon",
+    latestReleases: "Recently Added on MangaStoon",
     latestReleasesSubtitle: "New series added to the library",
     homeUnavailable: "Mangastoon",
     homeUnavailableBody: "We could not load the main rows right now.",
   },
   pt: {
-    worldTop: "Top Mundial da Monline",
-    worldTopSubtitle: "Os comics mais vistos da biblioteca Monline",
-    topManhwas: "Top 10 Manhwas Mundiais",
-    topManhwasSubtitle: "Os manhwas mais vistos na Monline",
-    latestReleases: "Recém adicionados na Monline",
+    worldTop: "Top Mundial da MangaStoon",
+    worldTopSubtitle: "Os comics mais vistos da nossa biblioteca",
+    topManhwas: "Top Manhuas Mundiais",
+    topManhwasSubtitle: "Os manhuas chineses mais vistos na MangaStoon",
+    latestReleases: "Recém adicionados na MangaStoon",
     latestReleasesSubtitle: "Novas séries adicionadas à biblioteca",
     homeUnavailable: "Mangastoon",
     homeUnavailableBody: "Nao foi possivel carregar as principais fileiras agora.",
@@ -64,16 +71,60 @@ const UI_COPY: Record<
 };
 
 type MonlineComic = Record<string, unknown>;
-type MonlineComicsResponse = {
-  data?: MonlineComic[] | { comics?: MonlineComic[]; items?: MonlineComic[]; results?: MonlineComic[] };
-  comics?: MonlineComic[];
-  items?: MonlineComic[];
-  results?: MonlineComic[];
+type MonlineComicsResponse = LocalApiComicsResponse;
+
+type MangaDexChapterFeedResponse = {
+  data?: Array<{
+    id: string;
+    attributes?: {
+      chapter?: string | null;
+      readableAt?: string | null;
+      publishAt?: string | null;
+      updatedAt?: string | null;
+      createdAt?: string | null;
+      translatedLanguage?: string | null;
+    };
+  }>;
+  total?: number;
 };
 
 function normalizeLanguage(value: string | undefined): SupportedLanguage {
   if (value === "en" || value === "pt") return value;
   return "es";
+}
+
+function isMangaDexUuid(value: string | null | undefined): value is string {
+  return Boolean(value?.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i));
+}
+
+function formatRelativeTime(dateString: string | null | undefined, language: SupportedLanguage) {
+  if (!dateString) return "";
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  const minutes = Math.floor(diffMs / 60_000);
+
+  if (minutes < 1) {
+    return language === "en" ? "just now" : language === "pt" ? "agora mesmo" : "hace instantes";
+  }
+  if (minutes < 60) {
+    return language === "en" ? `${minutes} min ago` : language === "pt" ? `ha ${minutes} min` : `hace ${minutes} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return language === "en" ? `${hours}h ago` : language === "pt" ? `ha ${hours} h` : `hace ${hours} h`;
+  }
+
+  const days = Math.floor(hours / 24);
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
+
+  if (years >= 1) return language === "en" ? `${years}y ago` : language === "pt" ? `ha ${years}a` : `hace ${years} a\u00f1o${years === 1 ? "" : "s"}`;
+  if (months >= 1) return language === "en" ? `${months}mo ago` : language === "pt" ? `ha ${months}m` : `hace ${months} mes${months === 1 ? "" : "es"}`;
+  return language === "en" ? `${days}d ago` : language === "pt" ? `ha ${days}d` : `hace ${days} d`;
 }
 
 function getStringValue(source: Record<string, unknown>, keys: string[]) {
@@ -96,6 +147,15 @@ function getNumberValue(source: MonlineComic, keys: string[]) {
   return 0;
 }
 
+function getRecordArrayValue(source: MonlineComic, keys: string[]) {
+  for (const key of keys) {
+    const value = source[key];
+    if (Array.isArray(value)) return value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object");
+    if (value && typeof value === "object") return [value as Record<string, unknown>];
+  }
+  return [];
+}
+
 function getGenres(source: MonlineComic) {
   const rawGenres = source.genres ?? source.genre ?? source.tags ?? source.categories;
   const values = Array.isArray(rawGenres)
@@ -116,6 +176,111 @@ function getGenres(source: MonlineComic) {
     .slice(0, 4);
 }
 
+function getMonlineTitleMap(source: MonlineComic) {
+  const title = getStringValue(source, ["title", "name", "comic_title", "original_title"]);
+  const englishTitle = getStringValue(source, ["english_title", "title_en", "en_title"]);
+  const spanishTitle = getStringValue(source, ["spanish_title", "title_es", "es_title"]);
+  const portugueseTitle = getStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
+
+  return {
+    ...(title ? { en: title } : {}),
+    ...(englishTitle ? { en: englishTitle } : {}),
+    ...(spanishTitle ? { es: spanishTitle } : {}),
+    ...(portugueseTitle ? { pt: portugueseTitle } : {}),
+  };
+}
+
+function getMonlineLatestChapters(comic: MonlineComic, language: SupportedLanguage) {
+  const chapters = getRecordArrayValue(comic, [
+    "latestChapters",
+    "latest_chapters",
+    "recentChapters",
+    "recent_chapters",
+    "chapters",
+  ]);
+  const fallbackChapterId = getStringValue(comic, [
+    "latestChapterId",
+    "latest_chapter_id",
+    "chapterId",
+    "chapter_id",
+    "mangadex_chapter_id",
+    "mangaDexChapterId",
+  ]);
+  const fallbackChapterNumber = getStringValue(comic, [
+    "latestChapter",
+    "latest_chapter",
+    "chapter",
+    "chapter_number",
+    "chapterNumber",
+  ]);
+  const fallbackPublishedAt = getStringValue(comic, [
+    "latestChapterAt",
+    "latest_chapter_at",
+    "releaseDate",
+    "release_date",
+    "published_at",
+    "publishAt",
+    "updated_at",
+    "created_at",
+  ]);
+  const parsedChapters = chapters
+    .map((chapter) => {
+      const id = getStringValue(chapter, [
+        "id",
+        "chapterId",
+        "chapter_id",
+        "mangadex_chapter_id",
+        "mangaDexChapterId",
+        "uuid",
+      ]);
+      const chapterNumber = getStringValue(chapter, [
+        "chapter",
+        "number",
+        "chapterNumber",
+        "chapter_number",
+        "name",
+        "title",
+      ]);
+      const publishedAt = getStringValue(chapter, [
+        "releaseDate",
+        "release_date",
+        "publishedAt",
+        "published_at",
+        "publishAt",
+        "readableAt",
+        "createdAt",
+        "created_at",
+        "updatedAt",
+        "updated_at",
+      ]);
+
+      return {
+        id: id || null,
+        chapter: chapterNumber,
+        timeAgo: formatRelativeTime(publishedAt, language),
+        publishedAt: publishedAt || null,
+      };
+    })
+    .filter((chapter) => chapter.chapter);
+
+  if (parsedChapters.length > 0) {
+    return parsedChapters.slice(0, 2);
+  }
+
+  if (fallbackChapterNumber) {
+    return [
+      {
+        id: fallbackChapterId || null,
+        chapter: fallbackChapterNumber,
+        timeAgo: formatRelativeTime(fallbackPublishedAt, language),
+        publishedAt: fallbackPublishedAt || null,
+      },
+    ];
+  }
+
+  return [];
+}
+
 function extractMonlineComics(payload: MonlineComicsResponse) {
   if (Array.isArray(payload.data)) return payload.data;
   if (Array.isArray(payload.data?.comics)) return payload.data.comics;
@@ -129,30 +294,48 @@ function extractMonlineComics(payload: MonlineComicsResponse) {
 
 function normalizeMonlineImageUrl(value: string) {
   if (!value) return "";
-  if (value.startsWith("http://") || value.startsWith("https://")) {
-    return value;
-  }
-  return `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
+  const imageUrl =
+    value.startsWith("http://") || value.startsWith("https://")
+      ? value
+      : value.startsWith("//")
+        ? `https:${value}`
+        : `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
+
+  return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 
-function mapMonlineComicsToShowcase(comics: MonlineComic[]) {
+function mapMonlineComicsToShowcase(comics: MonlineComic[], language: SupportedLanguage) {
   return comics.slice(0, 15).map((comic, index): MangaShowcaseItem => {
-    const title = getStringValue(comic, ["title", "name", "comic_title", "original_title"]) || "MangaStoon";
+    const titleMap = getMonlineTitleMap(comic);
+    const title = getLocalizedTitle({ titleMap }, language) || "MangaStoon";
     const slug = getStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
+    const mangaDexId = getStringValue(comic, [
+      "mangaDexId",
+      "mangadexId",
+      "mangadex_id",
+      "manga_dex_id",
+      "mangaId",
+      "manga_id",
+    ]);
     const coverImage = normalizeMonlineImageUrl(
       getStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
     );
     const genres = getGenres(comic);
+    const createdAt = getStringValue(comic, ["created_at", "createdAt", "uploaded_at", "updated_at", "updatedAt"]);
 
     return {
-      mal_id: getNumberValue(comic, ["id", "mal_id"]) || index + 1,
+      mal_id: index + 1,
       title,
       score: null,
       url: slug ? `/manga/${slug}` : "#",
-      mangaDexId: slug || null,
+      mangaDexId: slug || mangaDexId || null,
+      titleMap,
       featuredTag: `#${index + 1}`,
+      createdAt,
       genres: genres.map((genre, genreIndex) => ({ mal_id: genreIndex + 1, name: genre })),
       tags: genres,
+      latestChapters: getMonlineLatestChapters(comic, language),
+      isLocal: true,
       images: {
         webp: { large_image_url: coverImage, image_url: coverImage },
         jpg: { large_image_url: coverImage, image_url: coverImage },
@@ -161,19 +344,98 @@ function mapMonlineComicsToShowcase(comics: MonlineComic[]) {
   });
 }
 
-async function fetchMonlineComics(path: string) {
+async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLanguage) {
+  const params = new URLSearchParams();
+  params.set("limit", "2");
+  params.set("order[readableAt]", "desc");
+
+  getAvailableTranslatedLanguageVariants(language).forEach((translatedLanguage) => {
+    params.append("translatedLanguage[]", translatedLanguage);
+  });
+
+  try {
+    const response = await fetch(
+      toMangaDexApiUrl(`/manga/${mangaId}/feed?${params.toString()}`),
+      {
+        headers: getMangaDexRequestHeaders(),
+        next: { revalidate: 900 },
+      }
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = (await response.json()) as MangaDexChapterFeedResponse;
+
+    return (payload.data ?? []).slice(0, 2).map((chapter) => {
+      const publishedAt =
+        chapter.attributes?.readableAt ??
+        chapter.attributes?.publishAt ??
+        chapter.attributes?.updatedAt ??
+        chapter.attributes?.createdAt ??
+        null;
+
+      return {
+        id: chapter.id,
+        chapter: chapter.attributes?.chapter?.trim() || "Especial",
+        timeAgo: formatRelativeTime(publishedAt, language),
+        publishedAt,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+async function enrichLatestChapters(items: MangaShowcaseItem[], language: SupportedLanguage) {
+  return Promise.all(
+    items.map(async (item) => {
+      if (item.latestChapters?.some((chapter) => chapter.id)) {
+        return item;
+      }
+
+      const mangaDexId = item.mangaDexId;
+
+      if (!isMangaDexUuid(mangaDexId)) {
+        return item;
+      }
+
+      const latestChapters = await fetchLatestChapterPreviews(mangaDexId, language);
+
+      return latestChapters.length > 0 ? { ...item, latestChapters } : item;
+    })
+  );
+}
+
+async function fetchMonlineComics(path: string, language: SupportedLanguage) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MONLINE_HOME_TIMEOUT_MS);
+  const isTopRow = path.includes("order=views");
 
   try {
     const response = await fetch(`${MONLINE_API_URL}${path}`, {
-      cache: "no-store",
+      ...(isTopRow ? { next: { revalidate: 86_400 } } : { cache: "no-store" as const }),
       signal: controller.signal,
     });
     if (!response.ok) return [];
     const payload = (await response.json()) as MonlineComicsResponse;
-    return mapMonlineComicsToShowcase(extractMonlineComics(payload));
-  } catch {
+    console.log("📦 Respuesta Monline:", payload);
+    const comics = extractLocalApiComics(payload);
+    const items = mapLocalApiComicsToShowcaseItems(comics, language, MONLINE_API_URL);
+
+    if (path.includes("order=created_at")) {
+      return Promise.all(
+        items.map(async (item, index) => ({
+          ...item,
+          latestChapters: await fetchLocalChapterPreviews(comics[index], MONLINE_API_URL, controller.signal),
+        }))
+      );
+    }
+
+    return items;
+  } catch (error) {
+    console.error("🔥 Error al conectar con Monline:", error);
     return [];
   } finally {
     clearTimeout(timeout);
@@ -181,41 +443,41 @@ async function fetchMonlineComics(path: string) {
 }
 
 async function fetchMangaDexFallbackRows(isAdult: boolean, language: SupportedLanguage) {
-  const worldTopUrl = buildMangaDexMangaUrl({ limit: "15", "order[followedCount]": "desc" }, isAdult, language);
   const manhwasUrl = buildMangaDexMangaUrl(
-    { limit: "15", "originalLanguage[]": "ko", "order[followedCount]": "desc" },
+    { limit: "15", "originalLanguage[]": "zh", "order[followedCount]": "desc" },
     isAdult,
     language
   );
   const latestUrl = buildMangaDexMangaUrl({ limit: "15", "order[createdAt]": "desc" }, isAdult, language);
 
-  const [worldTopResponse, topManhwasResponse, latestResponse] = await Promise.all([
-    fetchMangaDexCollection(worldTopUrl),
+  const [topManhwasResponse, latestResponse] = await Promise.all([
     fetchMangaDexCollection(manhwasUrl),
     fetchMangaDexCollection(latestUrl),
   ]);
   const allMangaIds = Array.from(
     new Set(
-      [worldTopResponse.data, topManhwasResponse.data, latestResponse.data]
+      [topManhwasResponse.data, latestResponse.data]
         .flat()
         .map((manga: MangaDexManga) => manga.id)
     )
   );
   const statistics = await fetchMangaDexStatistics(allMangaIds);
 
+  const topManhwas = mapToShowcaseItems(topManhwasResponse.data, statistics, language).map((manga, index) => ({
+    ...manga,
+    title: getLocalizedTitle(manga, language),
+    featuredTag: `#${index + 1}`,
+  }));
+  const latest = mapToShowcaseItems(latestResponse.data, statistics, language).map((manga, index) => ({
+    ...manga,
+    title: getLocalizedTitle(manga, language),
+    featuredTag: `#${index + 1}`,
+  }));
+
   return {
-    worldTop: mapToShowcaseItems(worldTopResponse.data, statistics, language).map((manga, index) => ({
-      ...manga,
-      featuredTag: `#${index + 1}`,
-    })),
-    topManhwas: mapToShowcaseItems(topManhwasResponse.data, statistics, language).map((manga, index) => ({
-      ...manga,
-      featuredTag: `#${index + 1}`,
-    })),
-    latest: mapToShowcaseItems(latestResponse.data, statistics, language).map((manga, index) => ({
-      ...manga,
-      featuredTag: `#${index + 1}`,
-    })),
+    worldTop: [],
+    topManhwas,
+    latest: await enrichLatestChapters(latest, language),
   };
 }
 
@@ -226,17 +488,21 @@ export default async function HomePage() {
   const copy = UI_COPY[currentLanguage];
 
   const [monlineWorldTop, monlineTopManhwas, monlineLatest] = await Promise.all([
-    fetchMonlineComics("/api/comics?limit=15&order=views"),
-    fetchMonlineComics("/api/comics?limit=15&type=manhwa&order=views"),
-    fetchMonlineComics("/api/comics?limit=15&order=created_at"),
+    fetchLocalTop(10, currentLanguage),
+    fetchMonlineComics("/api/comics?limit=10&type=manhua&order=views", currentLanguage),
+    fetchMonlineComics("/api/comics?limit=15&order=created_at", currentLanguage),
   ]);
 
   const shouldUseFallback =
-    monlineWorldTop.length === 0 || monlineTopManhwas.length === 0 || monlineLatest.length === 0;
+    monlineTopManhwas.length < 10 || monlineLatest.length === 0;
   const fallbackRows = shouldUseFallback ? await fetchMangaDexFallbackRows(isAdult, currentLanguage) : null;
 
-  const worldTop = monlineWorldTop.length > 0 ? monlineWorldTop : fallbackRows?.worldTop ?? [];
-  const topManhwas = monlineTopManhwas.length > 0 ? monlineTopManhwas : fallbackRows?.topManhwas ?? [];
+  const worldTop = monlineWorldTop;
+  const topManhwaKeys = new Set(monlineTopManhwas.map((manga) => manga.mangaDexId ?? manga.url));
+  const topManhwas = [
+    ...monlineTopManhwas,
+    ...(fallbackRows?.topManhwas ?? []).filter((manga) => !topManhwaKeys.has(manga.mangaDexId ?? manga.url)),
+  ].slice(0, 10);
   const latest = monlineLatest.length > 0 ? monlineLatest : fallbackRows?.latest ?? [];
 
   if (worldTop.length === 0 && topManhwas.length === 0 && latest.length === 0) {
@@ -264,7 +530,7 @@ export default async function HomePage() {
           title={copy.topManhwas}
           subtitle={copy.topManhwasSubtitle}
         />
-        <HorizontalCarousel mangas={latest} title={copy.latestReleases} subtitle={copy.latestReleasesSubtitle} />
+        <HorizontalCarousel mangas={latest} title={copy.latestReleases} subtitle={copy.latestReleasesSubtitle} showChapters />
       </div>
     </main>
   );

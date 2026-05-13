@@ -13,6 +13,7 @@ export type ReadingHistoryItem = {
 type HistoryState = {
   history: ReadingHistoryItem[];
   addHistory: (item: ReadingHistoryItem) => void;
+  removeHistory: (mangaId: string) => void;
   clearHistory: () => void;
 };
 
@@ -36,6 +37,10 @@ export const useHistoryStore = create<HistoryState>()(
             history: [item, ...withoutCurrentManga].slice(0, MAX_HISTORY_ITEMS),
           };
         }),
+      removeHistory: (mangaId) =>
+        set((state) => ({
+          history: state.history.filter((historyItem) => historyItem.mangaId !== mangaId),
+        })),
       clearHistory: () => set({ history: [] }),
     }),
     { name: "mangastoon-reading-history" }

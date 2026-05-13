@@ -5,6 +5,11 @@ import { fetchMonlinePagesFromRoute, toMonlineSegment, uniqueNonEmpty } from "..
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+const LOCAL_API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://127.0.0.1:8085"
+).replace(/\/$/, "");
+
 type AtHomeResponse = {
   baseUrl: string;
   chapter: {
@@ -12,6 +17,12 @@ type AtHomeResponse = {
     data: string[];
     dataSaver?: string[];
   };
+};
+
+type LocalPagesResponse = {
+  data?: {
+    url_pages?: unknown;
+  } | null;
 };
 
 const RETRY_DELAY_MS = 1200;
@@ -46,6 +57,38 @@ async function fetchMangaDex(url: string, retries = 1) {
   return response;
 }
 
+function normalizeLocalImageUrl(value: string) {
+  if (!value) return "";
+  const imageUrl =
+    value.startsWith("http://") || value.startsWith("https://")
+      ? value
+      : value.startsWith("//")
+        ? `https:${value}`
+        : `${LOCAL_API_URL}/${value.replace(/^\/+/, "")}`;
+
+  return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+}
+
+async function fetchLocalChapterPages(chapterId: string) {
+  try {
+    const response = await fetch(`${LOCAL_API_URL}/api/chapters/${encodeURIComponent(chapterId)}/pages`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) return [];
+
+    const payload = (await response.json()) as LocalPagesResponse;
+    const rawPages = payload.data?.url_pages ?? (payload.data as Record<string, unknown> | null | undefined)?.urlPages;
+    const pages = Array.isArray(rawPages)
+      ? rawPages.filter((url): url is string => typeof url === "string" && url.trim().length > 0)
+      : [];
+
+    return pages.map(normalizeLocalImageUrl);
+  } catch {
+    return [];
+  }
+}
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ chapterId: string }> }) {
   const { chapterId } = await params;
   const mangaSegments = uniqueNonEmpty([
@@ -61,7 +104,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const monlinePages = await fetchMonlinePagesFromRoute({ mangaSegments, chapterSegments });
 
   if (monlinePages.length > 0) {
-    return NextResponse.json({ pages: monlinePages }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { pages: monlinePages.map(normalizeLocalImageUrl) },
+      { headers: { "Cache-Control": "no-store" } }
+    );
   }
 
   // Si no es un UUID de MangaDex, significa que viene de Consumet
@@ -69,6 +115,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
   if (!isMangaDexUuid) {
     try {
+      const localPages = await fetchLocalChapterPages(chapterId);
+      if (localPages.length > 0) {
+        return NextResponse.json({ pages: localPages }, { headers: { "Cache-Control": "no-store" } });
+      }
+
       const res = await fetch(`https://consumet-api-one.vercel.app/manga/manganato/read?chapterId=${chapterId}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
