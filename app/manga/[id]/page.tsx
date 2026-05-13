@@ -26,7 +26,11 @@ export const revalidate = 3600;
 export const dynamicParams = true;
 
 const MANGADEX_RETRY_DELAY_MS = 1200;
-const LOCAL_API_URL = (process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8085").replace(/\/$/, "");
+const LOCAL_API_URL = (
+  process.env.MONLINE_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://46.224.213.127:8085"
+).replace(/\/$/, "");
 
 type MangaDexLocalizedText = Record<string, string>;
 

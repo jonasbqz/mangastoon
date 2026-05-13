@@ -16,10 +16,7 @@ import {
   type MangaDexManga,
 } from "../utils/mangadex";
 
-const MONLINE_API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://127.0.0.1:8085"
-).replace(/\/$/, "");
+const MONLINE_API_URL = "/api/monline";
 
 const PRIORITY_THEMES = [
   "Isekai",

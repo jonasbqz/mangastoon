@@ -1,6 +1,7 @@
 ﻿const MONLINE_API_URL = (
+  process.env.MONLINE_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
-  "http://46.224.213.127:8085" // Ponemos tu IP de Hetzner por si la variable falla
+  "http://46.224.213.127:8085"
 ).replace(/\/$/, "");
 
 const MONLINE_TIMEOUT_MS = 8000; // 👈 LO SUBIMOS A 8 SEGUNDOS (Hetzner lo necesita)

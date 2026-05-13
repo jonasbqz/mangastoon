@@ -595,8 +595,9 @@ export function mapLocalApiComicsToShowcaseItems(
 
 export async function fetchLocalTop(limit = 10, language: SupportedLanguage = "es") {
   const apiBaseUrl = (
+    process.env.MONLINE_API_URL ??
     process.env.NEXT_PUBLIC_API_URL ??
-    "http://127.0.0.1:8085"
+    "http://46.224.213.127:8085"
   ).replace(/\/$/, "");
 
   try {

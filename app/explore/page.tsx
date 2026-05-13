@@ -21,10 +21,7 @@ import {
 } from "../utils/mangadex";
 import { translateTagName } from "../utils/tagTranslations";
 
-const MONLINE_API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ??
-  "http://127.0.0.1:8085"
-).replace(/\/$/, "");
+const MONLINE_API_URL = "/api/monline";
 
 const TYPE_FILTERS = [
   { value: "all", label: { es: "Todo", en: "All", pt: "Todos" } },

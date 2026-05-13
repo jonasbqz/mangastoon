@@ -20,8 +20,9 @@ import {
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "./utils/mangadex-config";
 
 const MONLINE_API_URL = (
+  process.env.MONLINE_API_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
-  "http://127.0.0.1:8085"
+  "http://46.224.213.127:8085"
 ).replace(/\/$/, "");
 const MONLINE_HOME_TIMEOUT_MS = 5000;
 
