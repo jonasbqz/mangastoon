@@ -184,7 +184,7 @@ function getMonlineTitleMap(source: MonlineComic) {
   const portugueseTitle = getStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
 
   return {
-    ...(title ? { en: title } : {}),
+    ...(title ? { es: title, en: title, pt: title } : {}),
     ...(englishTitle ? { en: englishTitle } : {}),
     ...(spanishTitle ? { es: spanishTitle } : {}),
     ...(portugueseTitle ? { pt: portugueseTitle } : {}),

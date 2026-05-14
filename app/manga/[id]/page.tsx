@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Script from "next/script";
 import Link from "next/link";
-import { ArrowDown } from "lucide-react";
+
 import BackButton from "../../components/BackButton";
 import ContinueReadingButton from "../../components/ContinueReadingButton";
 import FavoriteButton from "../../components/FavoriteButton";
 import { MangaCard, type MangaShowcaseItem } from "../../components/MangaCard";
 import SiteHeader, { type SupportedLanguage } from "../../components/site-header";
-import SynopsisBlock from "./synopsis";
+import SeoSynopsis from "./synopsis";
 import ChapterList from "./chapter-list";
 import { getLocalizedTitle, getLocalizedTitleAsync } from "../../utils/get-localized-title";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../utils/mangadex-config";
@@ -43,6 +43,7 @@ type MangaDetailsResponse = {
       altTitles?: MangaDexLocalizedText[];
       description?: MangaDexLocalizedText;
       contentRating?: string;
+      originalLanguage?: string;
       tags?: Array<{
         id: string;
         attributes?: {
@@ -218,7 +219,7 @@ function mapLocalComicToMangaDetails(comic: LocalApiComic): MangaDetails | null 
     id: slug,
     author,
     attributes: {
-      title: { es: title, en: title },
+      title: { es: title, en: title, pt: title },
       altTitles: [],
       description: description ? { es: description, en: description } : {},
       contentRating: comic.isNsfw || comic.nsfw || comic.adult ? "erotica" : "safe",
@@ -410,7 +411,7 @@ export async function generateMetadata({
             url: imageUrl,
             width: 800,
             height: 1200,
-            alt: `Portada de ${cleanTitle}`,
+            alt: `Portada del manga ${cleanTitle}`,
           },
         ],
       },
@@ -549,10 +550,17 @@ function wait(ms: number) {
 }
 
 async function fetchMangaDex(url: string, retries = 1) {
-  const response = await fetch(toMangaDexApiUrl(url), {
-    headers: getMangaDexRequestHeaders(),
-    next: { revalidate: 3600 },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(toMangaDexApiUrl(url), {
+      headers: getMangaDexRequestHeaders(),
+      next: { revalidate: 3600 },
+    });
+  } catch (error) {
+    console.error("[manga-page] MangaDex fetch failed:", error);
+    return new Response(null, { status: 502 });
+  }
 
   if (response.status === 429 && retries > 0) {
     const retryAfter = Number(response.headers.get("retry-after"));
@@ -1252,7 +1260,7 @@ export default async function MangaDetailsPage({
                   <div className="relative aspect-[2/3] w-full">
                     <Image
                       src={coverUrl}
-                      alt={displayTitle}
+                      alt={`Portada del manga ${displayTitle}`}
                       fill
                       sizes="(max-width: 640px) 112px, (max-width: 768px) 150px, 320px"
                       className="object-cover object-top"
@@ -1335,11 +1343,9 @@ export default async function MangaDetailsPage({
               ))}
             </div>
 
-            <SynopsisBlock
-              title={copy.synopsis}
-              content={description}
-              expandLabel={copy.readMore}
-              collapseLabel={copy.readLess}
+            <SeoSynopsis
+              title={displayTitle}
+              description={description}
             />
 
             <section id="chapters" className="mt-8 scroll-mt-28">
@@ -1351,19 +1357,6 @@ export default async function MangaDetailsPage({
                   {chapters.length} {copy.totalChapters}
                 </p>
               </div>
-
-              <div className="mb-4 flex items-center justify-between rounded-xl bg-[#141519] px-4 py-3 text-left">
-                <p className="text-base leading-relaxed text-gray-400">
-                  {chapters.length} {copy.totalSuffix}
-                </p>
-                <button
-                  type="button"
-                  className="rounded-md bg-white/5 p-2 text-gray-300 transition-colors hover:bg-white/10"
-                >
-                  <ArrowDown className="h-4 w-4" />
-                </button>
-              </div>
-
               {chapters.length === 0 ? (
                 <div className="rounded-xl bg-[#141519] p-6 text-base leading-relaxed text-gray-400">
                   <p>{bestFallbackLanguage ? copy.noChaptersInLanguage : copy.noChapters}</p>
@@ -1383,6 +1376,7 @@ export default async function MangaDetailsPage({
                   mangaId={manga.id}
                   chapterRows={chapterRows}
                   showMoreLabel={copy.showMoreChapters}
+                  totalLabel={`${chapters.length} ${copy.totalSuffix}`}
                 />
               )}
             </section>

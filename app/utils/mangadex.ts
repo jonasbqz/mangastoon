@@ -240,22 +240,31 @@ export function hasSensitiveAdultTag(manga: MangaDexManga) {
 }
 
 export async function fetchMangaDexCollection(url: string, signal?: AbortSignal) {
-  const response = await fetch(url, {
-    headers: getMangaDexRequestHeaders(),
-    next: { revalidate: 3600 },
-    signal,
-  });
+  try {
+    const response = await fetch(url, {
+      headers: getMangaDexRequestHeaders(),
+      next: { revalidate: 3600 },
+      signal,
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return { data: [], total: 0 };
+    }
+
+    const payload = (await response.json()) as MangaDexCollectionResponse;
+
+    return {
+      data: payload.data ?? [],
+      total: payload.total ?? payload.pagination?.total ?? 0,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw error;
+    }
+
+    console.error("[mangadex] Failed to fetch collection:", error);
     return { data: [], total: 0 };
   }
-
-  const payload = (await response.json()) as MangaDexCollectionResponse;
-
-  return {
-    data: payload.data ?? [],
-    total: payload.total ?? payload.pagination?.total ?? 0,
-  };
 }
 
 export async function fetchMangaDexStatistics(ids: string[], signal?: AbortSignal) {
@@ -271,21 +280,30 @@ export async function fetchMangaDexStatistics(ids: string[], signal?: AbortSigna
       ? toMangaDexApiUrl(`/statistics/manga?${params.toString()}`)
       : `/api/mangadex/statistics?${params.toString()}`;
 
-  const response =
-    typeof window === "undefined"
-      ? await fetch(url, {
-          headers: getMangaDexRequestHeaders(),
-          next: { revalidate: 3600 },
-          signal,
-        })
-      : await fetch(url, { signal });
+  try {
+    const response =
+      typeof window === "undefined"
+        ? await fetch(url, {
+            headers: getMangaDexRequestHeaders(),
+            next: { revalidate: 3600 },
+            signal,
+          })
+        : await fetch(url, { signal });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return {};
+    }
+
+    const payload = (await response.json()) as MangaDexStatisticsResponse;
+    return payload.statistics ?? {};
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw error;
+    }
+
+    console.error("[mangadex] Failed to fetch statistics:", error);
     return {};
   }
-
-  const payload = (await response.json()) as MangaDexStatisticsResponse;
-  return payload.statistics ?? {};
 }
 
 export function mapToShowcaseItems(
@@ -459,7 +477,7 @@ function getLocalTitleMap(source: LocalApiComic) {
   const portugueseTitle = getLocalStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
 
   return {
-    ...(title ? { en: title } : {}),
+    ...(title ? { es: title, en: title, pt: title } : {}),
     ...(englishTitle ? { en: englishTitle } : {}),
     ...(spanishTitle ? { es: spanishTitle } : {}),
     ...(portugueseTitle ? { pt: portugueseTitle } : {}),
@@ -559,7 +577,7 @@ export function mapLocalApiComicsToShowcaseItems(
     const slug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
     const rawTitle = getLocalStringValue(comic, ["title", "name", "comic_title", "original_title"]);
     const titleMap = getLocalTitleMap(comic);
-    const title = rawTitle || getLocalizedTitle({ titleMap }, language);
+    const title = getLocalizedTitle({ titleMap, title: rawTitle }, language);
     const coverImage = normalizeLocalImageUrl(
       getLocalStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"]),
       apiBaseUrl

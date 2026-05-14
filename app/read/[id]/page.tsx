@@ -590,7 +590,7 @@ export default function ReadPage() {
 
     async function loadSuggestions() {
       try {
-        const response = await fetch("/api/monline/api/comics?limit=4&order=updated_at&sort=desc", {
+        const response = await fetch("/api/monline/api/comics?limit=5&order=updated_at&sort=desc", {
           cache: "no-store",
         });
 
@@ -598,7 +598,7 @@ export default function ReadPage() {
 
         const items = extractSuggestedComics(await response.json())
           .filter((comic) => comic.slug !== mangaId)
-          .slice(0, 4);
+          .slice(0, 5);
 
         if (!cancelled) {
           setSuggestedComics(items);
@@ -1128,10 +1128,14 @@ export default function ReadPage() {
                 {suggestedComics.length > 0 ? (
                   <div className="mt-8 text-left">
                     <h3 className="mb-4 text-sm font-bold uppercase tracking-[0.22em] text-gray-500">{dictionary.suggestedTitle}</h3>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      {suggestedComics.map((comic) => (
-                        <a key={comic.slug} href={`/manga/${comic.slug}`} className="group block">
-                          <div className="aspect-[2/3] overflow-hidden rounded-xl border border-white/10 bg-black/30">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+                      {suggestedComics.map((comic, index) => (
+                        <a
+                          key={comic.slug}
+                          href={`/manga/${comic.slug}`}
+                          className={`group block ${index >= 4 ? "hidden lg:block" : ""}`}
+                        >
+                          <div className="aspect-[2/3] overflow-hidden rounded-lg border border-gray-800 bg-gray-900 transition-colors group-hover:border-orange-500/40">
                             {comic.coverImage ? (
                               <img
                                 src={comic.coverImage}

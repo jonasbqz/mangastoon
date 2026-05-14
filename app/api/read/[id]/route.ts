@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../utils/mangadex-config";
+import { getLocalizedTitle } from "../../../utils/get-localized-title";
 import {
   buildMonlineChapterSegments,
   fetchMonlinePagesFromRoute,
@@ -120,6 +121,21 @@ function getStringValue(source: Record<string, unknown>, keys: string[]) {
   return "";
 }
 
+
+function getLocalTitleMap(source: Record<string, unknown>) {
+  const title = getStringValue(source, ["title", "name", "comic_title", "original_title"]);
+  const englishTitle = getStringValue(source, ["english_title", "title_en", "en_title"]);
+  const spanishTitle = getStringValue(source, ["spanish_title", "title_es", "es_title"]);
+  const portugueseTitle = getStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
+
+  return {
+    ...(title ? { es: title, en: title, pt: title } : {}),
+    ...(englishTitle ? { en: englishTitle } : {}),
+    ...(spanishTitle ? { es: spanishTitle } : {}),
+    ...(portugueseTitle ? { pt: portugueseTitle } : {}),
+  };
+}
+
 function normalizeLocalImageUrl(value: string) {
   if (!value) return "";
   const imageUrl =
@@ -222,7 +238,8 @@ async function fetchLocalMangaIdentity(slug: string) {
       ? await fetch(`${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`, { cache: "no-store" })
       : null;
     const fullComic = detailResponse?.ok ? ((await detailResponse.json()) as LocalComic) : comic;
-    const title = getStringValue(fullComic, ["title", "name", "comic_title", "original_title"]) || "Mangastoon";
+    const rawTitle = getStringValue(fullComic, ["title", "name", "comic_title", "original_title"]);
+    const title = getLocalizedTitle({ titleMap: getLocalTitleMap(fullComic), title: rawTitle }, "es") || "Mangastoon";
     const coverImage = normalizeLocalImageUrl(
       getStringValue(fullComic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
     );

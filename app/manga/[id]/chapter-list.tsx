@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { BookOpen, CalendarDays } from "lucide-react";
+import { ArrowDown, BookOpen, CalendarDays } from "lucide-react";
 import { useState } from "react";
 
 type ChapterRow = {
@@ -16,18 +16,38 @@ type ChapterListProps = {
   mangaId: string;
   chapterRows: ChapterRow[];
   showMoreLabel: string;
+  totalLabel: string;
 };
 
 const INITIAL_CHAPTER_COUNT = 10;
-const CHAPTER_INCREMENT = 10;
-
-export default function ChapterList({ mangaId, chapterRows, showMoreLabel }: ChapterListProps) {
+export default function ChapterList({ mangaId, chapterRows, showMoreLabel, totalLabel }: ChapterListProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_CHAPTER_COUNT);
-  const visibleRows = chapterRows.slice(0, visibleCount);
+  const [descending, setDescending] = useState(true);
+  const orderedRows = descending ? chapterRows : [...chapterRows].reverse();
+  const visibleRows = orderedRows.slice(0, visibleCount);
   const hasMore = visibleCount < chapterRows.length;
+  const sortLabel = descending
+    ? "Mostrar capitulo 1 primero"
+    : "Mostrar capitulo mas reciente primero";
 
   return (
     <div>
+      <div className="mb-4 flex items-center justify-between rounded-xl bg-[#141519] px-4 py-3 text-left">
+        <p className="text-base leading-relaxed text-gray-400">{totalLabel}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setDescending((current) => !current);
+            setVisibleCount(INITIAL_CHAPTER_COUNT);
+          }}
+          aria-label={sortLabel}
+          title={sortLabel}
+          className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-800 text-gray-500 transition-all hover:border-orange-500/50 hover:text-white"
+        >
+          <ArrowDown className={`h-5 w-5 transition-transform duration-300 ${!descending ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+
       {visibleRows.map(({ chapter, chapterLabel, publishedLabel }) => (
         <Link
           key={chapter.id}
@@ -50,7 +70,7 @@ export default function ChapterList({ mangaId, chapterRows, showMoreLabel }: Cha
         <div className="mt-5 flex justify-center">
           <button
             type="button"
-            onClick={() => setVisibleCount((count) => count + CHAPTER_INCREMENT)}
+            onClick={() => setVisibleCount(chapterRows.length)}
             className="rounded-full border border-orange-500/40 bg-orange-500/10 px-5 py-2.5 text-sm font-semibold text-orange-300 transition hover:border-orange-400 hover:bg-orange-500 hover:text-white"
           >
             {showMoreLabel}
