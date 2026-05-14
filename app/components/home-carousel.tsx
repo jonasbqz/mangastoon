@@ -86,8 +86,8 @@ export function MangaCard({
   const visibleLatestChapters = latestChapters?.filter((chapter) => chapter.chapter?.trim());
 
   return (
-    <article className={`${sizeClass} shrink-0 cursor-pointer snap-start`}>
-      <div className="flex flex-col group w-full">
+    <article className={`${sizeClass} shrink-0 cursor-pointer snap-start transition-transform duration-300 hover:scale-[1.02]`}>
+      <div className="group flex w-full flex-col">
         
         {/* CONTENEDOR DE IMAGEN */}
         <div className="relative aspect-[3/4] w-full overflow-hidden rounded-md bg-zinc-900 ring-1 ring-white/5 transition-all duration-300 group-hover:shadow-[0_0_26px_rgba(255,107,0,0.28)]">
@@ -163,7 +163,7 @@ export function MangaCard({
         {/* TEXTOS INFERIORES - JERARQUÍA ARREGLADA */}
         <div className="mt-2 flex flex-col px-0.5">
           {/* Título: Blanco y tamaño moderado */}
-          <h3 className="text-gray-100 text-[13px] md:text-sm font-semibold line-clamp-1" title={mangaTitle}>
+          <h3 className="line-clamp-2 min-h-[2.5rem] text-[13px] font-semibold leading-5 text-gray-100 md:text-sm" title={mangaTitle}>
             {mangaTitle}
           </h3>
           {/* Género: Miniatura y gris oscuro */}
