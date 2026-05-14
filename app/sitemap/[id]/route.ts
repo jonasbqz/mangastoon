@@ -9,9 +9,11 @@ import {
   buildMangaDexSitemapSearchParams,
   escapeXml,
   extractMonlineSitemapComics,
+  fetchSitemapJson,
   getMangaDexSitemapTotal,
   getMonlineSitemapTotal,
   getSitemapPageCountFromTotal,
+  sitemapUnavailableResponse,
   xmlResponse,
 } from "../../utils/seo";
 
@@ -48,26 +50,21 @@ function sitemapUrl(loc: string, lastmod: string, priority = "0.8") {
 }
 
 async function getSitemapBoundaries() {
-  try {
-    const [mangaDexTotal, monlineTotal] = await Promise.all([
-      getMangaDexSitemapTotal(),
-      getMonlineSitemapTotal(),
-    ]);
+  const [mangaDexTotal, monlineTotal] = await Promise.all([
+    getMangaDexSitemapTotal(),
+    getMonlineSitemapTotal(),
+  ]);
 
-    const mangaDexPages = getSitemapPageCountFromTotal(
-      mangaDexTotal,
-      MAX_MANGADEX_SITEMAP_PAGES
-    );
-    const monlinePages = getSitemapPageCountFromTotal(
-      monlineTotal,
-      MAX_MONLINE_SITEMAP_PAGES
-    );
+  const mangaDexPages = getSitemapPageCountFromTotal(
+    mangaDexTotal,
+    MAX_MANGADEX_SITEMAP_PAGES
+  );
+  const monlinePages = getSitemapPageCountFromTotal(
+    monlineTotal,
+    MAX_MONLINE_SITEMAP_PAGES
+  );
 
-    return { mangaDexPages, totalPages: mangaDexPages + monlinePages };
-  } catch (error) {
-    console.error("Error fetching sitemap boundaries:", error);
-    return { mangaDexPages: MAX_MANGADEX_SITEMAP_PAGES, totalPages: MAX_MANGADEX_SITEMAP_PAGES };
-  }
+  return { mangaDexPages, totalPages: mangaDexPages + monlinePages };
 }
 
 async function getMangaDexUrls(sitemapId: number) {
@@ -76,17 +73,9 @@ async function getMangaDexUrls(sitemapId: number) {
     sitemapId * SITEMAP_PAGE_SIZE
   );
 
-  const response = await fetch(`${MANGADEX_API_URL}/manga?${searchParams.toString()}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`MangaDex sitemap page failed: ${response.status}`);
-  }
-
-  const payload = (await response.json()) as {
+  const payload = await fetchSitemapJson<{
     data?: Array<{ id: string; attributes?: { updatedAt?: string | null } }>;
-  };
+  }>(`${MANGADEX_API_URL}/manga?${searchParams.toString()}`);
 
   return (payload.data ?? []).map((manga) => {
     const lastmod = manga.attributes?.updatedAt
@@ -102,15 +91,9 @@ async function getMonlineUrls(localSitemapId: number) {
   searchParams.set("limit", SITEMAP_PAGE_SIZE.toString());
   searchParams.set("page", String(localSitemapId + 1));
 
-  const response = await fetch(`${MONLINE_API_URL}/api/comics?${searchParams.toString()}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Monline sitemap page failed: ${response.status}`);
-  }
-
-  const payload = await response.json();
+  const payload = await fetchSitemapJson<Parameters<typeof extractMonlineSitemapComics>[0]>(
+    `${MONLINE_API_URL}/api/comics?${searchParams.toString()}`
+  );
 
   return extractMonlineSitemapComics(payload).flatMap((comic): string[] => {
     if (!comic || typeof comic !== "object") return [];
@@ -134,7 +117,15 @@ export async function GET(
     return new Response("Not Found", { status: 404 });
   }
 
-  const { mangaDexPages, totalPages } = await getSitemapBoundaries();
+  let mangaDexPages = 0;
+  let totalPages = 0;
+
+  try {
+    ({ mangaDexPages, totalPages } = await getSitemapBoundaries());
+  } catch (error) {
+    console.error("Error fetching sitemap boundaries:", error);
+    return sitemapUnavailableResponse();
+  }
 
   if (sitemapId >= totalPages) {
     return new Response("Not Found", { status: 404 });
@@ -148,6 +139,7 @@ export async function GET(
       : await getMonlineUrls(sitemapId - mangaDexPages);
   } catch (error) {
     console.error("Error fetching sitemap page:", sitemapId, error);
+    return sitemapUnavailableResponse();
   }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join("\n")}\n</urlset>`;

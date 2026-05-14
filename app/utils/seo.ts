@@ -11,7 +11,8 @@ export const SITE_IMAGE = "/opengraph-image";
 
 export const MANGADEX_API_URL = "https://api.mangadex.org";
 export const SITEMAP_PAGE_SIZE = 100;
-export const MAX_MANGADEX_SITEMAP_PAGES = 200;
+// MangaDex rechaza offsets >= 10000; con 100 URLs por sitemap, el limite seguro es 0..99.
+export const MAX_MANGADEX_SITEMAP_PAGES = 100;
 export const MAX_MONLINE_SITEMAP_PAGES = 100;
 const PUBLIC_MONLINE_API_URL = process.env.NEXT_PUBLIC_API_URL?.startsWith("http")
   ? process.env.NEXT_PUBLIC_API_URL
@@ -24,6 +25,15 @@ export const MONLINE_API_URL = (
 ).replace(/\/$/, "");
 
 export const MANGADEX_SITEMAP_LANGUAGES = ["es", "en", "pt", "pt-br"] as const;
+export const SITEMAP_UPSTREAM_TIMEOUT_MS = 8000;
+export const SITEMAP_RETRY_AFTER_SECONDS = 3600;
+
+export class SitemapUnavailableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SitemapUnavailableError";
+  }
+}
 
 export function absoluteUrl(path = "/") {
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
@@ -48,6 +58,43 @@ export function xmlResponse(xml: string, maxAge = 3600) {
   });
 }
 
+export function sitemapUnavailableResponse(message = "Sitemap temporarily unavailable") {
+  return new NextResponse(message, {
+    status: 503,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Retry-After": String(SITEMAP_RETRY_AFTER_SECONDS),
+    },
+  });
+}
+
+export async function fetchSitemapJson<T>(url: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SITEMAP_UPSTREAM_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new SitemapUnavailableError(`Sitemap upstream failed: ${response.status}`);
+    }
+
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof SitemapUnavailableError) throw error;
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new SitemapUnavailableError("Sitemap upstream timed out");
+    }
+    throw new SitemapUnavailableError("Sitemap upstream request failed");
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function buildMangaDexSitemapSearchParams(limit: number, offset: number) {
   const searchParams = new URLSearchParams();
   searchParams.set("limit", String(limit));
@@ -68,15 +115,9 @@ export function getSitemapPageCountFromTotal(total: number, maxPages: number) {
 export async function getMangaDexSitemapTotal() {
   const searchParams = buildMangaDexSitemapSearchParams(1, 0);
 
-  const response = await fetch(`${MANGADEX_API_URL}/manga?${searchParams.toString()}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`MangaDex sitemap stats failed: ${response.status}`);
-  }
-
-  const payload = (await response.json()) as { total?: number };
+  const payload = await fetchSitemapJson<{ total?: number }>(
+    `${MANGADEX_API_URL}/manga?${searchParams.toString()}`
+  );
   return Math.max(0, payload.total ?? 0);
 }
 
@@ -112,14 +153,8 @@ export async function getMonlineSitemapTotal() {
   searchParams.set("limit", "1");
   searchParams.set("page", "1");
 
-  const response = await fetch(`${MONLINE_API_URL}/api/comics?${searchParams.toString()}`, {
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Monline sitemap stats failed: ${response.status}`);
-  }
-
-  const payload = (await response.json()) as MonlineSitemapPayload;
+  const payload = await fetchSitemapJson<MonlineSitemapPayload>(
+    `${MONLINE_API_URL}/api/comics?${searchParams.toString()}`
+  );
   return Math.max(0, getMonlineSitemapTotalFromPayload(payload, extractMonlineSitemapComics(payload).length));
 }

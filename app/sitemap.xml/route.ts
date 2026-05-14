@@ -6,6 +6,7 @@ import {
   getMangaDexSitemapTotal,
   getMonlineSitemapTotal,
   getSitemapPageCountFromTotal,
+  sitemapUnavailableResponse,
   xmlResponse,
 } from "../utils/seo";
 
@@ -13,38 +14,40 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 async function getSitemapPageCount() {
-  try {
-    const [mangaDexTotal, monlineTotal] = await Promise.all([
-      getMangaDexSitemapTotal(),
-      getMonlineSitemapTotal(),
-    ]);
+  const [mangaDexTotal, monlineTotal] = await Promise.all([
+    getMangaDexSitemapTotal(),
+    getMonlineSitemapTotal(),
+  ]);
 
-    const mangaDexPages = getSitemapPageCountFromTotal(
-      mangaDexTotal,
-      MAX_MANGADEX_SITEMAP_PAGES
-    );
-    const monlinePages = getSitemapPageCountFromTotal(
-      monlineTotal,
-      MAX_MONLINE_SITEMAP_PAGES
-    );
+  const mangaDexPages = getSitemapPageCountFromTotal(
+    mangaDexTotal,
+    MAX_MANGADEX_SITEMAP_PAGES
+  );
+  const monlinePages = getSitemapPageCountFromTotal(
+    monlineTotal,
+    MAX_MONLINE_SITEMAP_PAGES
+  );
 
-    return Math.max(1, mangaDexPages + monlinePages);
-  } catch (error) {
-    console.error("Error fetching sitemap stats:", error);
-    return MAX_MANGADEX_SITEMAP_PAGES;
-  }
+  return Math.max(1, mangaDexPages + monlinePages);
 }
 
 export async function GET() {
   const now = new Date().toISOString();
-  const dynamicPageCount = await getSitemapPageCount();
+  let dynamicPageCount = 1;
+
+  try {
+    dynamicPageCount = await getSitemapPageCount();
+  } catch (error) {
+    console.error("Error fetching sitemap stats:", error);
+    return sitemapUnavailableResponse();
+  }
   const sitemaps = [
     `  <sitemap>\n    <loc>${escapeXml(`${SITE_URL}/sitemap-static.xml`)}</loc>\n    <lastmod>${now}</lastmod>\n  </sitemap>`,
   ];
 
   for (let page = 0; page < dynamicPageCount; page += 1) {
     sitemaps.push(
-      `  <sitemap>\n    <loc>${escapeXml(`${SITE_URL}/sitemap/${page}`)}</loc>\n    <lastmod>${now}</lastmod>\n  </sitemap>`
+      `  <sitemap>\n    <loc>${escapeXml(`${SITE_URL}/sitemap/${page}.xml`)}</loc>\n    <lastmod>${now}</lastmod>\n  </sitemap>`
     );
   }
 

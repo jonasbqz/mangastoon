@@ -93,6 +93,8 @@ const ORDER_OPTIONS = [
 const DEFAULT_ORDER_BY = "latestUploadedChapter";
 const DEFAULT_SORT_DIR = "desc";
 const DEFAULT_TYPE = "all";
+const EXPLORE_STATE_STORAGE_KEY = "mangastoon:explore-state";
+const MANGADEX_MAX_OFFSET = 10_000;
 
 type OrderByValue = (typeof ORDER_OPTIONS)[number]["value"];
 type SortDirValue = "asc" | "desc";
@@ -276,11 +278,52 @@ function getLatestChapterTimestamp(manga: MangaShowcaseItem) {
   return Number.isFinite(createdAt) ? createdAt : 0;
 }
 
-function sortByLatestChapter(items: MangaShowcaseItem[], direction: SortDirValue) {
+function getComparableTitle(manga: MangaShowcaseItem) {
+  return normalizeSearchText(manga.titleMap?.es ?? manga.titleMap?.en ?? manga.title);
+}
+
+function interleaveShowcaseItems(
+  primaryItems: MangaShowcaseItem[],
+  secondaryItems: MangaShowcaseItem[]
+) {
+  const result: MangaShowcaseItem[] = [];
+  const maxLength = Math.max(primaryItems.length, secondaryItems.length);
+
+  for (let index = 0; index < maxLength; index += 1) {
+    if (primaryItems[index]) result.push(primaryItems[index]);
+    if (secondaryItems[index]) result.push(secondaryItems[index]);
+  }
+
+  return result;
+}
+
+function sortShowcaseItems(
+  items: MangaShowcaseItem[],
+  orderBy: OrderByValue,
+  direction: SortDirValue
+) {
+  if (orderBy === "followedCount") return items;
+
   return [...items].sort((a, b) => {
-    const diff = getLatestChapterTimestamp(b) - getLatestChapterTimestamp(a);
+    let diff = 0;
+
+    if (orderBy === "title") {
+      diff = getComparableTitle(a).localeCompare(getComparableTitle(b));
+    } else if (orderBy === "rating") {
+      diff = (b.score ?? 0) - (a.score ?? 0);
+    } else {
+      diff = getLatestChapterTimestamp(b) - getLatestChapterTimestamp(a);
+    }
+
     return direction === "asc" ? -diff : diff;
   });
+}
+
+function getReachablePageCount(total: number, localTotal: number) {
+  const totalPages = Math.max(1, Math.ceil(total / 24));
+  const maxReachablePage = Math.max(1, Math.floor((MANGADEX_MAX_OFFSET + localTotal) / 24) + 1);
+
+  return Math.min(totalPages, maxReachablePage);
 }
 
 export default function ExplorePage() {
@@ -308,6 +351,15 @@ export default function ExplorePage() {
   const [urlHydrated, setUrlHydrated] = useState(false);
 
   useEffect(() => {
+    if (!initializedFromUrlRef.current && !searchParams.toString()) {
+      const savedQueryString = window.sessionStorage.getItem(EXPLORE_STATE_STORAGE_KEY);
+
+      if (savedQueryString) {
+        router.replace(`/explore?${savedQueryString}`, { scroll: false });
+        return;
+      }
+    }
+
     isApplyingUrlStateRef.current = true;
     const urlTagIds = searchParams.getAll("includedTags");
     const genreIds = GENRE_TAGS.map((genre) => genre.id as string);
@@ -327,7 +379,7 @@ export default function ExplorePage() {
     setSelectedSpecialTags(urlTagIds.filter((tagId) => specialIds.includes(tagId)));
     initializedFromUrlRef.current = true;
     setUrlHydrated(true);
-  }, [searchParams]);
+  }, [router, searchParams]);
 
   const exploreQueryString = useMemo(() => {
     const params = new URLSearchParams();
@@ -363,6 +415,10 @@ export default function ExplorePage() {
   useEffect(() => {
     if (!urlHydrated) {
       return;
+    }
+
+    if (exploreQueryString) {
+      window.sessionStorage.setItem(EXPLORE_STATE_STORAGE_KEY, exploreQueryString);
     }
 
     if (isApplyingUrlStateRef.current) {
@@ -493,8 +549,10 @@ export default function ExplorePage() {
 
       const mangaDexParams = new URLSearchParams();
       const pageStart = (targetPage - 1) * 24;
-      const mangaDexOffset = Math.max(0, pageStart - localTotal);
-      mangaDexParams.set("limit", String(Math.max(1, 24 - Math.min(localMangas.length, 24))));
+      const isPopularityOrder = orderBy === "followedCount";
+      const mangaDexOffset = isPopularityOrder ? pageStart : Math.max(0, pageStart - localTotal);
+      const mangaDexLimit = isPopularityOrder ? 24 : Math.max(1, 24 - Math.min(localMangas.length, 24));
+      mangaDexParams.set("limit", String(mangaDexLimit));
       mangaDexParams.set("offset", String(mangaDexOffset));
       mangaDexParams.set(
         `order[${
@@ -522,7 +580,7 @@ export default function ExplorePage() {
         mangaDexParams.append("includedTags[]", tagId);
       });
 
-      const canFetchMangaDex = mangaDexOffset <= 10_000;
+      const canFetchMangaDex = mangaDexOffset <= MANGADEX_MAX_OFFSET;
       const mangaDexResponse = canFetchMangaDex
         ? await fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal })
         : null;
@@ -535,19 +593,18 @@ export default function ExplorePage() {
         : {};
       const mangaDexMangas = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
       const localSlugs = new Set(localMangas.map((manga) => manga.mangaDexId ?? manga.url));
-      const combinedMangas = [
-        ...localMangas,
-        ...mangaDexMangas.filter((manga) => !localSlugs.has(manga.mangaDexId ?? manga.url)),
-      ];
-      const mixedMangas = (orderBy === "latestUploadedChapter"
-        ? sortByLatestChapter(combinedMangas, sortDir)
-        : combinedMangas
-      ).slice(0, 24);
+      const uniqueMangaDexMangas = mangaDexMangas.filter(
+        (manga) => !localSlugs.has(manga.mangaDexId ?? manga.url)
+      );
+      const combinedMangas = orderBy === "followedCount"
+        ? interleaveShowcaseItems(localMangas, uniqueMangaDexMangas)
+        : [...localMangas, ...uniqueMangaDexMangas];
+      const mixedMangas = sortShowcaseItems(combinedMangas, orderBy, sortDir).slice(0, 24);
       const total = localTotal + (mangaDexPayload.total ?? mangaDexPayload.pagination?.total ?? 0);
 
       if (signal?.aborted) return;
 
-      const nextLastVisiblePage = Math.max(1, Math.ceil(total / 24));
+      const nextLastVisiblePage = getReachablePageCount(total, localTotal);
 
       setTotalItems(total);
       setLastVisiblePage(nextLastVisiblePage);
@@ -631,6 +688,7 @@ export default function ExplorePage() {
     setSelectedGenres([]);
     setSelectedSpecialTags([]);
     setSelectedType(DEFAULT_TYPE);
+    window.sessionStorage.removeItem(EXPLORE_STATE_STORAGE_KEY);
     setError("");
     setCurrentPage(1);
   }
@@ -739,16 +797,7 @@ export default function ExplorePage() {
                 ))}
 
                 {lastVisiblePage > paginationPages[paginationPages.length - 1] ? (
-                  <>
-                    <span className="px-2 text-sm text-gray-500">...</span>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentPage(lastVisiblePage)}
-                      className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium text-gray-400 transition-all hover:bg-gray-800 hover:text-white"
-                    >
-                      {lastVisiblePage}
-                    </button>
-                  </>
+                  <span className="px-2 text-sm text-gray-500">...</span>
                 ) : null}
 
                 {/* Bot?n Siguiente (Flecha) */}
