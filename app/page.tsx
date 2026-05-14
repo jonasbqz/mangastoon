@@ -10,7 +10,6 @@ import {
   fetchMangaDexCollection,
   fetchMangaDexStatistics,
   fetchLocalTop,
-  fetchLocalChapterPreviews,
   getAvailableTranslatedLanguageVariants,
   extractLocalApiComics,
   mapLocalApiComicsToShowcaseItems,
@@ -419,7 +418,7 @@ async function fetchMonlineComics(path: string, language: SupportedLanguage) {
 
   try {
     const response = await fetch(`${MONLINE_API_URL}${path}`, {
-      ...(isTopRow ? { next: { revalidate: 86_400 } } : { cache: "no-store" as const }),
+      next: { revalidate: isTopRow ? 86_400 : 300 },
       signal: controller.signal,
     });
     if (!response.ok) return [];
@@ -427,15 +426,6 @@ async function fetchMonlineComics(path: string, language: SupportedLanguage) {
     logger.debug("Respuesta Monline", payload);
     const comics = extractLocalApiComics(payload);
     const items = mapLocalApiComicsToShowcaseItems(comics, language, MONLINE_API_URL);
-
-    if (path.includes("order=created_at")) {
-      return Promise.all(
-        items.map(async (item, index) => ({
-          ...item,
-          latestChapters: await fetchLocalChapterPreviews(comics[index], MONLINE_API_URL, controller.signal),
-        }))
-      );
-    }
 
     return items;
   } catch (error) {
