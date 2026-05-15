@@ -89,19 +89,54 @@ function chooseCleanTitle(value: string | undefined, altTitles: LocalizedTextMap
   return looksLikeRoughTransliteration(value) ? findCleanAlternative(altTitles) ?? value : value;
 }
 
+function normalizeLanguageCode(lang: string) {
+  if (lang === "es-la") return "es";
+  if (lang === "pt-br") return "pt";
+  return lang;
+}
+
+function findTitleEntry(title: LocalizedTextMap, languages: string[]) {
+  for (const lang of languages) {
+    if (isUsefulTitle(title[lang])) {
+      return { value: title[lang], sourceLang: normalizeLanguageCode(lang) };
+    }
+  }
+
+  return undefined;
+}
+
+function findFirstTitleEntry(title: LocalizedTextMap) {
+  for (const [lang, value] of Object.entries(title)) {
+    if (isUsefulTitle(value)) {
+      return { value, sourceLang: normalizeLanguageCode(lang) };
+    }
+  }
+
+  return undefined;
+}
+
 function getBaseTitle(manga: LocalizableManga, targetLang: string) {
   const title = manga.attributes?.title ?? manga.titleMap ?? (manga.title ? { en: manga.title } : {});
   const altTitles = manga.attributes?.altTitles ?? manga.altTitles ?? [];
   const languageCandidates = getLanguageCandidates(targetLang);
+  const normalizedTarget = normalizeLanguageCode(targetLang);
 
   const localizedAltTitle = findAltTitle(altTitles, languageCandidates);
-  if (localizedAltTitle) return { value: chooseCleanTitle(localizedAltTitle, altTitles), translated: false };
+  if (localizedAltTitle) {
+    return { value: chooseCleanTitle(localizedAltTitle, altTitles), translated: false, sourceLang: normalizedTarget };
+  }
+
+  const directTitle = findTitleEntry(title, languageCandidates);
+  if (directTitle?.value) {
+    return { value: chooseCleanTitle(directTitle.value, altTitles), translated: false, sourceLang: directTitle.sourceLang };
+  }
 
   const englishAltTitle = findAltTitle(altTitles, ["en"]);
   if (englishAltTitle) {
     return {
       value: chooseCleanTitle(englishAltTitle, altTitles),
-      translated: targetLang === "es" || targetLang === "pt",
+      translated: normalizedTarget !== "en",
+      sourceLang: "en",
     };
   }
 
@@ -109,12 +144,18 @@ function getBaseTitle(manga: LocalizableManga, targetLang: string) {
   if (englishTitle) {
     return {
       value: chooseCleanTitle(englishTitle, altTitles),
-      translated: targetLang === "es" || targetLang === "pt",
+      translated: normalizedTarget !== "en",
+      sourceLang: "en",
     };
   }
 
-  const fallback = chooseCleanTitle(title["ja-ro"] || Object.values(title).find(isUsefulTitle), altTitles);
-  return { value: fallback, translated: false };
+  const fallbackEntry = title["ja-ro"]
+    ? { value: title["ja-ro"], sourceLang: "auto" }
+    : findFirstTitleEntry(title);
+  const fallback = chooseCleanTitle(fallbackEntry?.value, altTitles);
+  const sourceLang = fallbackEntry?.sourceLang ?? "auto";
+
+  return { value: fallback, translated: Boolean(fallback) && sourceLang !== normalizedTarget, sourceLang };
 }
 
 export const getLocalizedTitle = (
@@ -126,7 +167,7 @@ export const getLocalizedTitle = (
   if (!baseTitle.value) return "T?tulo Desconocido";
 
   const cleaned = cleanTitle(baseTitle.value);
-  return baseTitle.translated && (targetLang === "es" || targetLang === "pt")
+  return baseTitle.translated && (targetLang === "es" || targetLang === "pt" || targetLang === "en")
     ? applyFallbackDictionary(cleaned, targetLang)
     : cleaned;
 };
@@ -141,9 +182,10 @@ export async function getLocalizedTitleAsync(
 
   const cleaned = cleanTitle(baseTitle.value);
 
-  if (!baseTitle.translated || (targetLang !== "es" && targetLang !== "pt")) {
+  if (!baseTitle.translated) {
     return cleaned;
   }
 
-  return cleanTitle(await forceTranslate(cleaned, targetLang));
+  const safeTargetLang = targetLang === "en" || targetLang === "pt" ? targetLang : "es";
+  return cleanTitle(await forceTranslate(cleaned, safeTargetLang, baseTitle.sourceLang));
 }

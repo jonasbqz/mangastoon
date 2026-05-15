@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { MANGADEX_API_URL, MONLINE_API_URL, SITE_IMAGE, SITE_NAME, absoluteUrl } from "../../utils/seo";
-import { getLocalizedTitle } from "../../utils/get-localized-title";
+import { MANGADEX_API_URL, MONLINE_API_URL, SITE_IMAGE, SITE_NAME, absoluteUrl } from "../../../../utils/seo";
+import { getLocalizedTitle } from "../../../../utils/get-localized-title";
+import { extractComicIdFromSlugId } from "../../../../utils/slugify";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -80,8 +81,16 @@ function getLocalTitleMap(source: Record<string, unknown>) {
 
 function normalizeLocalImageUrl(value: string) {
   if (!value) return SITE_IMAGE;
-  if (/^https?:\/\//i.test(value)) return value;
-  return `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
+
+  const imageUrl = /^https?:\/\//i.test(value)
+    ? value
+    : `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
+
+  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) {
+    return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+  }
+
+  return imageUrl;
 }
 
 async function getLocalReadMetadata(slug: string) {
@@ -92,7 +101,7 @@ async function getLocalReadMetadata(slug: string) {
     const payload = (await response.json()) as LocalComicsResponse;
     const comic = extractLocalComics(payload).find((item) => {
       const comicSlug = getStringValue(item, ["slug", "manga_slug", "comic_slug"]);
-      return comicSlug === slug;
+      return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
     });
 
     if (!comic) return null;
@@ -151,18 +160,17 @@ export async function generateMetadata({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string; id: string }>;
   searchParams: Promise<{ chapter?: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
+  const { slug, id } = await params;
   const resolvedSearchParams = await searchParams;
-  const chapterId = resolvedSearchParams?.chapter;
-  const canonical = chapterId
-    ? absoluteUrl(`/read/${id}?chapter=${chapterId}`)
-    : absoluteUrl(`/read/${id}`);
-  const sourceMetadata = isMangaDexUuid(id)
-    ? await getMangaDexReadMetadata(id)
-    : await getLocalReadMetadata(id);
+  const chapterId = resolvedSearchParams?.chapter ?? id;
+  const mangaId = extractComicIdFromSlugId(slug);
+  const canonical = absoluteUrl(`/comics/${slug}/chapters/${chapterId}`);
+  const sourceMetadata = isMangaDexUuid(mangaId)
+    ? await getMangaDexReadMetadata(mangaId)
+    : await getLocalReadMetadata(mangaId);
   const mangaTitle = sourceMetadata?.title || "MangaStoon";
   const chapterLabel = getChapterLabel(chapterId);
   const title = chapterId

@@ -3,6 +3,7 @@
 import { BookOpen } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { buildChapterPath } from "../utils/slugify";
 
 type ReadingProgress = {
   mangaId: string;
@@ -38,7 +39,7 @@ export default function ContinueReadingButton({ mangaId }: { mangaId: string }) 
 
   return (
     <Link
-      href={`/read/${mangaId}?chapter=${progress.chapterId}`}
+      href={buildChapterPath(progress.mangaTitle, mangaId, progress.chapterId)}
       className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-[#ff6b00] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
     >
       <BookOpen className="h-4 w-4" />

@@ -1,4 +1,4 @@
-﻿const FALLBACK_TRANSLATIONS: Record<"es" | "pt", Array<[RegExp, string]>> = {
+﻿const FALLBACK_TRANSLATIONS: Record<"es" | "pt" | "en", Array<[RegExp, string]>> = {
   es: [
     [/\bSeason\b/gi, "Temporada"],
     [/\bVolume\b/gi, "Volumen"],
@@ -21,21 +21,22 @@
     [/\bReincarnation\b/gi, "Reencarnação"],
     [/\bGreen Tea\b/gi, "Interesseira"],
   ],
+  en: [],
 };
 
-export function applyFallbackDictionary(text: string, targetLang: "es" | "pt") {
+export function applyFallbackDictionary(text: string, targetLang: "es" | "pt" | "en") {
   return FALLBACK_TRANSLATIONS[targetLang].reduce(
     (value, [pattern, replacement]) => value.replace(pattern, replacement),
     text
   );
 }
 
-export async function forceTranslate(text: string, targetLang: "es" | "pt" | "en", sourceLang = "en") {
+export async function forceTranslate(text: string, targetLang: "es" | "pt" | "en", sourceLang = "auto") {
   const cleanText = text.replace(/\s+/g, " ").trim();
 
-  if (!cleanText || targetLang === "en") return cleanText;
+  if (!cleanText || sourceLang === targetLang) return cleanText;
 
-  const dictionaryFallback = applyFallbackDictionary(cleanText, targetLang);
+  const dictionaryFallback = targetLang === "en" ? cleanText : applyFallbackDictionary(cleanText, targetLang);
 
   try {
     const response = await fetch(

@@ -2,7 +2,6 @@ import { logger } from "../../utils/logger";
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import Image from "next/image";
-import Script from "next/script";
 import Link from "next/link";
 
 import BackButton from "../../components/BackButton";
@@ -23,6 +22,7 @@ import {
   mapToShowcaseItems,
 } from "../../utils/mangadex";
 import { SITE_IMAGE, SITE_NAME, absoluteUrl } from "../../utils/seo";
+import { buildChapterPath, buildComicPath, extractComicIdFromSlugId } from "../../utils/slugify";
 
 export const revalidate = 3600;
 export const dynamicParams = true;
@@ -166,10 +166,21 @@ function normalizeLocalImageUrl(value: string) {
     value.startsWith("http://") || value.startsWith("https://")
       ? value
       : `${LOCAL_API_URL}/${value.replace(/^\/+/, "")}`;
-
-  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) return imageUrl;
-
   return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+}
+
+function getLocalTextMap(source: LocalApiComic, baseKeys: string[], prefix: string) {
+  const baseText = getLocalStringValue(source, baseKeys);
+  const englishText = getLocalStringValue(source, [`english_${prefix}`, `${prefix}_en`, `en_${prefix}`]);
+  const spanishText = getLocalStringValue(source, [`spanish_${prefix}`, `${prefix}_es`, `es_${prefix}`]);
+  const portugueseText = getLocalStringValue(source, [`portuguese_${prefix}`, `${prefix}_pt`, `pt_${prefix}`]);
+
+  return {
+    ...(baseText ? { es: baseText } : {}),
+    ...(englishText ? { en: englishText } : {}),
+    ...(spanishText ? { es: spanishText } : {}),
+    ...(portugueseText ? { pt: portugueseText } : {}),
+  };
 }
 
 function getLocalGenres(source: LocalApiComic) {
@@ -192,7 +203,10 @@ async function fetchLocalComicBySlug(slug: string) {
     if (!listResponse.ok) return null;
 
     const comics = extractLocalComics(await listResponse.json());
-    const summary = comics.find((comic) => getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]) === slug);
+    const summary = comics.find((comic) => {
+      const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
+      return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+    });
     const numericId = getLocalStringValue(summary ?? {}, ["id"]);
 
     if (!summary || !numericId) return null;
@@ -212,6 +226,8 @@ function mapLocalComicToMangaDetails(comic: LocalApiComic): MangaDetails | null 
 
   const title = getLocalStringValue(comic, ["title", "name", "comic_title", "original_title"]) || slug;
   const description = getLocalStringValue(comic, ["synopsis", "description", "summary"]);
+  const titleMap = getLocalTextMap(comic, ["title", "name", "comic_title", "original_title"], "title");
+  const descriptionMap = getLocalTextMap(comic, ["synopsis", "description", "summary"], "description");
   const coverImage = normalizeLocalImageUrl(getLocalStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"]));
   const genres = getLocalGenres(comic);
   const author = getLocalStringValue(comic, ["author", "artist", "creator"]);
@@ -220,9 +236,9 @@ function mapLocalComicToMangaDetails(comic: LocalApiComic): MangaDetails | null 
     id: slug,
     author,
     attributes: {
-      title: { es: title, en: title, pt: title },
+      title: Object.keys(titleMap).length > 0 ? titleMap : { es: title },
       altTitles: [],
-      description: description ? { es: description, en: description } : {},
+      description: Object.keys(descriptionMap).length > 0 ? descriptionMap : description ? { es: description } : {},
       contentRating: comic.isNsfw || comic.nsfw || comic.adult ? "erotica" : "safe",
       tags: genres.map((genre, index) => ({
         id: `local-${index}-${genre.toLowerCase().replace(/\s+/g, "-")}`,
@@ -291,16 +307,16 @@ function cleanSynopsisText(value: string | null | undefined) {
     .trim();
 }
 
-async function translateEnglishSynopsis(text: string, targetLang: SupportedLanguage) {
+async function translateSynopsis(text: string, targetLang: SupportedLanguage, sourceLang = "auto") {
   const cleanText = cleanSynopsisText(text);
 
   if (!cleanText) {
     return "";
   }
 
-  return targetLang === "en"
+  return sourceLang === targetLang
     ? cleanText
-    : cleanSynopsisText(await forceTranslate(cleanText, targetLang));
+    : cleanSynopsisText(await forceTranslate(cleanText, targetLang, sourceLang));
 }
 
 async function getOriginalContent(
@@ -324,7 +340,19 @@ async function getOriginalContent(
   const englishDescription = cleanSynopsisText(descriptionMap.en);
 
   if (englishDescription) {
-    return translateEnglishSynopsis(englishDescription, lang);
+    return translateSynopsis(englishDescription, lang, "en");
+  }
+
+  const spanishDescription = cleanSynopsisText(descriptionMap.es ?? descriptionMap["es-la"]);
+
+  if (spanishDescription) {
+    return translateSynopsis(spanishDescription, lang, "es");
+  }
+
+  const portugueseDescription = cleanSynopsisText(descriptionMap.pt ?? descriptionMap["pt-br"]);
+
+  if (portugueseDescription) {
+    return translateSynopsis(portugueseDescription, lang, "pt");
   }
 
   const genres = (manga?.attributes?.tags ?? [])
@@ -347,10 +375,11 @@ async function getOriginalContent(
 export async function generateMetadata({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  const { id } = await params;
-  const canonicalUrl = absoluteUrl(`/manga/${id}`);
+  const { slug } = await params;
+  const id = extractComicIdFromSlugId(slug);
+  const fallbackCanonicalUrl = absoluteUrl(`/comics/${slug}`);
 
   try {
     const manga = await fetchMangaDetails(id);
@@ -360,7 +389,7 @@ export async function generateMetadata({
         title: `Manga no encontrado | ${SITE_NAME}`,
         description: "Explora manga, manhwa y comics online en MangaStoon.",
         alternates: {
-          canonical: canonicalUrl,
+          canonical: fallbackCanonicalUrl,
         },
         robots: {
           index: false,
@@ -377,6 +406,7 @@ export async function generateMetadata({
     const description = originalContent.length > 155 ? `${originalContent.slice(0, 155)}...` : originalContent;
     const imageUrl = getCoverUrl(manga.id, manga.relationships) || SITE_IMAGE;
     const socialTitle = `${title} | ${SITE_NAME}`;
+    const canonicalUrl = absoluteUrl(buildComicPath(title, manga.id));
 
     return {
       title: `Leer ${title} Online Gratis - ${SITE_NAME}`,
@@ -430,7 +460,7 @@ export async function generateMetadata({
       title: `Manga | ${SITE_NAME}`,
       description: "Lee este manga en MangaStoon.",
       alternates: {
-        canonical: canonicalUrl,
+        canonical: fallbackCanonicalUrl,
       },
     };
   }
@@ -1043,9 +1073,10 @@ function MangaMaintenance({ language }: { language: SupportedLanguage }) {
 export default async function MangaDetailsPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ slug: string }>;
 }) {
-  const { id } = await params;
+  const { slug } = await params;
+  const id = extractComicIdFromSlugId(slug);
   const cookieStore = await cookies();
   const currentLanguage = normalizeLanguage(cookieStore.get("lang")?.value);
   const isAdult = cookieStore.get("mangastoon_adult")?.value === "true";
@@ -1102,7 +1133,7 @@ export default async function MangaDetailsPage({
     id: manga.id,
     mangaDexId: manga.id,
     title: displayTitle,
-    url: `/manga/${manga.id}`,
+    url: buildComicPath(displayTitle, manga.id),
     titleMap: manga.attributes?.title,
     altTitles: manga.attributes?.altTitles,
     originalLanguage: undefined,
@@ -1163,7 +1194,7 @@ export default async function MangaDetailsPage({
     worstRating: "1",
   };
 
-  const mangaCanonicalUrl = `https://www.mangastoon.com/manga/${manga.id}`;
+  const mangaCanonicalUrl = absoluteUrl(buildComicPath(displayTitle, manga.id));
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Book",
@@ -1254,7 +1285,7 @@ export default async function MangaDetailsPage({
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white">
       {/* Anuncio Vignette de Monetag */}
-      <Script id="monetag-vignette" src="https://dd133.com/vignette.min.js" data-zone="10986315" strategy="afterInteractive" />
+      {/* Monetag vignette desactivado temporalmente hasta completar la integracion final. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
@@ -1376,7 +1407,7 @@ export default async function MangaDetailsPage({
 
                   {bestFallbackLanguage?.firstChapter ? (
                     <Link
-                      href={`/read/${manga.id}?chapter=${bestFallbackLanguage.firstChapter.id}&lang=${bestFallbackLanguage.language}`}
+                      href={buildChapterPath(displayTitle, manga.id, bestFallbackLanguage.firstChapter.id, bestFallbackLanguage.language)}
                       className="mt-5 inline-flex rounded-full bg-[#ff6b00] px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-orange-400"
                     >
                       {copy.readInFallbackLanguage} {LANGUAGE_LABELS[bestFallbackLanguage.language]} ·{" "}
@@ -1387,6 +1418,7 @@ export default async function MangaDetailsPage({
               ) : (
                 <ChapterList
                   mangaId={manga.id}
+                  mangaTitle={displayTitle}
                   chapterRows={chapterRows}
                   showMoreLabel={copy.showMoreChapters}
                   totalLabel={`${chapters.length} ${copy.totalSuffix}`}
@@ -1419,7 +1451,7 @@ export default async function MangaDetailsPage({
                     if (!slug) return null;
 
                     return (
-                      <Link key={slug} href={`/manga/${slug}`} className={`group block ${index >= 6 ? "hidden md:block" : ""}`}>
+                      <Link key={slug} href={buildComicPath(title, slug)} className={`group block ${index >= 6 ? "hidden md:block" : ""}`}>
                         <div className="aspect-[2/3] overflow-hidden rounded-lg border border-gray-800 bg-gray-900">
                           {coverImage ? (
                             <img

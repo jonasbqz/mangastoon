@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { SupportedLanguage } from "./site-header";
 import { useLanguage } from "./language-provider";
 import { getLocalizedTitle } from "../utils/get-localized-title";
+import { buildComicPath } from "../utils/slugify";
 
 type HeroMangaItem = {
   mal_id: number;
@@ -248,10 +249,10 @@ export default function HeroCarousel({
             <div className="mt-8 flex flex-wrap gap-4">
               {manga.mangaDexId ? (
                 <Link
-                  href={`/read/${manga.mangaDexId}`}
+                  href={buildComicPath(getLocalizedTitle(manga, currentLang), manga.mangaDexId)}
                   className="inline-flex items-center rounded-full bg-orange-500 px-6 py-3 text-sm font-bold uppercase tracking-wide text-black transition hover:bg-orange-400"
                 >
-                  {copy.readNow}
+                  {copy.viewDetails}
                 </Link>
               ) : (
                 <a

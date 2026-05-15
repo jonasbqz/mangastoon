@@ -66,6 +66,27 @@ const nextConfig = {
   // Explicit in Next 16 and keeps local/dev behavior aligned with lector-comics.
   turbopack: {},
 
+  async redirects() {
+    return [
+      {
+        source: "/manga/:id",
+        destination: "/comics/:id",
+        permanent: true,
+      },
+      {
+        source: "/read/:id",
+        has: [{ type: "query", key: "chapter", value: "(?<chapter>.*)" }],
+        destination: "/comics/:id/chapters/:chapter",
+        permanent: true,
+      },
+      {
+        source: "/read/:id",
+        destination: "/comics/:id",
+        permanent: true,
+      },
+    ];
+  },
+
   async rewrites() {
     return {
       beforeFiles: [],

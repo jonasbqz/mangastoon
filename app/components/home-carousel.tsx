@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useLanguage } from "./language-provider";
 import { getLocalizedTitle } from "../utils/get-localized-title";
+import { buildChapterPath, buildComicPath } from "../utils/slugify";
 import FavoriteButton from "./FavoriteButton";
 
 export type MangaShowcaseItem = {
@@ -67,7 +68,7 @@ export function MangaCard({
 }: MangaCardProps) {
   const { language } = useLanguage();
   const displayTitle = getLocalizedTitle(manga, language);
-  const href = manga.url?.startsWith("/") ? manga.url : manga.mangaDexId ? `/manga/${manga.mangaDexId}` : manga.url;
+  const href = manga.mangaDexId ? buildComicPath(displayTitle, manga.mangaDexId) : manga.url;
   const imageUrl = getImageUrl(manga);
   const subtitle = manga.genres?.[0]?.name ?? "";
   const featuredTag = manga.featuredTag ?? null;
@@ -174,7 +175,7 @@ export function MangaCard({
             <div className="mt-2 space-y-1">
               {visibleLatestChapters?.slice(0, 2).map((chapter) => {
                 const chapterHref =
-                  manga.mangaDexId && chapter.id ? `/read/${manga.mangaDexId}?chapter=${chapter.id}` : cardHref;
+                  manga.mangaDexId && chapter.id ? buildChapterPath(mangaTitle, manga.mangaDexId, chapter.id) : cardHref;
 
                 return (
                   <Link

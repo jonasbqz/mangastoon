@@ -9,6 +9,7 @@ import {
   toMangaDexApiUrl,
 } from "./mangadex-config";
 import { translateTagName } from "./tagTranslations";
+import { buildComicPath } from "./slugify";
 
 export type MangaDexLocalizedText = Record<string, string>;
 
@@ -314,7 +315,13 @@ export function mapToShowcaseItems(
 ): MangaDexShowcaseItem[] {
   return mangas.map((manga) => ({
     mal_id: Number.parseInt(manga.id.replace(/\D/g, "").slice(0, 9) || "0", 10),
-    title: getMangaTitle(manga, language),
+    title: getLocalizedTitle(
+      {
+        titleMap: manga.attributes.title,
+        altTitles: manga.attributes.altTitles,
+      },
+      language
+    ),
     synopsis: getMangaSynopsis(manga, language),
     score: statistics[manga.id]?.rating?.average ?? null,
     url: `https://mangadex.org/title/${manga.id}`,
@@ -360,9 +367,6 @@ function normalizeLocalImageUrl(value: string, apiBaseUrl: string) {
       : value.startsWith("//")
         ? `https:${value}`
         : `${apiBaseUrl.replace(/\/$/, "")}/${value.replace(/^\/+/, "")}`;
-
-  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) return imageUrl;
-
   return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 
@@ -426,6 +430,12 @@ function getLocalChapterDate(chapter: Record<string, unknown>) {
   ]);
 }
 
+function getLocalChapterTimestamp(chapter: Record<string, unknown>) {
+  const rawDate = getLocalChapterDate(chapter);
+  const timestamp = rawDate ? new Date(rawDate).getTime() : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 function getLocalChapterNumber(chapter: Record<string, unknown>) {
   return getLocalStringValue(chapter, [
     "chapterNumber",
@@ -437,19 +447,24 @@ function getLocalChapterNumber(chapter: Record<string, unknown>) {
   ]);
 }
 
+function getLocalChapterNumericNumber(chapter: Record<string, unknown>) {
+  const parsed = Number.parseFloat(getLocalChapterNumber(chapter).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function mapLocalChapterPreviews(chapters: Record<string, unknown>[]) {
   return [...chapters].sort((a, b) => {
-    const aDate = new Date(getLocalChapterDate(a)).getTime();
-    const bDate = new Date(getLocalChapterDate(b)).getTime();
+    const aDate = getLocalChapterTimestamp(a);
+    const bDate = getLocalChapterTimestamp(b);
 
-    if (Number.isFinite(aDate) && Number.isFinite(bDate) && aDate !== bDate) {
+    if (aDate > 0 && bDate > 0 && aDate !== bDate) {
       return bDate - aDate;
     }
 
-    const aNumber = Number(getLocalChapterNumber(a));
-    const bNumber = Number(getLocalChapterNumber(b));
+    const aNumber = getLocalChapterNumericNumber(a);
+    const bNumber = getLocalChapterNumericNumber(b);
 
-    if (Number.isFinite(aNumber) && Number.isFinite(bNumber) && aNumber !== bNumber) {
+    if (aNumber !== null && bNumber !== null && aNumber !== bNumber) {
       return bNumber - aNumber;
     }
 
@@ -478,7 +493,7 @@ function getLocalTitleMap(source: LocalApiComic) {
   const portugueseTitle = getLocalStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
 
   return {
-    ...(title ? { es: title, en: title, pt: title } : {}),
+    ...(title ? { es: title } : {}),
     ...(englishTitle ? { en: englishTitle } : {}),
     ...(spanishTitle ? { es: spanishTitle } : {}),
     ...(portugueseTitle ? { pt: portugueseTitle } : {}),
@@ -591,7 +606,7 @@ export function mapLocalApiComicsToShowcaseItems(
       title,
       synopsis: getLocalStringValue(comic, ["synopsis", "description", "summary"]) || null,
       score: null,
-      url: slug ? `/manga/${slug}` : "#",
+      url: slug ? buildComicPath(title, slug) : "#",
       mangaDexId: slug || null,
       titleMap,
       altTitles: [],

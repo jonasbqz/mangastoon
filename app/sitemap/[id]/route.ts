@@ -17,6 +17,8 @@ import {
   sitemapUnavailableResponse,
   xmlResponse,
 } from "../../utils/seo";
+import { getLocalizedTitle } from "../../utils/get-localized-title";
+import { buildComicPath } from "../../utils/slugify";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -75,7 +77,7 @@ async function getMangaDexUrls(sitemapId: number) {
   );
 
   const payload = await fetchSitemapJson<{
-    data?: Array<{ id: string; attributes?: { updatedAt?: string | null } }>;
+    data?: Array<{ id: string; attributes?: { updatedAt?: string | null; title?: Record<string, string>; altTitles?: Record<string, string>[] } }>;
   }>(`${MANGADEX_API_URL}/manga?${searchParams.toString()}`);
 
   return (payload.data ?? []).map((manga) => {
@@ -83,7 +85,12 @@ async function getMangaDexUrls(sitemapId: number) {
       ? new Date(manga.attributes.updatedAt).toISOString()
       : new Date().toISOString();
 
-    return sitemapUrl(absoluteUrl(`/manga/${manga.id}`), lastmod);
+    const title = getLocalizedTitle(
+      { titleMap: manga.attributes?.title, altTitles: manga.attributes?.altTitles },
+      "es"
+    );
+
+    return sitemapUrl(absoluteUrl(buildComicPath(title, manga.id)), lastmod);
   });
 }
 
@@ -101,9 +108,10 @@ async function getMonlineUrls(localSitemapId: number) {
 
     const record = comic as MonlineComic;
     const slug = getStringValue(record, ["slug", "manga_slug", "comic_slug", "id"]);
+    const title = getStringValue(record, ["title", "name", "comic_title", "original_title"]) || slug;
     if (!slug) return [];
 
-    return [sitemapUrl(absoluteUrl(`/manga/${slug}`), getMonlineLastmod(record), "0.85")];
+    return [sitemapUrl(absoluteUrl(buildComicPath(title, slug)), getMonlineLastmod(record), "0.85")];
   });
 }
 

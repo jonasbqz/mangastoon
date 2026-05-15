@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowDown, ArrowUp, BookOpen, CalendarDays } from "lucide-react";
 import { useState } from "react";
+import { buildChapterPath } from "../../utils/slugify";
 
 type ChapterRow = {
   chapter: {
@@ -14,6 +15,7 @@ type ChapterRow = {
 
 type ChapterListProps = {
   mangaId: string;
+  mangaTitle: string;
   chapterRows: ChapterRow[];
   showMoreLabel: string;
   totalLabel: string;
@@ -21,7 +23,7 @@ type ChapterListProps = {
 
 const INITIAL_CHAPTER_COUNT = 10;
 
-export default function ChapterList({ mangaId, chapterRows, showMoreLabel, totalLabel }: ChapterListProps) {
+export default function ChapterList({ mangaId, mangaTitle, chapterRows, showMoreLabel, totalLabel }: ChapterListProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_CHAPTER_COUNT);
   const [descending, setDescending] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -75,7 +77,7 @@ export default function ChapterList({ mangaId, chapterRows, showMoreLabel, total
         {visibleRows.map(({ chapter, chapterLabel, publishedLabel }) => (
           <Link
             key={chapter.id}
-            href={`/read/${mangaId}?chapter=${chapter.id}`}
+            href={buildChapterPath(mangaTitle, mangaId, chapter.id)}
             className="animate-soft-enter flex items-center justify-between gap-2 rounded-xl border border-white/5 bg-white/5 p-3 transition-colors hover:bg-white/10 sm:mb-2 sm:gap-3 sm:p-4"
           >
             <div className="flex min-w-0 items-center gap-3">

@@ -12,6 +12,7 @@ import {
   type MangaDexCollectionResponse,
   type MangaDexManga,
 } from "../utils/mangadex";
+import { buildComicPath } from "../utils/slugify";
 
 const MONLINE_API_URL = "/api/monline";
 
@@ -59,7 +60,7 @@ function getMonlineTitleMap(source: MonlineComic) {
   const portugueseTitle = getStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
 
   return {
-    ...(title ? { en: title } : {}),
+    ...(title ? { es: title } : {}),
     ...(englishTitle ? { en: englishTitle } : {}),
     ...(spanishTitle ? { es: spanishTitle } : {}),
     ...(portugueseTitle ? { pt: portugueseTitle } : {}),
@@ -85,9 +86,6 @@ function normalizeMonlineImageUrl(value: string) {
       : value.startsWith("//")
         ? `https:${value}`
         : `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
-
-  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) return imageUrl;
-
   return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 
@@ -95,7 +93,7 @@ function mapMonlineComicsToShowcase(comics: MonlineComic[], language: "es" | "en
   return comics.map((comic, index): MangaShowcaseItem => {
     const titleMap = getMonlineTitleMap(comic);
     const rawTitle = getStringValue(comic, ["title", "name", "comic_title", "original_title"]);
-    const title = rawTitle || getLocalizedTitle({ titleMap }, language) || "MangaStoon";
+    const title = getLocalizedTitle({ titleMap, title: rawTitle }, language) || "MangaStoon";
     const slug = getStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
     const coverImage = normalizeMonlineImageUrl(
       getStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
@@ -106,7 +104,7 @@ function mapMonlineComicsToShowcase(comics: MonlineComic[], language: "es" | "en
       mal_id: index + 1,
       title,
       score: null,
-      url: slug ? `/manga/${slug}` : "#",
+      url: slug ? buildComicPath(title, slug) : "#",
       mangaDexId: slug || null,
       titleMap,
       genres: genres.map((genre, genreIndex) => ({ mal_id: genreIndex + 1, name: genre })),

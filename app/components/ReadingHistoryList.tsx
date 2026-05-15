@@ -4,23 +4,21 @@ import Image from "next/image";
 import Link from "next/link";
 import { BookOpen, X } from "lucide-react";
 import { useHistoryStore } from "../store/useHistoryStore";
+import { buildChapterPath } from "../utils/slugify";
 
 function formatChapterLabel(chapterNumber: string) {
   return chapterNumber ? `Capitulo ${chapterNumber}` : "Continuar leyendo";
 }
 
 function normalizeStoredCoverImage(value: string) {
-  if (!value.includes("/api/proxy-image") || !value.includes("dashboard.olympusbiblioteca.com")) {
-    return value;
+  if (!value) return value;
+  if (value.startsWith("/api/proxy-image")) return value;
+
+  if (value.includes("dashboard.olympusbiblioteca.com")) {
+    return `/api/proxy-image?url=${encodeURIComponent(value)}`;
   }
 
-  try {
-    const url = new URL(value, window.location.origin);
-    const target = url.searchParams.get("url");
-    return target?.includes("dashboard.olympusbiblioteca.com") ? target : value;
-  } catch {
-    return value;
-  }
+  return value;
 }
 
 export default function ReadingHistoryList() {
@@ -47,7 +45,7 @@ export default function ReadingHistoryList() {
             className="group relative min-w-[260px] max-w-[300px]"
           >
             <Link
-              href={`/read/${item.mangaId}?chapter=${item.chapterId}`}
+              href={buildChapterPath(item.mangaTitle, item.mangaId, item.chapterId)}
               className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-3 pr-11 transition hover:border-[#ff6b00]/50 hover:bg-[#ff6b00]/10"
             >
               <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-xl bg-zinc-900 ring-1 ring-white/10">

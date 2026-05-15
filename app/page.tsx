@@ -18,6 +18,7 @@ import {
   type MangaDexManga,
 } from "./utils/mangadex";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "./utils/mangadex-config";
+import { buildComicPath } from "./utils/slugify";
 
 const MONLINE_API_URL = (
   process.env.MONLINE_API_URL ??
@@ -157,6 +158,34 @@ function getRecordArrayValue(source: MonlineComic, keys: string[]) {
   return [];
 }
 
+function getChapterTimestamp(chapter: Record<string, unknown>) {
+  const rawDate = getStringValue(chapter, [
+    "releaseDate",
+    "release_date",
+    "publishedAt",
+    "published_at",
+    "publishAt",
+    "readableAt",
+    "createdAt",
+    "created_at",
+    "updatedAt",
+    "updated_at",
+  ]);
+  const timestamp = rawDate ? new Date(rawDate).getTime() : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getChapterNumericNumber(chapter: Record<string, unknown>) {
+  const rawNumber = getStringValue(chapter, [
+    "chapter",
+    "number",
+    "chapterNumber",
+    "chapter_number",
+  ]);
+  const parsed = Number.parseFloat(rawNumber.replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function getGenres(source: MonlineComic) {
   const rawGenres = source.genres ?? source.genre ?? source.tags ?? source.categories;
   const values = Array.isArray(rawGenres)
@@ -184,7 +213,7 @@ function getMonlineTitleMap(source: MonlineComic) {
   const portugueseTitle = getStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
 
   return {
-    ...(title ? { es: title, en: title, pt: title } : {}),
+    ...(title ? { es: title } : {}),
     ...(englishTitle ? { en: englishTitle } : {}),
     ...(spanishTitle ? { es: spanishTitle } : {}),
     ...(portugueseTitle ? { pt: portugueseTitle } : {}),
@@ -224,7 +253,24 @@ function getMonlineLatestChapters(comic: MonlineComic, language: SupportedLangua
     "updated_at",
     "created_at",
   ]);
-  const parsedChapters = chapters
+  const parsedChapters = [...chapters]
+    .sort((a, b) => {
+      const aDate = getChapterTimestamp(a);
+      const bDate = getChapterTimestamp(b);
+
+      if (aDate > 0 && bDate > 0 && aDate !== bDate) {
+        return bDate - aDate;
+      }
+
+      const aNumber = getChapterNumericNumber(a);
+      const bNumber = getChapterNumericNumber(b);
+
+      if (aNumber !== null && bNumber !== null && aNumber !== bNumber) {
+        return bNumber - aNumber;
+      }
+
+      return 0;
+    })
     .map((chapter) => {
       const id = getStringValue(chapter, [
         "id",
@@ -301,9 +347,6 @@ function normalizeMonlineImageUrl(value: string) {
       : value.startsWith("//")
         ? `https:${value}`
         : `${MONLINE_API_URL}/${value.replace(/^\/+/, "")}`;
-
-  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) return imageUrl;
-
   return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 
@@ -330,7 +373,7 @@ function mapMonlineComicsToShowcase(comics: MonlineComic[], language: SupportedL
       mal_id: index + 1,
       title,
       score: null,
-      url: slug ? `/manga/${slug}` : "#",
+      url: slug ? buildComicPath(title, slug) : "#",
       mangaDexId: slug || mangaDexId || null,
       titleMap,
       featuredTag: `#${index + 1}`,

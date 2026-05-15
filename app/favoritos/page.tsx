@@ -7,6 +7,7 @@ import BackButton from "../components/BackButton";
 import SiteHeader from "../components/site-header";
 import { useLanguage } from "../components/language-provider";
 import { useFavoritesStore, type FavoriteManga } from "../store/useFavoritesStore";
+import { buildComicPath } from "../utils/slugify";
 
 function toShowcaseItem(manga: FavoriteManga): MangaShowcaseItem {
   const mangaDexId = manga.mangaDexId ?? manga.id ?? null;
@@ -16,7 +17,7 @@ function toShowcaseItem(manga: FavoriteManga): MangaShowcaseItem {
     mal_id: 0,
     title,
     score: manga.score ?? null,
-    url: manga.url ?? (mangaDexId ? `/manga/${mangaDexId}` : "#"),
+    url: manga.url ?? (mangaDexId ? buildComicPath(title, mangaDexId) : "#"),
     mangaDexId,
     titleMap: manga.titleMap ?? (title ? { es: title, en: title, pt: title } : undefined),
     altTitles: manga.altTitles,

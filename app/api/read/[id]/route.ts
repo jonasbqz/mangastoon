@@ -2,7 +2,7 @@ import { logger } from "../../../utils/logger";
 import { getCached, getOrSetCached, setCached, stableCacheKey } from "../../../utils/server-cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../utils/mangadex-config";
-import { getLocalizedTitle } from "../../../utils/get-localized-title";
+import { getLocalizedTitleAsync } from "../../../utils/get-localized-title";
 import {
   buildMonlineChapterSegments,
   fetchMonlinePagesFromRoute,
@@ -168,7 +168,7 @@ function getLocalTitleMap(source: Record<string, unknown>) {
   const portugueseTitle = getStringValue(source, ["portuguese_title", "title_pt", "pt_title"]);
 
   return {
-    ...(title ? { es: title, en: title, pt: title } : {}),
+    ...(title ? { es: title } : {}),
     ...(englishTitle ? { en: englishTitle } : {}),
     ...(spanishTitle ? { es: spanishTitle } : {}),
     ...(portugueseTitle ? { pt: portugueseTitle } : {}),
@@ -183,9 +183,6 @@ function normalizeLocalImageUrl(value: string) {
       : value.startsWith("//")
         ? `https:${value}`
         : `${LOCAL_API_URL}/${value.replace(/^\/+/, "")}`;
-
-  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) return imageUrl;
-
   return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 
@@ -249,7 +246,7 @@ function getLocalChapters(comic: LocalComic): ChapterFeedItem[] {
   });
 }
 
-async function resolveLocalMangaIdentity(slug: string) {
+async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) {
   const params = new URLSearchParams();
   params.set("limit", "100");
 
@@ -265,7 +262,7 @@ async function resolveLocalMangaIdentity(slug: string) {
     const payload = (await response.json()) as LocalComicsResponse;
     const comic = extractLocalComics(payload).find((item) => {
       const comicSlug = getStringValue(item, ["slug", "manga_slug", "comic_slug"]);
-      return comicSlug === slug;
+      return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
     });
 
     if (!comic) {
@@ -278,7 +275,7 @@ async function resolveLocalMangaIdentity(slug: string) {
       : null;
     const fullComic = detailResponse?.ok ? ((await detailResponse.json()) as LocalComic) : comic;
     const rawTitle = getStringValue(fullComic, ["title", "name", "comic_title", "original_title"]);
-    const title = getLocalizedTitle({ titleMap: getLocalTitleMap(fullComic), title: rawTitle }, "es") || "Mangastoon";
+    const title = await getLocalizedTitleAsync({ titleMap: getLocalTitleMap(fullComic), title: rawTitle }, lang) || "Mangastoon";
     const coverImage = normalizeLocalImageUrl(
       getStringValue(fullComic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
     );
@@ -294,11 +291,11 @@ async function resolveLocalMangaIdentity(slug: string) {
   }
 }
 
-async function fetchLocalMangaIdentity(slug: string) {
+async function fetchLocalMangaIdentity(slug: string, lang: SupportedLanguage) {
   return getOrSetCached(
-    stableCacheKey("local-manga-identity", [slug]),
+    stableCacheKey("local-manga-identity", [slug, lang]),
     LOCAL_DATA_TTL_SECONDS,
-    () => resolveLocalMangaIdentity(slug),
+    () => resolveLocalMangaIdentity(slug, lang),
     { shouldCache: (value) => value !== null }
   );
 }
@@ -647,7 +644,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   try {
-    const localManga = await fetchLocalMangaIdentity(id);
+    const localManga = await fetchLocalMangaIdentity(id, lang);
 
     if (localManga) {
       const currentChapter =

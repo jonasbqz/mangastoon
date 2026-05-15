@@ -74,7 +74,7 @@ const getImageData = (url: string): Promise<string> => {
       resolve(canvas.toDataURL("image/jpeg", 0.8));
     };
     img.onerror = reject;
-    img.src = url.includes("dashboard.olympusbiblioteca.com") || url.startsWith("/api/proxy-image")
+    img.src = url.startsWith("/api/proxy-image")
       ? url
       : `/api/proxy-image?url=${encodeURIComponent(url)}`;
   });

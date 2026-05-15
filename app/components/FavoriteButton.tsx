@@ -4,6 +4,7 @@ import { Heart } from "lucide-react";
 import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { toast } from "sonner";
 import { useFavoritesStore, type FavoriteManga } from "../store/useFavoritesStore";
+import { buildComicPath } from "../utils/slugify";
 
 type FavoriteButtonProps = {
   manga?: FavoriteManga;
@@ -26,7 +27,7 @@ function buildFavoriteManga({ manga, mangaId, title }: FavoriteButtonProps): Fav
     id: mangaId,
     mangaDexId: mangaId,
     title: title ?? "Manga",
-    url: `/manga/${mangaId}`,
+    url: buildComicPath(title ?? "Manga", mangaId),
     titleMap: title ? { es: title, en: title, pt: title } : undefined,
     images: {},
   };

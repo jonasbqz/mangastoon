@@ -2,13 +2,13 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import Script from "next/script";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, ArrowRight, Download, Eye, EyeOff, FileText, List } from "lucide-react";
-import { SupportedLanguage, useLanguage } from "../../components/language-provider";
-import { useHistoryStore } from "../../store/useHistoryStore";
-import { generateMangaPDF } from "../../utils/pdfGenerator";
+import { SupportedLanguage, useLanguage } from "../../../../components/language-provider";
+import { useHistoryStore } from "../../../../store/useHistoryStore";
+import { generateMangaPDF } from "../../../../utils/pdfGenerator";
+import { buildComicPath, extractComicIdFromSlugId } from "../../../../utils/slugify";
 
 type ScrollSpeed = 1 | 2 | 3;
 
@@ -224,9 +224,17 @@ function getStringValue(source: Record<string, unknown>, keys: string[]) {
 
 function normalizeSuggestedCover(value: string) {
   if (!value) return "";
-  if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/api/proxy-image")) return value;
-  if (value.startsWith("//")) return `https:${value}`;
-  return `/api/proxy-image?url=${encodeURIComponent(value)}`;
+  if (value.startsWith("/api/proxy-image")) return value;
+
+  const imageUrl = value.startsWith("//") ? `https:${value}` : value;
+
+  if (imageUrl.includes("dashboard.olympusbiblioteca.com")) {
+    return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+  }
+
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) return imageUrl;
+
+  return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 
 function extractSuggestedComics(payload: unknown): SuggestedComic[] {
@@ -372,19 +380,17 @@ function findChapterByNumberDelta(
   return chapters.find((chapter) => normalizeChapterNumber(chapter) === targetNumber) ?? null;
 }
 
-function buildReaderUrl(mangaId: string, chapterId?: string, lang?: SupportedLanguage) {
+function buildReaderUrl(comicSlug: string, chapterId?: string, lang?: SupportedLanguage) {
   const search = new URLSearchParams();
-
-  if (chapterId) {
-    search.set("chapter", chapterId);
-  }
 
   if (lang) {
     search.set("lang", lang);
   }
 
   const query = search.toString();
-  return query ? `/read/${mangaId}?${query}` : `/read/${mangaId}`;
+  return chapterId
+    ? `/comics/${comicSlug}/chapters/${chapterId}${query ? `?${query}` : ""}`
+    : `/comics/${comicSlug}${query ? `?${query}` : ""}`;
 }
 
 async function loadImageForPdf(url: string) {
@@ -593,12 +599,14 @@ export default function ReaderClient({
   initialChapterParam,
   initialReaderLanguage,
 }: ReaderClientProps) {
-  const params = useParams<{ id: string }>();
+  const params = useParams<{ slug: string; id: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { language } = useLanguage();
-  const mangaId = initialMangaId ?? (Array.isArray(params.id) ? params.id[0] : params.id);
-  const currentChapterParam = initialChapterParam ?? searchParams.get("chapter");
+  const routeSlug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
+  const routeChapterId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const mangaId = initialMangaId ?? extractComicIdFromSlugId(routeSlug);
+  const currentChapterParam = initialChapterParam ?? searchParams.get("chapter") ?? routeChapterId;
   const readerLanguage = initialReaderLanguage ?? normalizeReaderLanguage(searchParams.get("lang"), language);
   const dictionary = UI_COPY[readerLanguage];
   const addHistory = useHistoryStore((state) => state.addHistory);
@@ -945,7 +953,7 @@ export default function ReaderClient({
 
   function handleChapterNavigation(chapterId: string) {
     setAutoScroll(false);
-    router.push(buildReaderUrl(mangaId, chapterId, readerLanguage !== language ? readerLanguage : undefined));
+    router.push(buildReaderUrl(routeSlug, chapterId, readerLanguage !== language ? readerLanguage : undefined));
   }
 
   function cycleSpeed() {
@@ -970,15 +978,14 @@ export default function ReaderClient({
   }
 
   function openChapterList() {
-    router.push(`/manga/${mangaId}#chapters`);
+    router.push(`/comics/${routeSlug}#chapters`);
   }
 
   return (
     <main
       className="min-h-screen bg-[#0a0a0c] px-4 pb-10 pt-2 text-white sm:px-4 md:px-6 md:pt-3"
     >
-      {/* Anuncio Vignette de Monetag */}
-      <Script id="monetag-vignette" src="https://dd133.com/vignette.min.js" data-zone="10986315" strategy="afterInteractive" />
+      {/* Monetag vignette desactivado temporalmente hasta completar la integracion final. */}
 
       <AnimatePresence>
         {isReaderUiVisible ? (
@@ -1104,7 +1111,7 @@ export default function ReaderClient({
                   type="button"
                   onClick={() => {
                     setAutoScroll(false);
-                    router.push(buildReaderUrl(mangaId, englishFallbackChapter.id, "en"));
+                    router.push(buildReaderUrl(routeSlug, englishFallbackChapter.id, "en"));
                   }}
                   className="mt-6 inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-black transition hover:bg-orange-400"
                 >
@@ -1210,7 +1217,7 @@ export default function ReaderClient({
                       {suggestedComics.map((comic, index) => (
                         <a
                           key={comic.slug}
-                          href={`/manga/${comic.slug}`}
+                          href={buildComicPath(comic.title, comic.slug)}
                           className={`group block ${index >= 4 ? "hidden lg:block" : ""}`}
                         >
                           <div className="aspect-[2/3] overflow-hidden rounded-lg border border-gray-800 bg-gray-900 transition-colors group-hover:border-orange-500/40">
