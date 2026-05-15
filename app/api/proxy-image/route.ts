@@ -5,9 +5,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const PROXY_VERSION = "node-direct-v5-flaresolverr";
-const REQUEST_TIMEOUT_MS = 20000;
+const REQUEST_TIMEOUT_MS = 40000;
 const FORCED_REFERER = "https://olympusbiblioteca.com/";
-const flaresolverrUrl = process.env.FLARESOLVERR_URL || "http://localhost:8191";
 
 let cachedCookies = "";
 let cachedUserAgent = "";
@@ -124,6 +123,7 @@ async function fetchImage(targetUrl: URL, signal?: AbortSignal) {
 }
 
 async function refreshFlareSolverrSession(imageUrl: string) {
+  const flaresolverrUrl = process.env.FLARESOLVERR_URL || "http://localhost:8191";
   const response = await fetch(`${flaresolverrUrl.replace(/\/$/, "")}/v1`, {
     method: "POST",
     cache: "no-store",
