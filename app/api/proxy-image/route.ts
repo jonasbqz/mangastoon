@@ -11,6 +11,7 @@ const flaresolverrUrl = process.env.FLARESOLVERR_URL || "http://localhost:8191";
 
 let cachedCookies = "";
 let cachedUserAgent = "";
+let flareSolverrPromise: Promise<void> | null = null;
 
 type FlareSolverrCookie = {
   name?: string;
@@ -78,7 +79,7 @@ async function isCloudflareChallenge(response: Response, contentType: string) {
   return body.includes("Just a moment") || body.includes("challenges.cloudflare.com") || body.includes("cf-chl");
 }
 
-function fallbackImage(errorCode: string) {
+function fallbackImage(errorCode: string, debugError?: string) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900" viewBox="0 0 600 900">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
@@ -102,7 +103,14 @@ function fallbackImage(errorCode: string) {
 
   return new NextResponse(svg, {
     status: 200,
-    headers: proxyHeaders("image/svg+xml; charset=utf-8", errorCode, "public, max-age=300, s-maxage=300"),
+    headers: {
+      ...proxyHeaders(
+        "image/svg+xml; charset=utf-8",
+        errorCode,
+        debugError ? "no-store" : "public, max-age=300, s-maxage=300",
+      ),
+      ...(debugError ? { "X-Debug-Error": debugError } : {}),
+    },
   });
 }
 
@@ -197,7 +205,13 @@ export async function GET(request: Request) {
       return fallbackImage(String(firstResponse.status));
     }
 
-    await refreshFlareSolverrSession(targetUrl.toString());
+    if (!flareSolverrPromise) {
+      flareSolverrPromise = refreshFlareSolverrSession(targetUrl.toString()).finally(() => {
+        flareSolverrPromise = null;
+      });
+    }
+
+    await flareSolverrPromise;
 
     const secondResponse = await fetchImage(targetUrl, controller.signal);
     const secondContentType = secondResponse.headers.get("content-type") || "image/webp";
@@ -212,9 +226,11 @@ export async function GET(request: Request) {
     return fallbackImage(errorCode);
   } catch (error) {
     const errorCode = getErrorCode(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error("ERROR PROXY", rawUrl, errorCode, error);
+    console.error('🔥 ERROR EN PROXY:', error);
 
-    return fallbackImage(errorCode);
+    return fallbackImage(errorCode, errorMessage);
   } finally {
     clearTimeout(timeout);
   }
