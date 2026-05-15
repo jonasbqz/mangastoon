@@ -123,7 +123,7 @@ async function fetchImage(targetUrl: URL, signal?: AbortSignal) {
 }
 
 async function refreshFlareSolverrSession(imageUrl: string) {
-  const flaresolverrUrl = process.env.FLARESOLVERR_URL || "http://localhost:8191";
+  const flaresolverrUrl = "http://46.224.213.127:8191";
   const response = await fetch(`${flaresolverrUrl.replace(/\/$/, "")}/v1`, {
     method: "POST",
     cache: "no-store",
