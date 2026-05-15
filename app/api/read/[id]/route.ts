@@ -388,7 +388,7 @@ function buildFeedUrl(mangaId: string, lang: SupportedLanguage, limit: number, o
   return `https://api.mangadex.org/manga/${mangaId}/feed?${search.toString()}`;
 }
 
-async function resolveMangaIdentity(mangaId: string) {
+async function resolveMangaIdentity(mangaId: string, lang: SupportedLanguage) {
   const response = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}?includes[]=cover_art`);
 
   if (!response.ok) return { title: "Mangastoon", coverImage: "", segments: ["mangastoon"] };
@@ -396,11 +396,16 @@ async function resolveMangaIdentity(mangaId: string) {
   const payload = (await response.json()) as MangaDetailsResponse;
   const attributes = payload.data?.attributes;
   const titles = attributes?.title ?? {};
-  const title = titles.en ?? titles.es ?? titles["es-la"] ?? titles.pt ?? Object.values(titles)[0] ?? "Mangastoon";
   const mainTitles = Object.values(titles);
   const altTitles = (attributes?.altTitles ?? []).flatMap((titleMap) => Object.values(titleMap));
   const coverFileName = payload.data?.relationships?.find((relationship) => relationship.type === "cover_art")
     ?.attributes?.fileName;
+  const title = await getLocalizedTitleAsync({
+    attributes: {
+      title: titles,
+      altTitles: attributes?.altTitles ?? [],
+    },
+  }, lang);
 
   return {
     title,
@@ -501,11 +506,11 @@ async function resolveChapterPages(
   return fetchConsumetChapterPages(chapterId);
 }
 
-async function fetchMangaIdentity(mangaId: string) {
+async function fetchMangaIdentity(mangaId: string, lang: SupportedLanguage) {
   return getOrSetCached(
-    stableCacheKey("mangadex-manga-identity", [mangaId]),
+    stableCacheKey("mangadex-manga-identity", [mangaId, lang]),
     MANGA_IDENTITY_TTL_SECONDS,
-    () => resolveMangaIdentity(mangaId)
+    () => resolveMangaIdentity(mangaId, lang)
   );
 }
 
@@ -698,7 +703,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     const [mangaIdentity, chapters, requestedChapter] = await Promise.all([
-      fetchMangaIdentity(id),
+      fetchMangaIdentity(id, lang),
       fetchAllChapters(id, lang),
       chapterId ? fetchChapterDetails(chapterId) : Promise.resolve(null),
     ]);
@@ -747,7 +752,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ? { chapter: currentChapter, pages: [] }
       : await findReadableChapterWithPages(finalChapters, currentChapter, mangaSegments);
     currentChapter = readableChapter.chapter;
-    const pages = readableChapter.pages;
+    let pages = readableChapter.pages;
+
+    if (pages.length === 0 && lang !== "en" && currentChapter?.attributes?.chapter) {
+      const englishChapter = await findChapterByNumber(id, "en", currentChapter.attributes.chapter);
+
+      if (englishChapter) {
+        const englishPages = await fetchChapterPages(englishChapter.id, {
+          mangaSegments,
+          chapter: englishChapter,
+        }).catch(() => []);
+
+        if (englishPages.length > 0) {
+          currentChapter = englishChapter;
+          pages = englishPages;
+        }
+      }
+    }
 
     return cachedReadResponse(responseCacheKey, {
       mangaTitle,
@@ -793,7 +814,7 @@ async function fetchConsumetChapters(title: string) {
       attributes: {
         chapter: ch.number?.toString() || ch.title?.match(/\d+/)?.[0] || "1",
         title: ch.title,
-        translatedLanguage: "es" // Lo marcamos como es para que el front lo acepte
+        translatedLanguage: "en"
       },
       isConsumet: true // Bandera para saber que viene de fuente externa
     })) || [];

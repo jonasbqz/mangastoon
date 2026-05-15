@@ -398,35 +398,45 @@ export async function generateMetadata({
       };
     }
 
-    const metadataLanguage: SupportedLanguage = "es";
-    const title = await getLocalizedTitleAsync(manga, metadataLanguage);
-    const originalContent = (await getOriginalContent(manga, metadataLanguage, UI_COPY[metadataLanguage]))
+    const cookieStore = await cookies();
+    const currentLanguage = normalizeLanguage(cookieStore.get("lang")?.value);
+
+    const titleEs = await getLocalizedTitleAsync(manga, "es");
+    const titleEn = await getLocalizedTitleAsync(manga, "en");
+    const titlePt = await getLocalizedTitleAsync(manga, "pt");
+
+    const canonicalEs = absoluteUrl(buildComicPath(titleEs, manga.id));
+    const canonicalEn = absoluteUrl(buildComicPath(titleEn, manga.id));
+    const canonicalPt = absoluteUrl(buildComicPath(titlePt, manga.id));
+
+    const canonicalUrl = currentLanguage === "pt" ? canonicalPt : currentLanguage === "en" ? canonicalEn : canonicalEs;
+    const displayTitle = currentLanguage === "pt" ? titlePt : currentLanguage === "en" ? titleEn : titleEs;
+    const originalContent = (await getOriginalContent(manga, currentLanguage, UI_COPY[currentLanguage]))
       .replace(/\s+/g, " ")
       .trim();
     const description = originalContent.length > 155 ? `${originalContent.slice(0, 155)}...` : originalContent;
     const imageUrl = getCoverUrl(manga.id, manga.relationships) || SITE_IMAGE;
-    const socialTitle = `${title} | ${SITE_NAME}`;
-    const canonicalUrl = absoluteUrl(buildComicPath(title, manga.id));
+    const socialTitle = `${displayTitle} | ${SITE_NAME}`;
 
     return {
-      title: `Leer ${title} Online Gratis - ${SITE_NAME}`,
+      title: `Leer ${displayTitle} Online Gratis - ${SITE_NAME}`,
       description,
       keywords: [
-        title,
-        `${title} manga`,
-        `${title} manhwa`,
-        `${title} online`,
-        `${title} en español`,
+        displayTitle,
+        `${displayTitle} manga`,
+        `${displayTitle} manhwa`,
+        `${displayTitle} online`,
+        `${displayTitle} en español`,
         "leer manga online",
         "MangaStoon",
       ],
       alternates: {
         canonical: canonicalUrl,
         languages: {
-          es: canonicalUrl,
-          en: canonicalUrl,
-          pt: canonicalUrl,
-          "x-default": canonicalUrl,
+          es: canonicalEs,
+          en: canonicalEn,
+          pt: canonicalPt,
+          "x-default": canonicalEs,
         },
       },
       openGraph: {
@@ -440,7 +450,7 @@ export async function generateMetadata({
             url: imageUrl,
             width: 800,
             height: 1200,
-            alt: `Portada de ${title}`,
+            alt: `Portada de ${displayTitle}`,
           },
         ],
       },
@@ -563,8 +573,6 @@ function normalizeLanguage(value: string | undefined): SupportedLanguage {
 
   return "es";
 }
-
-const SUPPORTED_CHAPTER_LANGUAGES: SupportedLanguage[] = ["es", "en", "pt"];
 
 const LANGUAGE_LABELS: Record<SupportedLanguage, string> = {
   es: "Español",
@@ -943,9 +951,12 @@ async function findBestChapterLanguageFallback(
   id: string,
   currentLanguage: SupportedLanguage
 ) {
-  const fallbackCandidates = SUPPORTED_CHAPTER_LANGUAGES.filter(
-    (language) => language !== currentLanguage
-  );
+  const fallbackPriority: Record<SupportedLanguage, SupportedLanguage[]> = {
+    es: ["en"],
+    en: ["es"],
+    pt: ["en", "es"],
+  };
+  const fallbackCandidates = fallbackPriority[currentLanguage];
   const fallbacks = await Promise.all(
     fallbackCandidates.map((language) => fetchChapterLanguageFallback(id, language))
   );
@@ -970,7 +981,7 @@ async function fetchConsumetChaptersFallback(title: string) {
       attributes: {
         chapter: ch.number?.toString() || ch.title?.match(/\d+/)?.[0] || "1",
         title: ch.title,
-        translatedLanguage: "es"
+        translatedLanguage: "en"
       }
     })) || [];
   } catch (e) {
@@ -1093,6 +1104,7 @@ export default async function MangaDetailsPage({
   }
 
   const displayTitle = await getLocalizedTitleAsync(manga, currentLanguage);
+  const englishTitle = await getLocalizedTitleAsync(manga, "en");
   if (displayTitle === "Título Desconocido") {
     logger.warn(`[MangaStoon] Manga sin titulo utilizable: ${manga.id}`);
   }
@@ -1100,7 +1112,7 @@ export default async function MangaDetailsPage({
 
   // Si MangaDex no tiene cap?tulos, inyectamos los de Consumet en la UI
   if (chapters.length === 0) {
-    const fallbackChapters = await fetchConsumetChaptersFallback(displayTitle);
+    const fallbackChapters = await fetchConsumetChaptersFallback(englishTitle);
     if (fallbackChapters.length > 0) {
       chapters = fallbackChapters;
     }

@@ -442,8 +442,8 @@ function getLocalChapterNumber(chapter: Record<string, unknown>) {
     "chapter_number",
     "chapter",
     "number",
-    "title",
     "name",
+    "title",
   ]);
 }
 
@@ -452,15 +452,24 @@ function getLocalChapterNumericNumber(chapter: Record<string, unknown>) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function cleanLocalChapterLabel(value: string) {
+  return value.replace(/^Cap[íi]tulo\s*/i, "").replace(/^Cap\.\s*/i, "");
+}
+
 function mapLocalChapterPreviews(chapters: Record<string, unknown>[]) {
-  return [...chapters].sort((a, b) => {
-    const aDate = getLocalChapterTimestamp(a);
-    const bDate = getLocalChapterTimestamp(b);
+  const uniqueChapters = new Map<string, Record<string, unknown>>();
 
-    if (aDate > 0 && bDate > 0 && aDate !== bDate) {
-      return bDate - aDate;
+  chapters.forEach((chapter) => {
+    const id = getLocalStringValue(chapter, ["id", "chapterId", "chapter_id", "mangadex_chapter_id", "mangaDexChapterId"]);
+    const chapterNumber = getLocalChapterNumber(chapter);
+    const key = id || chapterNumber;
+
+    if (key && !uniqueChapters.has(key)) {
+      uniqueChapters.set(key, chapter);
     }
+  });
 
+  return [...uniqueChapters.values()].sort((a, b) => {
     const aNumber = getLocalChapterNumericNumber(a);
     const bNumber = getLocalChapterNumericNumber(b);
 
@@ -468,10 +477,17 @@ function mapLocalChapterPreviews(chapters: Record<string, unknown>[]) {
       return bNumber - aNumber;
     }
 
+    const aDate = getLocalChapterTimestamp(a);
+    const bDate = getLocalChapterTimestamp(b);
+
+    if (aDate > 0 && bDate > 0 && aDate !== bDate) {
+      return bDate - aDate;
+    }
+
     return 0;
   }).flatMap((chapter) => {
     const publishedAt = getLocalChapterDate(chapter);
-    const chapterNumber = getLocalChapterNumber(chapter);
+    const chapterNumber = cleanLocalChapterLabel(getLocalChapterNumber(chapter));
 
     if (!chapterNumber) {
       return [];
@@ -501,6 +517,10 @@ function getLocalTitleMap(source: LocalApiComic) {
 }
 
 function getLocalLatestChapters(source: LocalApiComic) {
+  const primaryChapter =
+    source.last_chapter && typeof source.last_chapter === "object"
+      ? [source.last_chapter as Record<string, unknown>]
+      : [];
   const rawChapters =
     source.latestChapters ??
     source.latest_chapters ??
@@ -511,7 +531,7 @@ function getLocalLatestChapters(source: LocalApiComic) {
     ? rawChapters.filter((chapter): chapter is Record<string, unknown> => Boolean(chapter) && typeof chapter === "object")
     : [];
 
-  return mapLocalChapterPreviews(chapters);
+  return mapLocalChapterPreviews([...primaryChapter, ...chapters]);
 }
 
 export async function fetchLocalChapterPreviews(

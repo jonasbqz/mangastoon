@@ -67,7 +67,7 @@ export function MangaCard({
   priorityImage = false,
 }: MangaCardProps) {
   const { language } = useLanguage();
-  const displayTitle = getLocalizedTitle(manga, language);
+  const displayTitle = manga.title || getLocalizedTitle(manga, language);
   const href = manga.mangaDexId ? buildComicPath(displayTitle, manga.mangaDexId) : manga.url;
   const imageUrl = getImageUrl(manga);
   const subtitle = manga.genres?.[0]?.name ?? "";

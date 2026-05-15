@@ -4,12 +4,13 @@ import HorizontalCarousel from "./components/horizontal-carousel";
 import ReadingHistoryList from "./components/ReadingHistoryList";
 import type { MangaShowcaseItem } from "./components/MangaCard";
 import SiteHeader, { type SupportedLanguage } from "./components/site-header";
-import { getLocalizedTitle } from "./utils/get-localized-title";
+import { getLocalizedTitle, getLocalizedTitleAsync } from "./utils/get-localized-title";
 import {
   buildMangaDexMangaUrl,
   fetchMangaDexCollection,
   fetchMangaDexStatistics,
   fetchLocalTop,
+  fetchLocalChapterPreviews,
   getAvailableTranslatedLanguageVariants,
   extractLocalApiComics,
   mapLocalApiComicsToShowcaseItems,
@@ -434,6 +435,22 @@ async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLa
   }
 }
 
+async function localizeShowcaseTitles(items: MangaShowcaseItem[], language: SupportedLanguage) {
+  return Promise.all(
+    items.map(async (item) => ({
+      ...item,
+      title: await getLocalizedTitleAsync(
+        {
+          titleMap: item.titleMap,
+          altTitles: item.altTitles,
+          title: item.title,
+        },
+        language
+      ),
+    }))
+  );
+}
+
 async function enrichLatestChapters(items: MangaShowcaseItem[], language: SupportedLanguage) {
   return Promise.all(
     items.map(async (item) => {
@@ -470,7 +487,13 @@ async function fetchMonlineComics(path: string, language: SupportedLanguage) {
     const comics = extractLocalApiComics(payload);
     const items = mapLocalApiComicsToShowcaseItems(comics, language, MONLINE_API_URL);
 
-    return items;
+    const latestChapters = await Promise.all(
+      comics.map((comic) => fetchLocalChapterPreviews(comic, MONLINE_API_URL, controller.signal).catch(() => []))
+    );
+
+    return items.map((item, index) =>
+      latestChapters[index]?.length ? { ...item, latestChapters: latestChapters[index] } : item
+    );
   } catch (error) {
     logger.error("Error al conectar con Monline", error);
     return [];
@@ -500,16 +523,14 @@ async function fetchMangaDexFallbackRows(isAdult: boolean, language: SupportedLa
   );
   const statistics = await fetchMangaDexStatistics(allMangaIds);
 
-  const topManhwas = mapToShowcaseItems(topManhwasResponse.data, statistics, language).map((manga, index) => ({
+  const topManhwas = await localizeShowcaseTitles(mapToShowcaseItems(topManhwasResponse.data, statistics, language), language).then((items) => items.map((manga, index) => ({
     ...manga,
-    title: getLocalizedTitle(manga, language),
     featuredTag: `#${index + 1}`,
-  }));
-  const latest = mapToShowcaseItems(latestResponse.data, statistics, language).map((manga, index) => ({
+  })));
+  const latest = await localizeShowcaseTitles(mapToShowcaseItems(latestResponse.data, statistics, language), language).then((items) => items.map((manga, index) => ({
     ...manga,
-    title: getLocalizedTitle(manga, language),
     featuredTag: `#${index + 1}`,
-  }));
+  })));
 
   return {
     worldTop: [],

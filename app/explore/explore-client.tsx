@@ -10,6 +10,7 @@ import { useLanguage, type SupportedLanguage } from "../components/language-prov
 import {
   appendStandardMangaDexFilters,
   extractLocalApiComics,
+  fetchLocalChapterPreviews,
   fetchMangaDexStatistics,
   getLocalApiTotal,
   mapLocalApiComicsToShowcaseItems,
@@ -529,7 +530,15 @@ export default function ExplorePage() {
           const pageComics = normalizedQuery
             ? filteredComics.slice((targetPage - 1) * 24, targetPage * 24)
             : filteredComics;
-          localMangas = mapLocalApiComicsToShowcaseItems(pageComics, language, MONLINE_API_URL);
+          const mappedLocalMangas = mapLocalApiComicsToShowcaseItems(pageComics, language, MONLINE_API_URL);
+          const latestChapters = await Promise.all(
+            pageComics.map((comic) =>
+              fetchLocalChapterPreviews(comic, MONLINE_API_URL, signal).catch(() => [])
+            )
+          );
+          localMangas = mappedLocalMangas.map((manga, index) =>
+            latestChapters[index]?.length ? { ...manga, latestChapters: latestChapters[index] } : manga
+          );
         } else if (response.status === 429) {
           setError(copy.rateLimit);
         }

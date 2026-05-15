@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
+const cleanSynopsis = (text: string) => {
+  if (!text) return "";
+  return text.replace(/^(?:[\[\{\(<【『].*?[\]\}\)>】』]\s*)+/g, "").trim();
+};
+
 export default function SeoSynopsis({
   title,
   description,
@@ -11,6 +16,7 @@ export default function SeoSynopsis({
   description: string;
 }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const cleanedDescription = cleanSynopsis(description);
 
   return (
     <section className="mt-6 rounded-xl bg-[#141519] p-5 text-left sm:p-6">
@@ -26,7 +32,7 @@ export default function SeoSynopsis({
           }`}
         >
           <p className="whitespace-pre-wrap text-[15px] leading-7 text-gray-300 md:text-base md:leading-7">
-            {description}
+            {cleanedDescription}
           </p>
 
           <div
