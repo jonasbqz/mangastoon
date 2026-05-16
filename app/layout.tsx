@@ -78,10 +78,6 @@ export const metadata: Metadata = {
     images: [SITE_IMAGE],
   },
   manifest: "/manifest.json",
-  icons: {
-    icon: "/icon.svg",
-    apple: "/icon.svg",
-  },
   appleWebApp: {
     capable: true,
     title: SITE_NAME,

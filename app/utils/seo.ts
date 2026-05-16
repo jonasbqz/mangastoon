@@ -25,7 +25,7 @@ export const MONLINE_API_URL = (
 ).replace(/\/$/, "");
 
 export const MANGADEX_SITEMAP_LANGUAGES = ["es", "en", "pt", "pt-br"] as const;
-export const SITEMAP_UPSTREAM_TIMEOUT_MS = 8000;
+export const SITEMAP_UPSTREAM_TIMEOUT_MS = 30000;
 export const SITEMAP_RETRY_AFTER_SECONDS = 3600;
 
 export class SitemapUnavailableError extends Error {

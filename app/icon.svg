@@ -1,7 +1,3 @@
-﻿<svg viewBox="-10 -10 120 120" xmlns="http://www.w3.org/2000/svg">
-  <!-- Circulo perfecto con margen de seguridad (padding invisible) -->
-  <circle cx="50" cy="50" r="50" fill="#0a0a0a" stroke="#f97316" stroke-width="6"/>
-  
-  <!-- La "M" de MangaStoon -->
-  <path d="M22 75 V28 L40 52 L50 38 L60 52 L78 28 V75 H65 V48 L50 70 L35 48 V75 Z" fill="#f97316"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512">
+  <path d="M10 85 V20 L35 55 L50 35 L65 55 L90 20 V85 H70 V45 L50 75 L30 45 V85 Z" fill="#f97316" />
 </svg>

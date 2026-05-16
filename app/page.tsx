@@ -471,7 +471,7 @@ async function enrichLatestChapters(items: MangaShowcaseItem[], language: Suppor
   );
 }
 
-async function fetchMonlineComics(path: string, language: SupportedLanguage) {
+async function fetchMonlineComics(path: string, language: SupportedLanguage, enrichChapters = false) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), MONLINE_HOME_TIMEOUT_MS);
   const isTopRow = path.includes("order=views");
@@ -486,6 +486,10 @@ async function fetchMonlineComics(path: string, language: SupportedLanguage) {
     logger.debug("Respuesta Monline", payload);
     const comics = extractLocalApiComics(payload);
     const items = mapLocalApiComicsToShowcaseItems(comics, language, MONLINE_API_URL);
+
+    if (!enrichChapters) {
+      return items;
+    }
 
     const latestChapters = await Promise.all(
       comics.map((comic) => fetchLocalChapterPreviews(comic, MONLINE_API_URL, controller.signal).catch(() => []))
@@ -548,24 +552,31 @@ export default async function HomePage() {
   const useLocalCatalog = currentLanguage === "es";
   let monlineWorldTop: MangaShowcaseItem[] = [];
   let monlineTopManhwas: MangaShowcaseItem[] = [];
+  let monlineNewManhwas: MangaShowcaseItem[] = [];
   let monlineLatest: MangaShowcaseItem[] = [];
 
   if (useLocalCatalog) {
-    [monlineWorldTop, monlineTopManhwas, monlineLatest] = await Promise.all([
+    [monlineWorldTop, monlineTopManhwas, monlineNewManhwas, monlineLatest] = await Promise.all([
       fetchLocalTop(10, currentLanguage),
       fetchMonlineComics("/api/comics?limit=10&type=manhua&order=views", currentLanguage),
-      fetchMonlineComics("/api/comics?limit=15&order=created_at", currentLanguage),
+      fetchMonlineComics("/api/comics?limit=10&type=manhua&order=created_at", currentLanguage),
+      fetchMonlineComics("/api/comics?limit=15&order=created_at", currentLanguage, true),
     ]);
   }
 
+  const localTopManhwaKeys = new Set(monlineTopManhwas.map((manga) => manga.mangaDexId ?? manga.url));
+  const localTopManhwas = [
+    ...monlineTopManhwas,
+    ...monlineNewManhwas.filter((manga) => !localTopManhwaKeys.has(manga.mangaDexId ?? manga.url)),
+  ];
   const shouldUseFallback =
-    !useLocalCatalog || monlineTopManhwas.length < 10 || monlineLatest.length === 0;
+    !useLocalCatalog || localTopManhwas.length < 10 || monlineLatest.length === 0;
   const fallbackRows = shouldUseFallback ? await fetchMangaDexFallbackRows(isAdult, currentLanguage) : null;
 
   const worldTop = useLocalCatalog ? monlineWorldTop : fallbackRows?.topManhwas ?? [];
-  const topManhwaKeys = new Set(monlineTopManhwas.map((manga) => manga.mangaDexId ?? manga.url));
+  const topManhwaKeys = new Set(localTopManhwas.map((manga) => manga.mangaDexId ?? manga.url));
   const topManhwas = [
-    ...monlineTopManhwas,
+    ...localTopManhwas,
     ...(fallbackRows?.topManhwas ?? []).filter((manga) => !topManhwaKeys.has(manga.mangaDexId ?? manga.url)),
   ].slice(0, 10);
   const latest = monlineLatest.length > 0 ? monlineLatest : fallbackRows?.latest ?? [];

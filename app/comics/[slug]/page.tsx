@@ -1326,6 +1326,7 @@ export default async function MangaDetailsPage({
                       sizes="(max-width: 640px) 112px, (max-width: 768px) 150px, 320px"
                       className="object-cover object-top"
                       priority
+                      unoptimized={true}
                       referrerPolicy="no-referrer"
                     />
                   </div>
