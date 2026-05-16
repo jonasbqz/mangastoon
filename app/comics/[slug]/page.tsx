@@ -398,9 +398,6 @@ export async function generateMetadata({
       };
     }
 
-    const cookieStore = await cookies();
-    const currentLanguage = normalizeLanguage(cookieStore.get("lang")?.value);
-
     const titleEs = await getLocalizedTitleAsync(manga, "es");
     const titleEn = await getLocalizedTitleAsync(manga, "en");
     const titlePt = await getLocalizedTitleAsync(manga, "pt");
@@ -408,10 +405,18 @@ export async function generateMetadata({
     const canonicalEs = absoluteUrl(buildComicPath(titleEs, manga.id));
     const canonicalEn = absoluteUrl(buildComicPath(titleEn, manga.id));
     const canonicalPt = absoluteUrl(buildComicPath(titlePt, manga.id));
+    const slugEs = buildComicPath(titleEs, manga.id).replace(/^\/comics\//, "");
+    const slugEn = buildComicPath(titleEn, manga.id).replace(/^\/comics\//, "");
+    const slugPt = buildComicPath(titlePt, manga.id).replace(/^\/comics\//, "");
+    const pageSlug = decodeURIComponent(slug);
 
-    const canonicalUrl = currentLanguage === "pt" ? canonicalPt : currentLanguage === "en" ? canonicalEn : canonicalEs;
-    const displayTitle = currentLanguage === "pt" ? titlePt : currentLanguage === "en" ? titleEn : titleEs;
-    const originalContent = (await getOriginalContent(manga, currentLanguage, UI_COPY[currentLanguage]))
+    let pageLang: SupportedLanguage = "es";
+    if (pageSlug === slugEn) pageLang = "en";
+    if (pageSlug === slugPt) pageLang = "pt";
+
+    const canonicalUrl = pageLang === "pt" ? canonicalPt : pageLang === "en" ? canonicalEn : canonicalEs;
+    const displayTitle = pageLang === "pt" ? titlePt : pageLang === "en" ? titleEn : titleEs;
+    const originalContent = (await getOriginalContent(manga, pageLang, UI_COPY[pageLang]))
       .replace(/\s+/g, " ")
       .trim();
     const description = originalContent.length > 155 ? `${originalContent.slice(0, 155)}...` : originalContent;
@@ -1321,7 +1326,6 @@ export default async function MangaDetailsPage({
                       sizes="(max-width: 640px) 112px, (max-width: 768px) 150px, 320px"
                       className="object-cover object-top"
                       priority
-                      unoptimized={true}
                       referrerPolicy="no-referrer"
                     />
                   </div>
