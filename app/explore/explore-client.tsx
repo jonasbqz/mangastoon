@@ -8,7 +8,6 @@ import type { MangaShowcaseItem } from "../components/home-carousel";
 import SiteHeader from "../components/site-header";
 import { useLanguage, type SupportedLanguage } from "../components/language-provider";
 import {
-  appendStandardMangaDexFilters,
   extractLocalApiComics,
   fetchLocalChapterPreviews,
   fetchMangaDexStatistics,
@@ -19,6 +18,7 @@ import {
   type MangaDexCollectionResponse,
   type MangaDexManga,
 } from "../utils/mangadex";
+import { getLocalizedTitleAsync } from "../utils/get-localized-title";
 import { translateTagName } from "../utils/tagTranslations";
 
 const MONLINE_API_URL = "/api/monline";
@@ -95,6 +95,21 @@ const DEFAULT_SORT_DIR = "desc";
 const DEFAULT_TYPE = "all";
 const EXPLORE_STATE_STORAGE_KEY = "mangastoon:explore-state";
 const MANGADEX_MAX_OFFSET = 10_000;
+const MANGADEX_FALLBACK_TOTAL = 12_000;
+const SAFE_EXPLORE_CONTENT_RATINGS = ["safe", "suggestive"];
+const ADULT_EXPLORE_CONTENT_RATINGS = ["erotica", "pornographic"];
+
+function appendExploreMangaDexFilters(params: URLSearchParams, isAdult: boolean) {
+  params.append("includes[]", "cover_art");
+
+  const ratings = isAdult
+    ? [...SAFE_EXPLORE_CONTENT_RATINGS, ...ADULT_EXPLORE_CONTENT_RATINGS]
+    : SAFE_EXPLORE_CONTENT_RATINGS;
+
+  ratings.forEach((rating) => {
+    params.append("contentRating[]", rating);
+  });
+}
 
 type OrderByValue = (typeof ORDER_OPTIONS)[number]["value"];
 type SortDirValue = "asc" | "desc";
@@ -168,24 +183,24 @@ const UI_COPY: Record<
     title: "Explorar mangas",
     subtitle: "Descubre series seguras, filtra por tipo y encuentra algo nuevo para leer.",
     filters: "Filtros",
-    searchTitle: "Buscar titulo",
+    searchTitle: "Buscar título",
     searchPlaceholder: "Ej: Solo Leveling",
     orderBy: "Ordenar por",
-    direction: "Direccion",
-    genreTitle: "Generos",
+    direction: "Dirección",
+    genreTitle: "Géneros",
     specialTagTitle: "Tags especiales",
-    typeTitle: "Tipo de comic",
+    typeTitle: "Tipo de cómic",
     searchButton: "Buscar",
     showing: "Mostrando",
     of: "de",
-    titles: "titulos",
+    titles: "títulos",
     noResults: "No se encontraron mangas con estos filtros",
     ascending: "Ascendente",
     descending: "Descendente",
     clearFilters: "Limpiar",
-    selectedGenres: "Selecciona hasta 3 tematicas.",
-    rateLimit: "La API de mangas esta recibiendo demasiadas solicitudes. Intenta de nuevo en unos segundos.",
-    genericError: "No se pudo cargar la exploracion de mangas.",
+    selectedGenres: "Selecciona hasta 3 temáticas.",
+    rateLimit: "La API de mangas está recibiendo demasiadas solicitudes. Intenta de nuevo en unos segundos.",
+    genericError: "No se pudo cargar la exploración de mangas.",
   },
   en: {
     title: "Explore manga",
@@ -214,24 +229,24 @@ const UI_COPY: Record<
     title: "Explorar mangas",
     subtitle: "Descubra series seguras, filtre por tipo e encontre algo novo para ler.",
     filters: "Filtros",
-    searchTitle: "Buscar titulo",
+    searchTitle: "Buscar título",
     searchPlaceholder: "Ex: Solo Leveling",
     orderBy: "Ordenar por",
-    direction: "Direcao",
-    genreTitle: "Generos",
+    direction: "Direção",
+    genreTitle: "Gêneros",
     specialTagTitle: "Tags especiais",
     typeTitle: "Tipo de comic",
     searchButton: "Buscar",
     showing: "Mostrando",
     of: "de",
-    titles: "titulos",
+    titles: "títulos",
     noResults: "Nenhum manga encontrado com esses filtros",
     ascending: "Ascendente",
     descending: "Descendente",
     clearFilters: "Limpar",
-    selectedGenres: "Selecione ate 3 tematicas.",
-    rateLimit: "A API de mangas esta recebendo muitas solicitacoes. Tente novamente em alguns segundos.",
-    genericError: "Nao foi possivel carregar o catalogo de mangas.",
+    selectedGenres: "Selecione até 3 temáticas.",
+    rateLimit: "A API de mangas está recebendo muitas solicitações. Tente novamente em alguns segundos.",
+    genericError: "Não foi possível carregar o catálogo de mangas.",
   },
 };
 
@@ -568,7 +583,8 @@ export default function ExplorePage() {
         }]`,
         sortDir
       );
-      appendStandardMangaDexFilters(mangaDexParams, isAdult, language);
+      appendExploreMangaDexFilters(mangaDexParams, isAdult);
+      mangaDexParams.set("skipLanguageFilter", "1");
 
       if (normalizedQuery) {
         mangaDexParams.set("title", normalizedQuery);
@@ -586,6 +602,7 @@ export default function ExplorePage() {
       const mangaDexResponse = canFetchMangaDex
         ? await fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal })
         : null;
+      const mangaDexUnavailable = canFetchMangaDex && !mangaDexResponse?.ok;
       const mangaDexPayload = mangaDexResponse?.ok
         ? ((await mangaDexResponse.json()) as MangaDexCollectionResponse)
         : { data: [], total: 0 };
@@ -593,7 +610,20 @@ export default function ExplorePage() {
       const statistics = rawMangaDex.length
         ? await fetchMangaDexStatistics(rawMangaDex.map((manga) => manga.id), signal)
         : {};
-      const mangaDexMangas = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
+      const mangaDexMangas = await Promise.all(
+        mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language).map(async (manga) => {
+          const translatedTitle = await getLocalizedTitleAsync(manga, language);
+
+          return {
+            ...manga,
+            title: translatedTitle,
+            titleMap: {
+              ...manga.titleMap,
+              [language]: translatedTitle,
+            },
+          };
+        })
+      );
       const localSlugs = new Set(localMangas.map((manga) => manga.mangaDexId ?? manga.url));
       const uniqueMangaDexMangas = mangaDexMangas.filter(
         (manga) => !localSlugs.has(manga.mangaDexId ?? manga.url)
@@ -602,7 +632,8 @@ export default function ExplorePage() {
         ? interleaveShowcaseItems(localMangas, uniqueMangaDexMangas)
         : [...localMangas, ...uniqueMangaDexMangas];
       const mixedMangas = sortShowcaseItems(combinedMangas, orderBy, sortDir).slice(0, 24);
-      const total = localTotal + (mangaDexPayload.total ?? mangaDexPayload.pagination?.total ?? 0);
+      const mangaDexTotal = mangaDexPayload.total ?? mangaDexPayload.pagination?.total ?? 0;
+      const total = localTotal + (mangaDexTotal > 0 ? mangaDexTotal : MANGADEX_FALLBACK_TOTAL);
 
       if (signal?.aborted) return;
 
@@ -619,7 +650,7 @@ export default function ExplorePage() {
       }
 
       setMangas(mixedMangas);
-      setError("");
+      setError(mangaDexUnavailable && targetPage > Math.ceil(localTotal / 24) ? copy.genericError : "");
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         return;
@@ -758,10 +789,10 @@ export default function ExplorePage() {
     <main className="min-h-screen bg-[#141519] text-white">
       <SiteHeader language={language} />
 
-      <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-8 md:px-8">
-        <div className="mb-8 rounded-[28px] border border-white/6 bg-[#111316] px-5 py-5 md:px-8">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-            <div className="inline-flex items-center gap-3 text-base font-semibold text-white">
+      <div className="mx-auto max-w-[1600px] px-4 pb-16 pt-5 md:px-8 md:pt-8">
+        <div className="mb-5 rounded-2xl border border-white/6 bg-[#111316] px-4 py-4 md:mb-8 md:rounded-[28px] md:px-8 md:py-5">
+          <div className="flex flex-col gap-3 md:gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <div className="inline-flex items-center justify-center gap-2 text-center text-sm font-semibold text-white md:justify-start md:gap-3 md:text-base">
               <span className="h-2.5 w-2.5 rounded-full bg-[#ff6b00]" />
               <span>
                 {copy.showing} <span className="text-[#ff6b00]">{mangas.length}</span> {copy.of}{" "}
@@ -770,7 +801,7 @@ export default function ExplorePage() {
             </div>
 
             {/* Contenedor Principal Centrado */}
-            <div className="flex w-full flex-col items-center my-12 xl:my-0 xl:w-auto">
+            <div className="my-3 flex w-full flex-col items-center md:my-6 xl:my-0 xl:w-auto">
               {/* La P?ldora Glassmorphism */}
               <div className="inline-flex items-center gap-1.5 rounded-full border border-gray-800 bg-[#141519]/80 p-1.5 shadow-lg backdrop-blur-md">
                 {/* Bot?n Anterior (Flecha) */}
@@ -814,8 +845,8 @@ export default function ExplorePage() {
               </div>
 
               {/* Texto de informaci?n minimalista */}
-              <div className="mt-4 text-center text-[11px] font-semibold uppercase tracking-widest text-gray-500">
-                P?gina {currentPage} de {lastVisiblePage}
+              <div className="mt-2 text-center text-[10px] font-semibold uppercase tracking-widest text-gray-500 md:mt-4 md:text-[11px]">
+                Página {currentPage} de {lastVisiblePage}
               </div>
             </div>
           </div>

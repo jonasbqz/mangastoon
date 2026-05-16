@@ -32,15 +32,13 @@ export default function ChapterList({
   chapterRows,
   showMoreLabel,
   totalLabel,
-  scanGroups,
   activeScanGroup,
 }: ChapterListProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_CHAPTER_COUNT);
   const [descending, setDescending] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedScan, setSelectedScan] = useState(activeScanGroup);
-  const scanFilteredRows = selectedScan
-    ? chapterRows.filter((row) => row.scanGroupName === selectedScan)
+  const scanFilteredRows = activeScanGroup
+    ? chapterRows.filter((row) => row.scanGroupName === activeScanGroup)
     : chapterRows;
   const orderedRows = descending ? scanFilteredRows : [...scanFilteredRows].reverse();
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
@@ -55,26 +53,10 @@ export default function ChapterList({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-[#141519] px-4 py-3 text-left">
-        <p className="min-w-0 flex-1 text-base leading-relaxed text-gray-400">{totalLabel}</p>
+      <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-[#141519] px-3 py-2.5 text-left md:mb-4 md:gap-3 md:px-4 md:py-3">
+        <p className="min-w-0 flex-1 text-sm leading-relaxed text-gray-400 md:text-base">{totalLabel}</p>
 
-        <div className="flex shrink-0 items-center gap-3">
-          {scanGroups.length > 0 ? (
-            <select
-              value={selectedScan}
-              onChange={(event) => {
-                setSelectedScan(event.target.value);
-                setVisibleCount(INITIAL_CHAPTER_COUNT);
-              }}
-              className="h-10 max-w-[150px] rounded-2xl border border-white/5 bg-[#1e1f24] px-3 text-xs text-gray-200 transition-all focus:border-[#ff6b00] focus:outline-none focus:ring-1 focus:ring-[#ff6b00] sm:max-w-[210px]"
-            >
-              {scanGroups.map((scanGroup) => (
-                <option key={scanGroup} value={scanGroup}>
-                  {scanGroup}
-                </option>
-              ))}
-            </select>
-          ) : null}
+        <div className="flex shrink-0 items-center gap-2 md:gap-3">
           <input
             type="search"
             value={searchQuery}

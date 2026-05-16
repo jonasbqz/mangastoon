@@ -3,6 +3,7 @@
 import { BookOpen } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useLanguage } from "./language-provider";
 import { getLocalizedTitle } from "../utils/get-localized-title";
 import { buildChapterPath, buildComicPath } from "../utils/slugify";
@@ -58,6 +59,60 @@ function getImageUrl(manga: MangaShowcaseItem) {
     ""
   );
 }
+
+const MAX_IMAGE_RETRIES = 3;
+
+function withImageRetryParam(src: string, retry: number) {
+  if (!src || src.startsWith("data:") || src.startsWith("blob:")) return src;
+
+  try {
+    const url = new URL(src, window.location.origin);
+    url.searchParams.set("retry", String(retry));
+    return src.startsWith("/") ? `${url.pathname}${url.search}${url.hash}` : url.toString();
+  } catch {
+    const separator = src.includes("?") ? "&" : "?";
+    return `${src}${separator}retry=${retry}`;
+  }
+}
+
+function RetryableCoverImage({
+  src,
+  alt,
+  priorityImage,
+}: {
+  src: string;
+  alt: string;
+  priorityImage: boolean;
+}) {
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    setCurrentSrc(src);
+    setRetryCount(0);
+  }, [src]);
+
+  return (
+    <Image
+      src={currentSrc}
+      alt={alt}
+      fill
+      sizes="(max-width: 768px) 150px, 200px"
+      className="object-cover transition-transform duration-300 group-hover:scale-105"
+      priority={priorityImage}
+      loading={priorityImage ? undefined : "lazy"}
+      unoptimized={true}
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (retryCount >= MAX_IMAGE_RETRIES) return;
+        const nextRetry = retryCount + 1;
+        setRetryCount(nextRetry);
+        setCurrentSrc(withImageRetryParam(src, nextRetry));
+      }}
+    />
+  );
+}
+
 export function MangaCard({
   manga,
   variant = "carousel",
@@ -95,32 +150,20 @@ export function MangaCard({
           {isInternal ? (
             <Link href={cardHref} className="absolute inset-0 z-0">
               {imageUrl ? (
-                <Image
+                <RetryableCoverImage
                   src={imageUrl}
                   alt={mangaTitle}
-                  fill
-                  sizes="(max-width: 768px) 150px, 200px"
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  priority={priorityImage}
-                  loading={priorityImage ? undefined : "lazy"}
-                  unoptimized={true}
-                  referrerPolicy="no-referrer"
+                  priorityImage={priorityImage}
                 />
               ) : null}
             </Link>
           ) : (
             <a href={cardHref} target="_blank" rel="noreferrer" className="absolute inset-0 z-0">
               {imageUrl ? (
-                <Image
+                <RetryableCoverImage
                   src={imageUrl}
                   alt={mangaTitle}
-                  fill
-                  sizes="(max-width: 768px) 150px, 200px"
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
-                  priority={priorityImage}
-                  loading={priorityImage ? undefined : "lazy"}
-                  unoptimized={true}
-                  referrerPolicy="no-referrer"
+                  priorityImage={priorityImage}
                 />
               ) : null}
             </a>

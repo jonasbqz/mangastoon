@@ -164,7 +164,7 @@ export const getLocalizedTitle = (
 ) => {
   const baseTitle = getBaseTitle(manga, targetLang);
 
-  if (!baseTitle.value) return "T?tulo Desconocido";
+  if (!baseTitle.value) return "Título Desconocido";
 
   const cleaned = cleanTitle(baseTitle.value);
   return baseTitle.translated && (targetLang === "es" || targetLang === "pt" || targetLang === "en")
@@ -178,7 +178,7 @@ export async function getLocalizedTitleAsync(
 ) {
   const baseTitle = getBaseTitle(manga, targetLang);
 
-  if (!baseTitle.value) return "T?tulo Desconocido";
+  if (!baseTitle.value) return "Título Desconocido";
 
   const cleaned = cleanTitle(baseTitle.value);
 

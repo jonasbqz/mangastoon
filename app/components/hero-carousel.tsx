@@ -89,6 +89,62 @@ function getImageUrl(manga: HeroMangaItem) {
   );
 }
 
+const MAX_IMAGE_RETRIES = 3;
+
+function withImageRetryParam(src: string, retry: number) {
+  if (!src || src.startsWith("data:") || src.startsWith("blob:")) return src;
+
+  try {
+    const url = new URL(src, window.location.origin);
+    url.searchParams.set("retry", String(retry));
+    return src.startsWith("/") ? `${url.pathname}${url.search}${url.hash}` : url.toString();
+  } catch {
+    const separator = src.includes("?") ? "&" : "?";
+    return `${src}${separator}retry=${retry}`;
+  }
+}
+
+function RetryableHeroImage({
+  src,
+  alt,
+  active,
+  eager,
+}: {
+  src: string;
+  alt: string;
+  active: boolean;
+  eager: boolean;
+}) {
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    setCurrentSrc(src);
+    setRetryCount(0);
+  }, [src]);
+
+  return (
+    <Image
+      src={currentSrc}
+      alt={alt}
+      fill
+      sizes="100vw"
+      className={`object-cover blur-3xl scale-150 transition-opacity duration-1000 ease-in-out ${
+        active ? "z-0 opacity-30" : "z-0 opacity-0"
+      }`}
+      loading={eager ? "eager" : "lazy"}
+      unoptimized={true}
+      referrerPolicy="no-referrer"
+      onError={() => {
+        if (retryCount >= MAX_IMAGE_RETRIES) return;
+        const nextRetry = retryCount + 1;
+        setRetryCount(nextRetry);
+        setCurrentSrc(withImageRetryParam(src, nextRetry));
+      }}
+    />
+  );
+}
+
 function getShortSynopsis(text: string | null | undefined, maxLength = 260) {
   const cleaned = text?.replace(/\[Written by MAL Rewrite\]/g, "").trim();
 
@@ -154,17 +210,11 @@ export default function HeroCarousel({
 
           return (
           <div key={manga.mangaDexId ?? manga.mal_id} className="absolute inset-0">
-            <Image
+            <RetryableHeroImage
               src={imageUrl}
               alt={manga.title}
-              fill
-              sizes="100vw"
-              className={`object-cover blur-3xl scale-150 transition-opacity duration-1000 ease-in-out ${
-                index === currentIndex ? "z-0 opacity-30" : "z-0 opacity-0"
-              }`}
-              loading={index === 0 ? "eager" : "lazy"}
-              unoptimized={true}
-              referrerPolicy="no-referrer"
+              active={index === currentIndex}
+              eager={index === 0}
             />
           </div>
         );

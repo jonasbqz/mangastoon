@@ -149,15 +149,8 @@ export default function RootLayout({
             id="monetag-popunder-core"
             strategy="afterInteractive"
             dangerouslySetInnerHTML={{
-              __html: `window._kwnrf = window._kwnrf || function(){}; window._zzshc = window._zzshc || function(){};`,
+              __html: `(function(s){s.dataset.zone='11014955',s.src='https://jnbhi.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))`,
             }}
-          />
-          <Script
-            id="monetag-popunder-zone-11014955"
-            src="https://jnbhi.com/tag.min.js"
-            data-zone="11014955"
-            data-cfasync="false"
-            strategy="afterInteractive"
           />
           {children}
           <Footer />

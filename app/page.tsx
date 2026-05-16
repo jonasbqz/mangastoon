@@ -187,6 +187,18 @@ function getChapterNumericNumber(chapter: Record<string, unknown>) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function getLatestChapterPreviewTimestamp(item: MangaShowcaseItem) {
+  const timestamps = (item.latestChapters ?? [])
+    .map((chapter) => (chapter.publishedAt ? new Date(chapter.publishedAt).getTime() : Number.NaN))
+    .filter(Number.isFinite);
+
+  if (timestamps.length > 0) {
+    return Math.max(...timestamps);
+  }
+
+  return item.createdAt ? new Date(item.createdAt).getTime() : 0;
+}
+
 function getGenres(source: MonlineComic) {
   const rawGenres = source.genres ?? source.genre ?? source.tags ?? source.categories;
   const values = Array.isArray(rawGenres)
@@ -437,17 +449,25 @@ async function fetchLatestChapterPreviews(mangaId: string, language: SupportedLa
 
 async function localizeShowcaseTitles(items: MangaShowcaseItem[], language: SupportedLanguage) {
   return Promise.all(
-    items.map(async (item) => ({
-      ...item,
-      title: await getLocalizedTitleAsync(
+    items.map(async (item) => {
+      const title = await getLocalizedTitleAsync(
         {
           titleMap: item.titleMap,
           altTitles: item.altTitles,
           title: item.title,
         },
         language
-      ),
-    }))
+      );
+
+      return {
+        ...item,
+        title,
+        titleMap: {
+          ...item.titleMap,
+          [language]: title,
+        },
+      };
+    })
   );
 }
 
@@ -484,20 +504,24 @@ async function fetchMonlineComics(path: string, language: SupportedLanguage, enr
     if (!response.ok) return [];
     const payload = (await response.json()) as MonlineComicsResponse;
     logger.debug("Respuesta Monline", payload);
-    const comics = extractLocalApiComics(payload);
-    const items = mapLocalApiComicsToShowcaseItems(comics, language, MONLINE_API_URL);
+
+    const comics = extractMonlineComics(payload);
+    const items = mapMonlineComicsToShowcase(comics, language);
 
     if (!enrichChapters) {
       return items;
     }
 
     const latestChapters = await Promise.all(
-      comics.map((comic) => fetchLocalChapterPreviews(comic, MONLINE_API_URL, controller.signal).catch(() => []))
+      comics.map((comic) => fetchLocalChapterPreviews(comic as any, MONLINE_API_URL, controller.signal).catch(() => []))
     );
 
-    return items.map((item, index) =>
-      latestChapters[index]?.length ? { ...item, latestChapters: latestChapters[index] } : item
-    );
+    return items
+      .map((item, index) =>
+        latestChapters[index]?.length ? { ...item, latestChapters: latestChapters[index] } : item
+      )
+      .sort((a, b) => getLatestChapterPreviewTimestamp(b) - getLatestChapterPreviewTimestamp(a))
+      .map((item, index) => ({ ...item, featuredTag: `#${index + 1}` }));
   } catch (error) {
     logger.error("Error al conectar con Monline", error);
     return [];
@@ -560,7 +584,7 @@ export default async function HomePage() {
       fetchLocalTop(10, currentLanguage),
       fetchMonlineComics("/api/comics?limit=10&type=manhua&order=views", currentLanguage),
       fetchMonlineComics("/api/comics?limit=10&type=manhua&order=created_at", currentLanguage),
-      fetchMonlineComics("/api/comics?limit=15&order=created_at", currentLanguage, true),
+      fetchMonlineComics("/api/comics?limit=15&order=updated_at&sort=desc", currentLanguage, true),
     ]);
   }
 

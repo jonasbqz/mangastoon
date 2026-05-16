@@ -12,6 +12,21 @@ import { buildComicPath, extractComicIdFromSlugId } from "../../../../utils/slug
 
 type ScrollSpeed = 1 | 2 | 3;
 
+const MAX_IMAGE_RETRIES = 3;
+
+function withImageRetryParam(src: string, retry: number) {
+  if (!src || src.startsWith("data:") || src.startsWith("blob:")) return src;
+
+  try {
+    const url = new URL(src, window.location.origin);
+    url.searchParams.set("retry", String(retry));
+    return src.startsWith("/") ? `${url.pathname}${url.search}${url.hash}` : url.toString();
+  } catch {
+    const separator = src.includes("?") ? "&" : "?";
+    return `${src}${separator}retry=${retry}`;
+  }
+}
+
 type ReaderDictionary = {
   reader: string;
   backHome: string;
@@ -507,11 +522,15 @@ function MangaPageImage({
   const [shouldLoad, setShouldLoad] = useState(priority);
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [currentSrc, setCurrentSrc] = useState(pageUrl);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     setLoaded(false);
     setFailed(false);
     setShouldLoad(priority);
+    setCurrentSrc(pageUrl);
+    setRetryCount(0);
   }, [pageUrl, priority]);
 
   useEffect(() => {
@@ -568,7 +587,7 @@ function MangaPageImage({
         </div>
       ) : shouldLoad ? (
         <img
-          src={pageUrl}
+          src={currentSrc}
           alt={alt}
           className={`block h-auto w-full transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
           loading={priority ? "eager" : "lazy"}
@@ -577,12 +596,46 @@ function MangaPageImage({
           referrerPolicy="no-referrer"
           onLoad={() => setLoaded(true)}
           onError={() => {
+            if (retryCount < MAX_IMAGE_RETRIES) {
+              const nextRetry = retryCount + 1;
+              setRetryCount(nextRetry);
+              setLoaded(false);
+              setFailed(false);
+              setCurrentSrc(withImageRetryParam(pageUrl, nextRetry));
+              return;
+            }
+
             setLoaded(true);
             setFailed(true);
           }}
         />
       ) : null}
     </div>
+  );
+}
+
+function RetryableSuggestedImage({ src, alt }: { src: string; alt: string }) {
+  const [currentSrc, setCurrentSrc] = useState(src);
+  const [retryCount, setRetryCount] = useState(0);
+
+  useEffect(() => {
+    setCurrentSrc(src);
+    setRetryCount(0);
+  }, [src]);
+
+  return (
+    <img
+      src={currentSrc}
+      alt={alt}
+      className="h-full w-full object-cover transition-transform group-hover:scale-105"
+      loading="lazy"
+      onError={() => {
+        if (retryCount >= MAX_IMAGE_RETRIES) return;
+        const nextRetry = retryCount + 1;
+        setRetryCount(nextRetry);
+        setCurrentSrc(withImageRetryParam(src, nextRetry));
+      }}
+    />
   );
 }
 
@@ -1222,11 +1275,9 @@ export default function ReaderClient({
                         >
                           <div className="aspect-[2/3] overflow-hidden rounded-lg border border-gray-800 bg-gray-900 transition-colors group-hover:border-orange-500/40">
                             {comic.coverImage ? (
-                              <img
+                              <RetryableSuggestedImage
                                 src={comic.coverImage}
                                 alt={comic.title}
-                                className="h-full w-full object-cover transition-transform group-hover:scale-105"
-                                loading="lazy"
                               />
                             ) : null}
                           </div>

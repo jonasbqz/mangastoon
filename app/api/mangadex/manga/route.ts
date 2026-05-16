@@ -33,13 +33,15 @@ export async function GET(request: NextRequest) {
   try {
     const params = new URLSearchParams(request.nextUrl.searchParams);
     const hasLanguageFilter = params.has("availableTranslatedLanguage[]");
+    const skipLanguageFilter = params.get("skipLanguageFilter") === "1";
     const language = normalizeMangaStoonLanguage(
       params.get("lang") ?? request.cookies.get("lang")?.value
     );
 
     params.delete("lang");
+    params.delete("skipLanguageFilter");
 
-    if (!hasLanguageFilter) {
+    if (!skipLanguageFilter && !hasLanguageFilter) {
       appendMangaDexAvailableLanguageFilters(params, language);
     }
 
