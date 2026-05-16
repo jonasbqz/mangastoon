@@ -11,6 +11,7 @@ type ChapterRow = {
   };
   chapterLabel: string;
   publishedLabel: string;
+  scanGroupName: string;
 };
 
 type ChapterListProps = {
@@ -19,15 +20,29 @@ type ChapterListProps = {
   chapterRows: ChapterRow[];
   showMoreLabel: string;
   totalLabel: string;
+  scanGroups: string[];
+  activeScanGroup: string;
 };
 
 const INITIAL_CHAPTER_COUNT = 10;
 
-export default function ChapterList({ mangaId, mangaTitle, chapterRows, showMoreLabel, totalLabel }: ChapterListProps) {
+export default function ChapterList({
+  mangaId,
+  mangaTitle,
+  chapterRows,
+  showMoreLabel,
+  totalLabel,
+  scanGroups,
+  activeScanGroup,
+}: ChapterListProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_CHAPTER_COUNT);
   const [descending, setDescending] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const orderedRows = descending ? chapterRows : [...chapterRows].reverse();
+  const [selectedScan, setSelectedScan] = useState(activeScanGroup);
+  const scanFilteredRows = selectedScan
+    ? chapterRows.filter((row) => row.scanGroupName === selectedScan)
+    : chapterRows;
+  const orderedRows = descending ? scanFilteredRows : [...scanFilteredRows].reverse();
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredRows = normalizedSearchQuery
     ? orderedRows.filter(({ chapterLabel }) => chapterLabel.toLowerCase().includes(normalizedSearchQuery))
@@ -44,6 +59,22 @@ export default function ChapterList({ mangaId, mangaTitle, chapterRows, showMore
         <p className="min-w-0 flex-1 text-base leading-relaxed text-gray-400">{totalLabel}</p>
 
         <div className="flex shrink-0 items-center gap-3">
+          {scanGroups.length > 0 ? (
+            <select
+              value={selectedScan}
+              onChange={(event) => {
+                setSelectedScan(event.target.value);
+                setVisibleCount(INITIAL_CHAPTER_COUNT);
+              }}
+              className="h-10 max-w-[150px] rounded-2xl border border-white/5 bg-[#1e1f24] px-3 text-xs text-gray-200 transition-all focus:border-[#ff6b00] focus:outline-none focus:ring-1 focus:ring-[#ff6b00] sm:max-w-[210px]"
+            >
+              {scanGroups.map((scanGroup) => (
+                <option key={scanGroup} value={scanGroup}>
+                  {scanGroup}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <input
             type="search"
             value={searchQuery}

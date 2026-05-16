@@ -26,7 +26,7 @@ const MONLINE_API_URL = (
   process.env.NEXT_PUBLIC_API_URL ??
   "http://46.224.213.127:8085"
 ).replace(/\/$/, "");
-const MONLINE_HOME_TIMEOUT_MS = 5000;
+const MONLINE_HOME_TIMEOUT_MS = 15000;
 
 const UI_COPY: Record<
   SupportedLanguage,
@@ -478,7 +478,7 @@ async function fetchMonlineComics(path: string, language: SupportedLanguage, enr
 
   try {
     const response = await fetch(`${MONLINE_API_URL}${path}`, {
-      next: { revalidate: isTopRow ? 86_400 : 300 },
+      next: { revalidate: isTopRow ? 86_400 : 60 },
       signal: controller.signal,
     });
     if (!response.ok) return [];

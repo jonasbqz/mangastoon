@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 import BackButton from "../../components/BackButton";
 import ContinueReadingButton from "../../components/ContinueReadingButton";
@@ -1094,38 +1095,61 @@ export default async function MangaDetailsPage({
   const { slug } = await params;
   const id = extractComicIdFromSlugId(slug);
   const cookieStore = await cookies();
-  const currentLanguage = normalizeLanguage(cookieStore.get("lang")?.value);
+  const cookieLang = normalizeLanguage(cookieStore.get("lang")?.value);
   const isAdult = cookieStore.get("mangastoon_adult")?.value === "true";
+
+  // 1. Obtener detalles primero para poder calcular los slugs de cada idioma
+  const manga = await fetchMangaDetails(id);
+
+  if (!manga) {
+    return <MangaMaintenance language={cookieLang} />;
+  }
+
+  // 2. Sincronizar el idioma real comparando el slug de la URL actual
+  const titleEs = await getLocalizedTitleAsync(manga, "es");
+  const titleEn = await getLocalizedTitleAsync(manga, "en");
+  const titlePt = await getLocalizedTitleAsync(manga, "pt");
+
+  const slugEs = buildComicPath(titleEs, manga.id).replace(/^\/comics\//, "");
+  const slugEn = buildComicPath(titleEn, manga.id).replace(/^\/comics\//, "");
+  const slugPt = buildComicPath(titlePt, manga.id).replace(/^\/comics\//, "");
+  const pageSlug = decodeURIComponent(slug);
+
+  let currentLanguage: SupportedLanguage = cookieLang;
+  if (pageSlug === slugEn) currentLanguage = "en";
+  else if (pageSlug === slugPt) currentLanguage = "pt";
+  else if (pageSlug === slugEs) currentLanguage = "es";
+
   const copy = UI_COPY[currentLanguage];
 
-  const [manga, initialChapters, ratingSummary] = await Promise.all([
-    fetchMangaDetails(id),
+  // 3. Traer los cap?tulos correspondientes al idioma real resuelto
+  const [initialChapters, ratingSummary] = await Promise.all([
     fetchMangaChapters(id, currentLanguage),
     fetchMangaRatingSummary(id),
   ]);
 
-  if (!manga) {
-    return <MangaMaintenance language={currentLanguage} />;
-  }
-
-  const displayTitle = await getLocalizedTitleAsync(manga, currentLanguage);
-  const englishTitle = await getLocalizedTitleAsync(manga, "en");
-  if (displayTitle === "Título Desconocido") {
-    logger.warn(`[MangaStoon] Manga sin titulo utilizable: ${manga.id}`);
-  }
   let chapters = initialChapters;
 
-  // Si MangaDex no tiene cap?tulos, inyectamos los de Consumet en la UI
+  // Fallback de Consumet si MangaDex no devolvi? nada
   if (chapters.length === 0) {
-    const fallbackChapters = await fetchConsumetChaptersFallback(englishTitle);
+    const fallbackChapters = await fetchConsumetChaptersFallback(titleEn);
     if (fallbackChapters.length > 0) {
       chapters = fallbackChapters;
     }
   }
 
-  const bestFallbackLanguage =
-    chapters.length === 0 ? await findBestChapterLanguageFallback(id, currentLanguage) : null;
+  // 4. REGLA DE ORO: Si tras los intentos el array sigue en 0, disparar 404 inmediatamente
+  if (chapters.length === 0) {
+    notFound();
+  }
 
+  const displayTitle = currentLanguage === "pt" ? titlePt : currentLanguage === "en" ? titleEn : titleEs;
+  const englishTitle = titleEn;
+  const bestFallbackLanguage = null as ChapterLanguageFallback | null;
+
+  if (displayTitle === "Título Desconocido") {
+    logger.warn(`[MangaStoon] Manga sin titulo utilizable: ${manga.id}`);
+  }
   const tags = (manga.attributes?.tags ?? [])
     .filter((tag) => tag.attributes?.group === "genre")
     .map((tag) => ({
@@ -1171,6 +1195,9 @@ export default async function MangaDetailsPage({
   const realAuthor = databaseAuthor ?? (await fetchAuthorName(displayTitle));
   const authorSearchQuery = realAuthor ? `${realAuthor} manga creator` : `${displayTitle} oficial`;
   const activeScanGroup = getScanGroupName(chapters[0] ?? null) ?? copy.noScan;
+  const scanGroups = Array.from(
+    new Set(chapters.map((chapter) => getScanGroupName(chapter) ?? copy.noScan))
+  );
   const chapterTotals = new Map<string, number>();
   chapters.forEach((chapter) => {
     const chapterNumber = chapter.attributes?.chapter;
@@ -1199,6 +1226,7 @@ export default async function MangaDetailsPage({
         copy.chapterFallback
       ),
       publishedLabel: getPublishedDate(chapter, currentLanguage),
+      scanGroupName: getScanGroupName(chapter) ?? copy.noScan,
     };
   });
 
@@ -1363,17 +1391,6 @@ export default async function MangaDetailsPage({
                   </a>
                 </div>
 
-                <div className="mt-4 md:mt-5">
-                  <label className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 md:text-[11px]">
-                    {copy.activeScan}
-                  </label>
-                  <select
-                    defaultValue={activeScanGroup}
-                    className="mt-2 w-full rounded-md border border-white/10 bg-[#0a0a0a] p-2 text-sm text-white outline-none"
-                  >
-                    <option value={activeScanGroup}>{activeScanGroup}</option>
-                  </select>
-                </div>
               </div>
             </div>
           </aside>
@@ -1439,6 +1456,8 @@ export default async function MangaDetailsPage({
                   chapterRows={chapterRows}
                   showMoreLabel={copy.showMoreChapters}
                   totalLabel={`${chapters.length} ${copy.totalSuffix}`}
+                  scanGroups={scanGroups}
+                  activeScanGroup={activeScanGroup}
                 />
               )}
             </section>

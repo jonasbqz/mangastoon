@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Outfit } from "next/font/google";
+import Script from "next/script";
 import AppFeedback from "./components/app-feedback";
 import Footer from "./components/Footer";
 import { LanguageProvider } from "./components/language-provider";
@@ -58,7 +59,7 @@ export const metadata: Metadata = {
       default: `${SITE_NAME} - Lee tus mangas favoritos`,
     },
     description: SITE_DESCRIPTION,
-    siteName: SITE_NAME,
+    siteName: "MangaStoon",
     type: "website",
     url: "/",
     images: [
@@ -106,14 +107,9 @@ export const metadata: Metadata = {
 const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  name: SITE_NAME,
+  name: "MangaStoon",
+  alternateName: ["Mangastoon", "manga stoon"],
   url: SITE_URL,
-  description: SITE_DESCRIPTION,
-  potentialAction: {
-    "@type": "SearchAction",
-    target: `${SITE_URL}/search?q={search_term_string}`,
-    "query-input": "required name=search_term_string",
-  },
 };
 
 const organizationJsonLd = {
@@ -123,6 +119,7 @@ const organizationJsonLd = {
   url: SITE_URL,
   logo: `${SITE_URL}/icon.svg`,
 };
+
 
 export default function RootLayout({
   children,
@@ -139,12 +136,28 @@ export default function RootLayout({
           <script
             id="global-website-jsonld"
             type="application/ld+json"
+            suppressHydrationWarning
             dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
           />
           <script
             id="global-organization-jsonld"
             type="application/ld+json"
+            suppressHydrationWarning
             dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
+          />
+          <Script
+            id="monetag-popunder-core"
+            strategy="afterInteractive"
+            dangerouslySetInnerHTML={{
+              __html: `window._kwnrf = window._kwnrf || function(){}; window._zzshc = window._zzshc || function(){};`,
+            }}
+          />
+          <Script
+            id="monetag-popunder-zone-11014955"
+            src="https://jnbhi.com/tag.min.js"
+            data-zone="11014955"
+            data-cfasync="false"
+            strategy="afterInteractive"
           />
           {children}
           <Footer />
