@@ -20,6 +20,10 @@ type ChapterListProps = {
   chapterRows: ChapterRow[];
   showMoreLabel: string;
   totalLabel: string;
+  showingLabel: string;
+  searchPlaceholder: string;
+  sortNewestLabel: string;
+  sortOldestLabel: string;
   scanGroups: string[];
   activeScanGroup: string;
 };
@@ -32,29 +36,28 @@ export default function ChapterList({
   chapterRows,
   showMoreLabel,
   totalLabel,
-  activeScanGroup,
+  showingLabel,
+  searchPlaceholder,
+  sortNewestLabel,
+  sortOldestLabel,
 }: ChapterListProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_CHAPTER_COUNT);
   const [descending, setDescending] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const scanFilteredRows = activeScanGroup
-    ? chapterRows.filter((row) => row.scanGroupName === activeScanGroup)
-    : chapterRows;
-  const orderedRows = descending ? scanFilteredRows : [...scanFilteredRows].reverse();
+  const orderedRows = descending ? chapterRows : [...chapterRows].reverse();
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredRows = normalizedSearchQuery
     ? orderedRows.filter(({ chapterLabel }) => chapterLabel.toLowerCase().includes(normalizedSearchQuery))
     : orderedRows;
   const visibleRows = filteredRows.slice(0, visibleCount);
   const hasMore = visibleCount < filteredRows.length;
-  const sortLabel = descending
-    ? "Mostrar capitulo 1 primero"
-    : "Mostrar capitulo mas reciente primero";
+  const sortLabel = descending ? sortOldestLabel : sortNewestLabel;
+  const totalText = `${showingLabel} ${visibleRows.length} / ${filteredRows.length} · ${totalLabel}`;
 
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-[#141519] px-3 py-2.5 text-left md:mb-4 md:gap-3 md:px-4 md:py-3">
-        <p className="min-w-0 flex-1 text-sm leading-relaxed text-gray-400 md:text-base">{totalLabel}</p>
+        <p className="min-w-0 flex-1 text-sm leading-relaxed text-gray-400 md:text-base">{totalText}</p>
 
         <div className="flex shrink-0 items-center gap-2 md:gap-3">
           <input
@@ -64,7 +67,7 @@ export default function ChapterList({
               setSearchQuery(event.target.value);
               setVisibleCount(INITIAL_CHAPTER_COUNT);
             }}
-            placeholder="Ej: 16"
+            placeholder={searchPlaceholder}
             className="h-10 w-28 rounded-2xl border border-white/5 bg-[#1e1f24] px-3 text-sm text-gray-200 transition-all placeholder:text-gray-600 focus:border-[#ff6b00] focus:outline-none focus:ring-1 focus:ring-[#ff6b00] sm:w-36"
           />
           <button

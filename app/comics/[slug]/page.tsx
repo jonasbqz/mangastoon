@@ -423,17 +423,23 @@ export async function generateMetadata({
     const description = originalContent.length > 155 ? `${originalContent.slice(0, 155)}...` : originalContent;
     const imageUrl = getCoverUrl(manga.id, manga.relationships) || SITE_IMAGE;
     const socialTitle = `${displayTitle} | ${SITE_NAME}`;
+    const metaTitlePrefix = pageLang === "pt" ? "Ler" : pageLang === "en" ? "Read" : "Leer";
+    const metaTitleSuffix = pageLang === "pt" ? "Online Gr\u00e1tis" : pageLang === "en" ? "Online Free" : "Online Gratis";
+    const languageKeyword =
+      pageLang === "pt" ? `${displayTitle} em portugu\u00eas` : pageLang === "en" ? `${displayTitle} in english` : `${displayTitle} en espa\u00f1ol`;
+    const genericKeyword =
+      pageLang === "pt" ? "ler manga online" : pageLang === "en" ? "read manga online" : "leer manga online";
 
     return {
-      title: `Leer ${displayTitle} Online Gratis - ${SITE_NAME}`,
+      title: `${metaTitlePrefix} ${displayTitle} ${metaTitleSuffix} - ${SITE_NAME}`,
       description,
       keywords: [
         displayTitle,
         `${displayTitle} manga`,
         `${displayTitle} manhwa`,
         `${displayTitle} online`,
-        `${displayTitle} en español`,
-        "leer manga online",
+        languageKeyword,
+        genericKeyword,
         "MangaStoon",
       ],
       alternates: {
@@ -489,6 +495,10 @@ const UI_COPY: Record<
     addToFavorites: string;
     author: string;
     noAuthor: string;
+    noAuthorDb: string;
+    supportOnX: string;
+    authorFallbackSearchSuffix: string;
+    ratingVotes: string;
     activeScan: string;
     synopsis: string;
     readMore: string;
@@ -503,35 +513,69 @@ const UI_COPY: Record<
     latestOrder: string;
     noScan: string;
     publishedOn: string;
+    chapterPrefix: string;
     chapterFallback: string;
     showMoreChapters: string;
+    showingChapters: string;
+    chapterSearchPlaceholder: string;
+    sortNewestLabel: string;
+    sortOldestLabel: string;
+    suggestedEyebrow: string;
+    suggestedTitle: string;
+    faqWhereQuestion: (title: string) => string;
+    faqWhereAnswer: (title: string) => string;
+    faqLanguagesQuestion: (title: string) => string;
+    faqLanguagesAnswer: (title: string) => string;
+    faqContinueQuestion: (title: string) => string;
+    faqContinueAnswer: (title: string) => string;
   }
 > = {
   es: {
     addToFavorites: "Agregar a Favoritos",
     author: "Autor",
     noAuthor: "No disponible",
+    noAuthorDb: "No disponible en DB",
+    supportOnX: "Apoyar en X",
+    authorFallbackSearchSuffix: "oficial",
+    ratingVotes: "votos",
     activeScan: "Grupo de Scan Activo",
     synopsis: "Sinopsis",
-    readMore: "Leer mas",
+    readMore: "Leer más",
     readLess: "Leer menos",
-    chapters: "Capitulos",
+    chapters: "Capítulos",
     totalChapters: "Totales",
-    totalSuffix: "capitulos en total",
-    noSynopsis: "No hay descripcion disponible para este manga.",
-    noChapters: "No encontramos capitulos disponibles todavia.",
-    noChaptersInLanguage: "No hay capitulos disponibles en este idioma.",
+    totalSuffix: "capítulos en total",
+    noSynopsis: "No hay descripción disponible para este manga.",
+    noChapters: "No encontramos capítulos disponibles todavía.",
+    noChaptersInLanguage: "No hay capítulos disponibles en este idioma.",
     readInFallbackLanguage: "Leer en",
-    latestOrder: "Mas recientes primero",
-    noScan: "Seleccion automatica",
+    latestOrder: "Más recientes primero",
+    noScan: "Selección automática",
     publishedOn: "Publicado",
-    chapterFallback: "Capitulo especial",
+    chapterPrefix: "Capítulo",
+    chapterFallback: "Capítulo especial",
     showMoreChapters: "Mostrar más capítulos",
+    showingChapters: "Mostrando",
+    chapterSearchPlaceholder: "Ej: 16",
+    sortNewestLabel: "Mostrar capítulo más reciente primero",
+    sortOldestLabel: "Mostrar capítulo 1 primero",
+    suggestedEyebrow: "MangaStoon recomienda",
+    suggestedTitle: "Más contenido similar",
+    faqWhereQuestion: (title) => `¿Dónde leer ${title} online gratis?`,
+    faqWhereAnswer: (title) => `Podés leer ${title} online gratis en MangaStoon, con capítulos disponibles desde la página de la serie.`,
+    faqLanguagesQuestion: (title) => `¿En qué idiomas está disponible ${title}?`,
+    faqLanguagesAnswer: (title) => `${title} puede estar disponible en Español, Inglés y Portugués según los capítulos publicados para cada idioma.`,
+    faqContinueQuestion: (title) => `¿Dónde continuar leyendo ${title}?`,
+    faqContinueAnswer: (title) => `En MangaStoon podés abrir ${title}, elegir un capítulo y continuar la lectura desde el historial del navegador.`,
   },
   en: {
     addToFavorites: "Add to Favorites",
     author: "Author",
     noAuthor: "Unavailable",
+    noAuthorDb: "Unavailable in DB",
+    supportOnX: "Support on X",
+    authorFallbackSearchSuffix: "official",
+    ratingVotes: "votes",
     activeScan: "Active Scan Group",
     synopsis: "Synopsis",
     readMore: "Read more",
@@ -546,29 +590,59 @@ const UI_COPY: Record<
     latestOrder: "Newest first",
     noScan: "Auto selection",
     publishedOn: "Published",
+    chapterPrefix: "Chapter",
     chapterFallback: "Special chapter",
     showMoreChapters: "Show more chapters",
+    showingChapters: "Showing",
+    chapterSearchPlaceholder: "Ex: 16",
+    sortNewestLabel: "Show newest chapter first",
+    sortOldestLabel: "Show chapter 1 first",
+    suggestedEyebrow: "MangaStoon recommends",
+    suggestedTitle: "More similar content",
+    faqWhereQuestion: (title) => `Where can I read ${title} online for free?`,
+    faqWhereAnswer: (title) => `You can read ${title} online for free on MangaStoon, with available chapters from the series page.`,
+    faqLanguagesQuestion: (title) => `Which languages is ${title} available in?`,
+    faqLanguagesAnswer: (title) => `${title} may be available in Spanish, English and Portuguese depending on the chapters published for each language.`,
+    faqContinueQuestion: (title) => `Where can I continue reading ${title}?`,
+    faqContinueAnswer: (title) => `On MangaStoon you can open ${title}, choose a chapter and continue reading from your browser history.`,
   },
   pt: {
     addToFavorites: "Adicionar aos Favoritos",
     author: "Autor",
-    noAuthor: "Indisponivel",
+    noAuthor: "Indisponível",
+    noAuthorDb: "Indisponível no DB",
+    supportOnX: "Apoiar no X",
+    authorFallbackSearchSuffix: "oficial",
+    ratingVotes: "votos",
     activeScan: "Grupo de Scan Ativo",
     synopsis: "Sinopse",
     readMore: "Ler mais",
     readLess: "Ler menos",
-    chapters: "Capitulos",
+    chapters: "Capítulos",
     totalChapters: "Totais",
-    totalSuffix: "capitulos no total",
-    noSynopsis: "Nao ha descricao disponivel para este manga.",
-    noChapters: "Ainda nao encontramos capitulos disponiveis.",
-    noChaptersInLanguage: "Nao ha capitulos disponiveis neste idioma.",
+    totalSuffix: "capítulos no total",
+    noSynopsis: "Não há descrição disponível para este manga.",
+    noChapters: "Ainda não encontramos capítulos disponíveis.",
+    noChaptersInLanguage: "Não há capítulos disponíveis neste idioma.",
     readInFallbackLanguage: "Ler em",
     latestOrder: "Mais recentes primeiro",
-    noScan: "Selecao automatica",
+    noScan: "Seleção automática",
     publishedOn: "Publicado",
-    chapterFallback: "Capitulo especial",
+    chapterPrefix: "Capítulo",
+    chapterFallback: "Capítulo especial",
     showMoreChapters: "Mostrar mais capítulos",
+    showingChapters: "Mostrando",
+    chapterSearchPlaceholder: "Ex: 16",
+    sortNewestLabel: "Mostrar capítulo mais recente primeiro",
+    sortOldestLabel: "Mostrar capítulo 1 primeiro",
+    suggestedEyebrow: "MangaStoon recomenda",
+    suggestedTitle: "Mais conteúdo similar",
+    faqWhereQuestion: (title) => `Onde ler ${title} online grátis?`,
+    faqWhereAnswer: (title) => `Você pode ler ${title} online grátis no MangaStoon, com capítulos disponíveis na página da série.`,
+    faqLanguagesQuestion: (title) => `Em quais idiomas ${title} está disponível?`,
+    faqLanguagesAnswer: (title) => `${title} pode estar disponível em Espanhol, Inglês e Português conforme os capítulos publicados para cada idioma.`,
+    faqContinueQuestion: (title) => `Onde continuar lendo ${title}?`,
+    faqContinueAnswer: (title) => `No MangaStoon você pode abrir ${title}, escolher um capítulo e continuar a leitura pelo histórico do navegador.`,
   },
 };
 
@@ -833,6 +907,7 @@ function buildChapterNumberLabel(
   chapterNumber: string | null | undefined,
   occurrenceIndex: number,
   totalOccurrences: number,
+  chapterPrefix: string,
   fallbackLabel: string
 ) {
   if (!chapterNumber) {
@@ -842,11 +917,11 @@ function buildChapterNumberLabel(
   const remainingVariants = totalOccurrences - occurrenceIndex - 1;
 
   if (remainingVariants <= 0) {
-    return `Capitulo ${chapterNumber}`;
+    return `${chapterPrefix} ${chapterNumber}`;
   }
 
   const suffix = 4 + remainingVariants;
-  return `Capitulo ${chapterNumber}.${suffix}`;
+  return `${chapterPrefix} ${chapterNumber}.${suffix}`;
 }
 
 async function fetchMangaDetails(id: string) {
@@ -928,7 +1003,7 @@ async function fetchChapterLanguageFallback(
     params.append("translatedLanguage[]", variant);
   });
   // Para recomendar otro idioma debemos mandar al inicio real de lectura,
-  // no al cap?tulo m?s reciente. Por eso pedimos el cap?tulo m?s antiguo.
+  // no al capítulo más reciente. Por eso pedimos el capítulo más antiguo.
   params.set("order[chapter]", "asc");
   params.set("limit", "1");
   params.set("offset", "0");
@@ -1095,7 +1170,8 @@ export default async function MangaDetailsPage({
   const { slug } = await params;
   const id = extractComicIdFromSlugId(slug);
   const cookieStore = await cookies();
-  const cookieLang = normalizeLanguage(cookieStore.get("lang")?.value);
+  const rawCookieLang = cookieStore.get("lang")?.value;
+  const cookieLang = normalizeLanguage(rawCookieLang);
   const isAdult = cookieStore.get("mangastoon_adult")?.value === "true";
 
   // 1. Obtener detalles primero para poder calcular los slugs de cada idioma
@@ -1115,14 +1191,16 @@ export default async function MangaDetailsPage({
   const slugPt = buildComicPath(titlePt, manga.id).replace(/^\/comics\//, "");
   const pageSlug = decodeURIComponent(slug);
 
-  let currentLanguage: SupportedLanguage = cookieLang;
-  if (pageSlug === slugEn) currentLanguage = "en";
-  else if (pageSlug === slugPt) currentLanguage = "pt";
-  else if (pageSlug === slugEs) currentLanguage = "es";
+  let slugLanguage: SupportedLanguage = "es";
+  if (pageSlug === slugEn) slugLanguage = "en";
+  else if (pageSlug === slugPt) slugLanguage = "pt";
+  else if (pageSlug === slugEs) slugLanguage = "es";
+
+  const currentLanguage: SupportedLanguage = rawCookieLang ? cookieLang : slugLanguage;
 
   const copy = UI_COPY[currentLanguage];
 
-  // 3. Traer los cap?tulos correspondientes al idioma real resuelto
+  // 3. Traer los capítulos correspondientes al idioma real resuelto
   const [initialChapters, ratingSummary] = await Promise.all([
     fetchMangaChapters(id, currentLanguage),
     fetchMangaRatingSummary(id),
@@ -1130,7 +1208,7 @@ export default async function MangaDetailsPage({
 
   let chapters = initialChapters;
 
-  // Fallback de Consumet si MangaDex no devolvi? nada
+  // Fallback de Consumet si MangaDex no devolvió nada
   if (chapters.length === 0) {
     const fallbackChapters = await fetchConsumetChaptersFallback(titleEn);
     if (fallbackChapters.length > 0) {
@@ -1193,7 +1271,7 @@ export default async function MangaDetailsPage({
       ? manga.author.trim()
       : null;
   const realAuthor = databaseAuthor ?? (await fetchAuthorName(displayTitle));
-  const authorSearchQuery = realAuthor ? `${realAuthor} manga creator` : `${displayTitle} oficial`;
+  const authorSearchQuery = realAuthor ? `${realAuthor} manga creator` : `${displayTitle} ${copy.authorFallbackSearchSuffix}`;
   const activeScanGroup = getScanGroupName(chapters[0] ?? null) ?? copy.noScan;
   const scanGroups = Array.from(
     new Set(chapters.map((chapter) => getScanGroupName(chapter) ?? copy.noScan))
@@ -1223,6 +1301,7 @@ export default async function MangaDetailsPage({
         chapterNumber,
         occurrenceIndex,
         chapterNumber ? (chapterTotals.get(chapterNumber) ?? 1) : 1,
+        copy.chapterPrefix,
         copy.chapterFallback
       ),
       publishedLabel: getPublishedDate(chapter, currentLanguage),
@@ -1277,26 +1356,26 @@ export default async function MangaDetailsPage({
     mainEntity: [
       {
         "@type": "Question",
-        name: `¿Dónde leer ${displayTitle} online gratis?`,
+        name: copy.faqWhereQuestion(displayTitle),
         acceptedAnswer: {
           "@type": "Answer",
-          text: `Podés leer ${displayTitle} online gratis en MangaStoon, con capítulos disponibles desde la página de la serie.`,
+          text: copy.faqWhereAnswer(displayTitle),
         },
       },
       {
         "@type": "Question",
-        name: `¿En qué idiomas está disponible ${displayTitle}?`,
+        name: copy.faqLanguagesQuestion(displayTitle),
         acceptedAnswer: {
           "@type": "Answer",
-          text: `${displayTitle} puede estar disponible en Español, Inglés y Portugués según los capítulos publicados para cada idioma.`,
+          text: copy.faqLanguagesAnswer(displayTitle),
         },
       },
       {
         "@type": "Question",
-        name: `¿Dónde continuar leyendo ${displayTitle}?`,
+        name: copy.faqContinueQuestion(displayTitle),
         acceptedAnswer: {
           "@type": "Answer",
-          text: `En MangaStoon podés abrir ${displayTitle}, elegir un capítulo y continuar la lectura desde el historial del navegador.`,
+          text: copy.faqContinueAnswer(displayTitle),
         },
       },
     ],
@@ -1371,7 +1450,7 @@ export default async function MangaDetailsPage({
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 md:text-[11px]">
                     {copy.author}
                   </p>
-                  <p className="mt-2 text-sm text-white">{realAuthor || "No disponible en DB"}</p>
+                  <p className="mt-2 text-sm text-white">{realAuthor || copy.noAuthorDb}</p>
                   <a
                     href={
                       "https://twitter.com/search?q=" +
@@ -1387,7 +1466,7 @@ export default async function MangaDetailsPage({
                     >
                       <path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-7.4L6.4 22H3.3l7.3-8.4L2.9 2h6.4l4.4 6.6L18.9 2Zm-1.1 17.9h1.7L8.4 4H6.6l11.2 15.9Z" />
                     </svg>
-                    Apoyar en X
+                    {copy.supportOnX}
                   </a>
                 </div>
 
@@ -1400,7 +1479,7 @@ export default async function MangaDetailsPage({
               {displayTitle}
             </h1>
             <p className="mb-4 text-center text-sm font-medium text-amber-300 md:text-left">
-              {"\u2605"} {aggregateRating.ratingValue}/{aggregateRating.bestRating} {"\u00b7"} {aggregateRating.ratingCount} votos
+              {"\u2605"} {aggregateRating.ratingValue}/{aggregateRating.bestRating} {"\u00b7"} {aggregateRating.ratingCount} {copy.ratingVotes}
             </p>
 
             <div className="flex flex-wrap justify-center gap-2 md:justify-start">
@@ -1424,6 +1503,7 @@ export default async function MangaDetailsPage({
             <SeoSynopsis
               title={displayTitle}
               description={description}
+              language={currentLanguage}
             />
 
             <section id="chapters" className="mt-8 scroll-mt-28">
@@ -1456,6 +1536,10 @@ export default async function MangaDetailsPage({
                   chapterRows={chapterRows}
                   showMoreLabel={copy.showMoreChapters}
                   totalLabel={`${chapters.length} ${copy.totalSuffix}`}
+                  showingLabel={copy.showingChapters}
+                  searchPlaceholder={copy.chapterSearchPlaceholder}
+                  sortNewestLabel={copy.sortNewestLabel}
+                  sortOldestLabel={copy.sortOldestLabel}
                   scanGroups={scanGroups}
                   activeScanGroup={activeScanGroup}
                 />
@@ -1465,8 +1549,8 @@ export default async function MangaDetailsPage({
             {suggestedMangas.length > 0 ? (
               <section className="mt-16 border-t border-gray-800 pt-10">
                 <div className="mb-6 border-b-4 border-[#ff6b00] px-3 pb-2 text-center md:border-b-0 md:border-l-4 md:pb-0 md:pl-3 md:text-left">
-                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#ff6b00]">MangaStoon recomienda</p>
-                  <h2 className="mt-1 text-2xl font-bold text-white">Más contenido similar</h2>
+                  <p className="text-xs font-bold uppercase tracking-[0.24em] text-[#ff6b00]">{copy.suggestedEyebrow}</p>
+                  <h2 className="mt-1 text-2xl font-bold text-white">{copy.suggestedTitle}</h2>
                 </div>
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
                   {suggestedMangas.map((suggested, index) => {
