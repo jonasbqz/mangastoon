@@ -217,7 +217,7 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     hideControls: "Ocultar controles",
     nextChapterCta: "Próximo Capítulo",
     backToSeries: "Voltar para a série",
-    endReachedTitle: "Você chegou ao último capítulo disponível",
+    endReachedTitle: "Você chegou ao último capítulo disponible",
     endReachedBody: "Por enquanto não há mais episódios publicados. Deixamos recomendações da MangaStoon para você continuar lendo.",
     suggestedTitle: "Continuar lendo na MangaStoon",
     exploreMore: "Explorar mais mangas",
@@ -233,7 +233,6 @@ function normalizeReaderLanguage(value: string | null, fallback: SupportedLangua
   if (value === "en" || value === "pt" || value === "es") {
     return value;
   }
-
   return fallback;
 }
 
@@ -243,7 +242,6 @@ function getStringValue(source: Record<string, unknown>, keys: string[]) {
     if (typeof value === "string" && value.trim()) return value.trim();
     if (typeof value === "number" && Number.isFinite(value)) return String(value);
   }
-
   return "";
 }
 
@@ -418,16 +416,6 @@ function buildReaderUrl(comicSlug: string, chapterId?: string, lang?: SupportedL
     : `/comics/${comicSlug}${query ? `?${query}` : ""}`;
 }
 
-async function loadImageForPdf(url: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
-    img.src = url;
-  });
-}
-
 function ToolButton({
   title,
   onClick,
@@ -562,8 +550,6 @@ function MangaPageImage({
         }
       },
       {
-        // Start loading a little before the page reaches the viewport, but do
-        // not attach src for the whole chapter at once.
         rootMargin: "900px 0px",
         threshold: 0.01,
       }
@@ -684,15 +670,15 @@ export default function ReaderClient({
   const [loading, setLoading] = useState(!initialData);
   const [error, setError] = useState(
     initialData?.error ??
-      (initialData?.fallbackReason === "english"
-        ? dictionary.chapterAvailableInEnglish
-        : initialData?.fallbackReason
+    (initialData?.fallbackReason === "english"
+      ? dictionary.chapterAvailableInEnglish
+      : initialData?.fallbackReason
+        ? dictionary.chapterUnavailableBody
+        : !initialSelectedChapter && initialData
           ? dictionary.chapterUnavailableBody
-          : !initialSelectedChapter && initialData
-            ? dictionary.chapterUnavailableBody
-            : initialSelectedChapter && initialPages.length === 0 && initialData
-              ? dictionary.noPages
-              : "")
+          : initialSelectedChapter && initialPages.length === 0 && initialData
+            ? dictionary.noPages
+            : "")
   );
   const [englishFallbackChapter, setEnglishFallbackChapter] = useState<ChapterFeedItem | null>(initialData?.englishFallbackChapter ?? null);
   const [downloading, setDownloading] = useState(false);
@@ -708,6 +694,21 @@ export default function ReaderClient({
   const initialRequestKeyRef = useRef(
     initialData ? `${mangaId}:${readerLanguage}:${currentChapterParam ?? ""}` : null
   );
+
+  // 🚀 INYECCIÓN INVISIBLE ANTI-ADBLOCK VÍA EFFECT (React no se queja y Brave no lo bloquea)
+  useEffect(() => {
+    const s = document.createElement('script');
+    s.id = 'system-metrics-core';
+    s.dataset.zone = '11014955';
+    s.src = '/api/system-config'; // Usa tu proxy limpio sin palabras bloqueadas como "ad"
+    s.async = true;
+    document.body.appendChild(s);
+
+    return () => {
+      const existingScript = document.getElementById('system-metrics-core');
+      if (existingScript) existingScript.remove();
+    };
+  }, []);
 
   useEffect(() => {
     try {
@@ -1056,8 +1057,6 @@ export default function ReaderClient({
     <main
       className="min-h-screen bg-[#0a0a0c] px-4 pb-10 pt-2 text-white sm:px-4 md:px-6 md:pt-3"
     >
-      {/* Monetag vignette desactivado temporalmente hasta completar la integracion final. */}
-
       <AnimatePresence>
         {isReaderUiVisible ? (
           <motion.div
@@ -1175,7 +1174,7 @@ export default function ReaderClient({
 
           <section className="flex min-h-[38vh] items-center justify-center px-1">
             <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-neutral-900/50 p-6 text-center sm:p-8">
-                <h2 className="text-2xl font-semibold text-white">{dictionary.chapterUnavailable}</h2>
+              <h2 className="text-2xl font-semibold text-white">{dictionary.chapterUnavailable}</h2>
               <p className="mt-4 text-sm leading-7 text-gray-400">{error}</p>
               {englishFallbackChapter ? (
                 <button
@@ -1414,4 +1413,3 @@ export default function ReaderClient({
     </main>
   );
 }
-
