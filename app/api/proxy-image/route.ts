@@ -1,7 +1,5 @@
-﻿import { logger } from "../../utils/logger";
+import { logger } from "../../utils/logger";
 import { NextResponse } from "next/server";
-import http from "node:http";
-import https from "node:https";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -129,9 +127,13 @@ function fallbackImage(errorCode: string, debugError?: string) {
   });
 }
 
-function fetchImage(targetUrl: URL, signal?: AbortSignal, redirects = 0): Promise<ImageFetchResult> {
+async function fetchImage(targetUrl: URL, signal?: AbortSignal, redirects = 0): Promise<ImageFetchResult> {
+  const transport =
+    targetUrl.protocol === "http:"
+      ? await import("node:http")
+      : await import("node:https");
+
   return new Promise((resolve, reject) => {
-    const transport = targetUrl.protocol === "http:" ? http : https;
     const request = transport.get(
       targetUrl,
       {
