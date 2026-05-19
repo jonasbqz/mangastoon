@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const PROXY_VERSION = "node-direct-v6-node-https";
+const PROXY_VERSION = "web-fetch-v7-flaresolverr";
 const REQUEST_TIMEOUT_MS = 40000;
 const FORCED_REFERER = "https://olympusbiblioteca.com/";
 const FLARESOLVERR_URL = (
@@ -35,17 +35,16 @@ type ImageFetchResult = {
   status: number;
   contentType: string;
   cfMitigated: string | null;
-  buffer: Buffer;
+  buffer: ArrayBuffer;
 };
 
-function getBrowserHeaders() {
+function getBrowserHeaders(): HeadersInit {
   return {
     "User-Agent":
       cachedUserAgent ||
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    Accept: "image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
     "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-    "Accept-Encoding": "identity",
     Referer: FORCED_REFERER,
     Origin: "https://olympusbiblioteca.com",
     "Cache-Control": "no-cache",
@@ -84,10 +83,14 @@ function proxyHeaders(contentType: string, errorCode = "NONE", cacheControl = "p
 
 function isCloudflareChallenge(response: ImageFetchResult) {
   if (response.cfMitigated === "challenge") return true;
-  if (response.status !== 403 || !response.contentType.toLowerCase().includes("text/html")) return false;
+  if (!response.contentType.toLowerCase().includes("text/html")) return false;
 
-  const body = response.buffer.toString("utf8");
+  const body = new TextDecoder().decode(response.buffer);
   return body.includes("Just a moment") || body.includes("challenges.cloudflare.com") || body.includes("cf-chl");
+}
+
+function shouldUseFlareSolverr(response: ImageFetchResult) {
+  return response.status === 403 || response.status === 503 || isCloudflareChallenge(response);
 }
 
 function fallbackImage(errorCode: string, debugError?: string) {
@@ -126,58 +129,22 @@ function fallbackImage(errorCode: string, debugError?: string) {
   });
 }
 
-async function fetchImage(targetUrl: URL, signal?: AbortSignal, redirects = 0): Promise<ImageFetchResult> {
-  const transport =
-    targetUrl.protocol === "http:"
-      ? await import("node:http")
-      : await import("node:https");
-
-  return new Promise((resolve, reject) => {
-    const request = transport.get(
-      targetUrl,
-      {
-        headers: getBrowserHeaders(),
-        rejectUnauthorized: false,
-      },
-      (response) => {
-        const location = response.headers.location;
-
-        if (location && [301, 302, 303, 307, 308].includes(response.statusCode ?? 0) && redirects < 5) {
-          response.resume();
-          resolve(fetchImage(new URL(location, targetUrl), signal, redirects + 1));
-          return;
-        }
-
-        const chunks: Buffer[] = [];
-
-        response.on("data", (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-        response.on("end", () => {
-          const status = response.statusCode ?? 500;
-          const contentTypeHeader = response.headers["content-type"];
-          const contentType = Array.isArray(contentTypeHeader) ? contentTypeHeader[0] : contentTypeHeader || "image/webp";
-          const cfMitigatedHeader = response.headers["cf-mitigated"];
-
-          resolve({
-            ok: status >= 200 && status < 300,
-            status,
-            contentType,
-            cfMitigated: Array.isArray(cfMitigatedHeader) ? cfMitigatedHeader[0] : cfMitigatedHeader ?? null,
-            buffer: Buffer.concat(chunks),
-          });
-        });
-      },
-    );
-
-    request.on("error", reject);
-
-    signal?.addEventListener(
-      "abort",
-      () => {
-        request.destroy(new Error("ABORT_ERR"));
-      },
-      { once: true },
-    );
+async function fetchImage(targetUrl: URL, signal?: AbortSignal): Promise<ImageFetchResult> {
+  const response = await fetch(targetUrl.toString(), {
+    method: "GET",
+    cache: "no-store",
+    redirect: "follow",
+    signal,
+    headers: getBrowserHeaders(),
   });
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    contentType: response.headers.get("content-type") || "image/webp",
+    cfMitigated: response.headers.get("cf-mitigated"),
+    buffer: await response.arrayBuffer(),
+  };
 }
 
 async function refreshFlareSolverrSession(imageUrl: string) {
@@ -216,7 +183,7 @@ async function refreshFlareSolverrSession(imageUrl: string) {
 }
 
 function imageResponse(response: ImageFetchResult, diagnostic = "NONE") {
-  return new NextResponse(new Uint8Array(response.buffer), {
+  return new NextResponse(response.buffer, {
     status: 200,
     headers: proxyHeaders(response.contentType, diagnostic),
   });
@@ -247,13 +214,12 @@ export async function GET(request: Request) {
 
   try {
     const firstResponse = await fetchImage(targetUrl, controller.signal);
-    const firstIsChallenge = isCloudflareChallenge(firstResponse);
 
-    if (firstResponse.ok && !firstIsChallenge) {
+    if (firstResponse.ok && !isCloudflareChallenge(firstResponse)) {
       return imageResponse(firstResponse);
     }
 
-    if (!firstIsChallenge && firstResponse.status !== 403) {
+    if (!shouldUseFlareSolverr(firstResponse)) {
       console.warn("IMAGE PROXY FALLBACK", rawUrl, String(firstResponse.status));
       return fallbackImage(String(firstResponse.status));
     }
@@ -267,13 +233,14 @@ export async function GET(request: Request) {
     await flareSolverrPromise;
 
     const secondResponse = await fetchImage(targetUrl, controller.signal);
-    const secondIsChallenge = isCloudflareChallenge(secondResponse);
 
-    if (secondResponse.ok && !secondIsChallenge) {
+    if (secondResponse.ok && !isCloudflareChallenge(secondResponse)) {
       return imageResponse(secondResponse, "FLARESOLVERR_OK");
     }
 
-    const errorCode = secondIsChallenge ? `CF_CHALLENGE_${secondResponse.status}` : String(secondResponse.status);
+    const errorCode = isCloudflareChallenge(secondResponse)
+      ? `CF_CHALLENGE_${secondResponse.status}`
+      : String(secondResponse.status);
     console.warn("IMAGE PROXY FALLBACK", rawUrl, errorCode);
     return fallbackImage(errorCode);
   } catch (error) {
