@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-// Evitamos que Next.js cachee esta ruta en el servidor
 export const dynamic = "force-dynamic";
 
 function fallbackImage(errorCode: string) {
@@ -10,8 +9,8 @@ function fallbackImage(errorCode: string) {
     status: 502,
     headers: {
       "Content-Type": "image/svg+xml; charset=utf-8",
-      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-      "X-Proxy-Version": "manual-fix-final",
+      "Cache-Control": "no-store, no-cache",
+      "X-Proxy-Version": "vibecoder-redirect-v1",
     },
   });
 }
@@ -23,17 +22,22 @@ export async function GET(req: Request) {
 
     if (!imageUrl) return fallbackImage("NO_URL");
 
-    // Headers para engañar a Olympus y hacernos pasar por navegador
     const headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       "Referer": "https://olympusbiblioteca.com/",
       "Accept": "image/webp,image/avif,image/png,image/*,*/*;q=0.8",
     };
 
-    // Usamos el fetch nativo, sin inventos raros que rompan Docker
     const res = await fetch(imageUrl, { headers, cache: "no-store" });
 
     if (!res.ok) {
+      // LA JUGADA MAESTRA:
+      // Si Cloudflare bloquea nuestro servidor Dokploy (403 o 503),
+      // redirigimos al cliente para que su celular descargue la imagen directamente.
+      // Como tu frontend ya tiene 'referrerPolicy="no-referrer"', Olympus se lo tragará.
+      if (res.status === 403 || res.status === 503) {
+        return NextResponse.redirect(imageUrl);
+      }
       return fallbackImage(`HTTP_${res.status}`);
     }
 
@@ -43,7 +47,7 @@ export async function GET(req: Request) {
       headers: {
         "Content-Type": res.headers.get("content-type") || "image/webp",
         "Cache-Control": "public, max-age=86400",
-        "X-Proxy-Version": "manual-fix-final"
+        "X-Proxy-Version": "fetch-success"
       }
     });
 
