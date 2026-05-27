@@ -1,16 +1,82 @@
-﻿"use client";
+"use client";
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Download, Eye, EyeOff, FileText, List } from "lucide-react";
+import { ArrowLeft, ArrowRight, Download, Eye, EyeOff, FileText, List, ImageOff, RefreshCw, BookOpen, Scroll, Palette, Sparkles, Lock } from "lucide-react";
 import { SupportedLanguage, useLanguage } from "../../../../components/language-provider";
 import { useHistoryStore } from "../../../../store/useHistoryStore";
+import { useReaderSettingsStore, type ReadingMode, type PageSize } from "../../../../store/useReaderSettingsStore";
 import { generateMangaPDF } from "../../../../utils/pdfGenerator";
 import { buildComicPath, extractComicIdFromSlugId } from "../../../../utils/slugify";
+import { createClient } from "../../../../../utils/supabase/client";
+import { upgradeToPremiumAction } from "../../../../actions/profile";
+import PremiumBenefitsCard from "../../../../components/PremiumBenefitsCard";
+import AuthModal from "../../../../components/AuthModal";
+import CommentsSection from "../../../../components/CommentsSection";
 
-type ScrollSpeed = 1 | 2 | 3;
+// Import newly modularized atomic components
+import HorizontalReader from "./components/HorizontalReader";
+import MangaPageImage from "./components/MangaPageImage";
+import ReaderHeader from "./components/ReaderHeader";
+import ReaderSettingsPanel from "./components/ReaderSettingsPanel";
+
+type ScrollSpeed = 1 | 2 | 3 | 4 | 5;
+export type ReaderTheme = "dark" | "amoled" | "sepia" | "light" | "gray";
+
+const READER_THEME_KEY = "mangastoon_reader_theme";
+
+const THEME_CLASSES: Record<ReaderTheme, { bg: string; text: string; headerBg: string; border: string; card: string; sidepanelBg: string }> = {
+  dark: {
+    bg: "bg-[#0a0a0c]",
+    text: "text-white",
+    headerBg: "bg-[#0a0a0c]/85",
+    sidepanelBg: "bg-[#111215]/60",
+    border: "border-white/5",
+    card: "bg-gradient-to-b from-[#12131a] to-[#0a0a0c]"
+  },
+  amoled: {
+    bg: "bg-black",
+    text: "text-neutral-100",
+    headerBg: "bg-black/85",
+    sidepanelBg: "bg-neutral-900/60",
+    border: "border-neutral-800",
+    card: "bg-neutral-950"
+  },
+  sepia: {
+    bg: "bg-[#f4ecd8]",
+    text: "text-[#5b4636]",
+    headerBg: "bg-[#f4ecd8]/90",
+    sidepanelBg: "bg-[#ebdcb9]/80",
+    border: "border-[#e4dcc8]",
+    card: "bg-[#ebdcb9]/50"
+  },
+  light: {
+    bg: "bg-white",
+    text: "text-neutral-800",
+    headerBg: "bg-white/90",
+    sidepanelBg: "bg-neutral-100/80",
+    border: "border-neutral-200",
+    card: "bg-neutral-50"
+  },
+  gray: {
+    bg: "bg-[#1a1b20]",
+    text: "text-gray-200",
+    headerBg: "bg-[#1a1b20]/85",
+    sidepanelBg: "bg-[#22232a]/60",
+    border: "border-white/5",
+    card: "bg-[#22232a]"
+  }
+};
+
+const PAGE_SIZE_CLASSES: Record<PageSize, string> = {
+  small: "max-w-xl",
+  medium: "max-w-3xl",
+  large: "max-w-5xl",
+  full: "max-w-full",
+};
 
 const MAX_IMAGE_RETRIES = 3;
 
@@ -29,7 +95,7 @@ function withImageRetryParam(src: string, retry: number) {
   }
 }
 
-type ReaderDictionary = {
+export type ReaderDictionary = {
   reader: string;
   backHome: string;
   chapterUnavailable: string;
@@ -69,9 +135,16 @@ type ReaderDictionary = {
   endReachedBody: string;
   suggestedTitle: string;
   exploreMore: string;
+  scrollSpeedTooltip: string;
+  modeVertical: string;
+  modeHorizontal: string;
+  pageIndicator: (current: number, total: number) => string;
+  tapHint: string;
+  previousPage: string;
+  nextPage: string;
 };
 
-type ChapterFeedItem = {
+export type ChapterFeedItem = {
   id: string;
   attributes?: {
     chapter?: string | null;
@@ -125,13 +198,13 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     pdfFailed: "No se pudo generar el PDF. Intentá de nuevo.",
     cancel: "Cancelar",
     download: "Descargar",
-    play: "Play",
-    pause: "Pause",
+    play: "Lectura automática",
+    pause: "Pausar desplazamiento",
     page: "Página",
     chapter: "Capítulo",
-    scrollTop: "Subir",
+    scrollTop: "Subir al inicio",
     fullscreen: "Pantalla completa",
-    controls: "Controles",
+    controls: "Mostrar controles",
     hideControls: "Ocultar controles",
     nextChapterCta: "Siguiente Capítulo",
     backToSeries: "Volver a la serie",
@@ -139,6 +212,13 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     endReachedBody: "Por ahora no hay más episodios publicados. Te dejamos lecturas de MangaStoon para que sigas con el ritmo.",
     suggestedTitle: "Seguir leyendo en MangaStoon",
     exploreMore: "Explorar más mangas",
+    scrollSpeedTooltip: "Velocidad de desplazamiento",
+    modeVertical: "Modo Vertical (Webtoon)",
+    modeHorizontal: "Modo Horizontal (Página)",
+    pageIndicator: (current, total) => `${current} / ${total}`,
+    tapHint: "Toca los lados para navegar",
+    previousPage: "Página anterior",
+    nextPage: "Página siguiente",
   },
   en: {
     reader: "Mangastoon Reader",
@@ -166,13 +246,13 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     pdfFailed: "The PDF could not be generated. Please try again.",
     cancel: "Cancel",
     download: "Download",
-    play: "Play",
-    pause: "Pause",
+    play: "Auto-scroll",
+    pause: "Pause scroll",
     page: "Page",
     chapter: "Chapter",
-    scrollTop: "Scroll top",
+    scrollTop: "Scroll to top",
     fullscreen: "Fullscreen",
-    controls: "Controls",
+    controls: "Show controls",
     hideControls: "Hide controls",
     nextChapterCta: "Next Chapter",
     backToSeries: "Back to series",
@@ -180,6 +260,13 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     endReachedBody: "There are no more published episodes yet. Here are MangaStoon picks so you can keep reading.",
     suggestedTitle: "Keep reading on MangaStoon",
     exploreMore: "Explore more manga",
+    scrollSpeedTooltip: "Scroll speed",
+    modeVertical: "Vertical Mode (Webtoon)",
+    modeHorizontal: "Horizontal Mode (Page)",
+    pageIndicator: (current, total) => `${current} / ${total}`,
+    tapHint: "Tap sides to navigate",
+    previousPage: "Previous page",
+    nextPage: "Next page",
   },
   pt: {
     reader: "Leitor Mangastoon",
@@ -207,13 +294,13 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     pdfFailed: "Nao foi possivel gerar o PDF. Tente novamente.",
     cancel: "Cancelar",
     download: "Baixar",
-    play: "Play",
-    pause: "Pause",
+    play: "Rolagem automática",
+    pause: "Pausar rolagem",
     page: "Pagina",
     chapter: "Capitulo",
-    scrollTop: "Topo",
+    scrollTop: "Subir ao topo",
     fullscreen: "Tela cheia",
-    controls: "Controles",
+    controls: "Mostrar controles",
     hideControls: "Ocultar controles",
     nextChapterCta: "Próximo Capítulo",
     backToSeries: "Voltar para a série",
@@ -221,6 +308,13 @@ const UI_COPY: Record<SupportedLanguage, ReaderDictionary> = {
     endReachedBody: "Por enquanto não há mais episódios publicados. Deixamos recomendações da MangaStoon para você continuar lendo.",
     suggestedTitle: "Continuar lendo na MangaStoon",
     exploreMore: "Explorar mais mangas",
+    scrollSpeedTooltip: "Velocidade de rolagem",
+    modeVertical: "Modo Vertical (Webtoon)",
+    modeHorizontal: "Modo Horizontal (Página)",
+    pageIndicator: (current, total) => `${current} / ${total}`,
+    tapHint: "Toque nos lados para navegar",
+    previousPage: "Página anterior",
+    nextPage: "Próxima página",
   },
 };
 
@@ -416,28 +510,7 @@ function buildReaderUrl(comicSlug: string, chapterId?: string, lang?: SupportedL
     : `/comics/${comicSlug}${query ? `?${query}` : ""}`;
 }
 
-function ToolButton({
-  title,
-  onClick,
-  children,
-}: {
-  title: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <motion.button
-      type="button"
-      title={title}
-      onClick={onClick}
-      whileHover={{ scale: 1.04 }}
-      whileTap={{ scale: 0.9 }}
-      className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-[#1d1e25]/80 text-gray-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_32px_rgba(0,0,0,0.42)] backdrop-blur-md transition-colors hover:border-orange-500/45 hover:bg-orange-500 hover:text-black hover:shadow-orange-900/25"
-    >
-      {children}
-    </motion.button>
-  );
-}
+
 
 function ChapterNavButton({
   disabled,
@@ -454,8 +527,8 @@ function ChapterNavButton({
 }) {
   const className =
     variant === "primary"
-      ? "h-12 w-12 rounded-full bg-orange-600 text-white shadow-lg transition-all hover:scale-105 hover:bg-orange-500 disabled:cursor-not-allowed disabled:opacity-40"
-      : "h-12 w-12 rounded-full border border-gray-800 text-gray-500 transition-all hover:border-orange-500/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
+      ? "h-11 w-11 rounded-xl bg-orange-600 text-white shadow-lg transition-all hover:bg-orange-500 hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
+      : "h-11 w-11 rounded-xl border border-white/10 bg-[#141519]/75 text-gray-300 hover:border-orange-500/30 hover:text-orange-400 disabled:cursor-not-allowed disabled:opacity-40 shadow-sm";
   const hiddenClass = disabled && hiddenWhenDisabled ? "hidden" : "";
 
   return (
@@ -463,7 +536,7 @@ function ChapterNavButton({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      whileTap={{ scale: disabled ? 1 : 0.9 }}
+      whileTap={{ scale: disabled ? 1 : 0.95 }}
       className={`flex items-center justify-center ${className} ${hiddenClass}`}
       aria-hidden={disabled && hiddenWhenDisabled ? true : undefined}
     >
@@ -490,125 +563,23 @@ function ChapterNavigation({
   return (
     <div className="my-4 flex flex-wrap items-center justify-center gap-3 md:my-5 md:gap-4">
       <ChapterNavButton disabled={!previousChapter} hiddenWhenDisabled onClick={onPrevious}>
-        <ArrowLeft aria-hidden="true" size={24} strokeWidth={2.6} />
+        <ArrowLeft aria-hidden="true" size={20} strokeWidth={2.2} />
         <span className="sr-only">{dictionary.previousChapter}</span>
       </ChapterNavButton>
 
       <ChapterNavButton onClick={onList}>
-        <List aria-hidden="true" size={24} strokeWidth={2.6} />
+        <List aria-hidden="true" size={20} strokeWidth={2.2} />
         <span className="sr-only">{dictionary.chapterList}</span>
       </ChapterNavButton>
 
       <ChapterNavButton disabled={!nextChapter} hiddenWhenDisabled onClick={onNext} variant="primary">
-        <ArrowRight aria-hidden="true" size={24} strokeWidth={2.6} />
+        <ArrowRight aria-hidden="true" size={20} strokeWidth={2.2} />
         <span className="sr-only">{dictionary.nextChapter}</span>
       </ChapterNavButton>
     </div>
   );
 }
 
-function MangaPageImage({
-  pageUrl,
-  alt,
-  priority,
-}: {
-  pageUrl: string;
-  alt: string;
-  priority: boolean;
-}) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [shouldLoad, setShouldLoad] = useState(priority);
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [currentSrc, setCurrentSrc] = useState(pageUrl);
-  const [retryCount, setRetryCount] = useState(0);
-
-  useEffect(() => {
-    setLoaded(false);
-    setFailed(false);
-    setShouldLoad(priority);
-    setCurrentSrc(pageUrl);
-    setRetryCount(0);
-  }, [pageUrl, priority]);
-
-  useEffect(() => {
-    if (shouldLoad) return;
-
-    const element = containerRef.current;
-    if (!element) return;
-
-    if (!("IntersectionObserver" in window)) {
-      setShouldLoad(true);
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setShouldLoad(true);
-          observer.disconnect();
-        }
-      },
-      {
-        rootMargin: "900px 0px",
-        threshold: 0.01,
-      }
-    );
-
-    observer.observe(element);
-
-    return () => observer.disconnect();
-  }, [shouldLoad]);
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative w-full overflow-hidden bg-[#111217]"
-      style={{ contentVisibility: "auto", containIntrinsicSize: "900px" }}
-    >
-      {!loaded && !failed ? (
-        <div
-          aria-hidden="true"
-          className="min-h-[72vh] w-full overflow-hidden bg-[#111217]"
-        >
-          <div className="relative min-h-[72vh] w-full animate-pulse bg-[#181a22]">
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.045] to-transparent opacity-70" />
-          </div>
-        </div>
-      ) : null}
-
-      {failed ? (
-        <div className="flex min-h-[45vh] items-center justify-center px-4 text-center text-sm text-gray-400">
-          No pudimos cargar esta pagina. Intenta recargar el capitulo.
-        </div>
-      ) : shouldLoad ? (
-        <img
-          src={currentSrc}
-          alt={alt}
-          className={`block h-auto w-full transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
-          loading={priority ? "eager" : "lazy"}
-          decoding="async"
-          fetchPriority={priority ? "high" : "low"}
-          referrerPolicy="no-referrer"
-          onLoad={() => setLoaded(true)}
-          onError={() => {
-            if (retryCount < MAX_IMAGE_RETRIES) {
-              const nextRetry = retryCount + 1;
-              setRetryCount(nextRetry);
-              setLoaded(false);
-              setFailed(false);
-              setCurrentSrc(withImageRetryParam(pageUrl, nextRetry));
-              return;
-            }
-
-            setLoaded(true);
-            setFailed(true);
-          }}
-        />
-      ) : null}
-    </div>
-  );
-}
 
 function RetryableSuggestedImage({ src, alt }: { src: string; alt: string }) {
   const [currentSrc, setCurrentSrc] = useState(src);
@@ -635,6 +606,8 @@ function RetryableSuggestedImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
+
+
 type ReaderClientProps = {
   initialData?: ReaderApiResponse | null;
   initialMangaId?: string;
@@ -659,6 +632,10 @@ export default function ReaderClient({
   const readerLanguage = initialReaderLanguage ?? normalizeReaderLanguage(searchParams.get("lang"), language);
   const dictionary = UI_COPY[readerLanguage];
   const addHistory = useHistoryStore((state) => state.addHistory);
+  const readingMode = useReaderSettingsStore((state) => state.readingMode);
+  const setReadingMode = useReaderSettingsStore((state) => state.setReadingMode);
+  const pageSize = useReaderSettingsStore((state) => state.pageSize);
+  const setPageSize = useReaderSettingsStore((state) => state.setPageSize);
 
   const initialSelectedChapter = initialData?.currentChapter ?? null;
   const initialPages = initialData?.pages ?? [];
@@ -690,6 +667,186 @@ export default function ReaderClient({
   const [scrollSpeed, setScrollSpeed] = useState<ScrollSpeed>(1);
   const [isReaderUiVisible, setIsReaderUiVisible] = useState(true);
   const [suggestedComics, setSuggestedComics] = useState<SuggestedComic[]>([]);
+  const [scrollDirection, setScrollDirection] = useState<"up" | "down">("up");
+  const [isAtTop, setIsAtTop] = useState(true);
+
+  const [isPremium, setIsPremium] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [readerTheme, setReaderTheme] = useState<ReaderTheme>("dark");
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [pageRetryVersions, setPageRetryVersions] = useState<number[]>([]);
+
+  useEffect(() => {
+    setPageRetryVersions(new Array(pages.length).fill(0));
+  }, [pages]);
+
+  const handleRetrySubsequent = useCallback((startIndex: number) => {
+    setPageRetryVersions((prev) => {
+      const next = [...prev];
+      for (let i = startIndex; i < next.length; i++) {
+        next[i] = (next[i] || 0) + 1;
+      }
+      return next;
+    });
+  }, []);
+  const [showNextChapterBanner, setShowNextChapterBanner] = useState(false);
+  const maxPdfChapters = isPremium ? 50 : 10;
+
+  const nextChapterRef = useRef<ChapterFeedItem | null>(null);
+
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [currentProfile, setCurrentProfile] = useState<any | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authLoaded, setAuthLoaded] = useState(false);
+
+  useEffect(() => {
+    async function loadPremiumAndTheme() {
+      try {
+        const storedTheme = localStorage.getItem(READER_THEME_KEY) as ReaderTheme;
+        if (storedTheme) {
+          setReaderTheme(storedTheme);
+        }
+
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setAuthLoaded(true);
+          return;
+        }
+        setCurrentUser(user);
+
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+
+        if (data) {
+          setCurrentProfile(data);
+          if (data.is_premium) {
+            setIsPremium(true);
+          }
+        }
+      } catch (err) {
+        console.warn("[ReaderClient] Error loading premium/theme:", err);
+      } finally {
+        setAuthLoaded(true);
+      }
+    }
+    loadPremiumAndTheme();
+  }, []);
+
+  useEffect(() => {
+    if (authLoaded && !isPremium && readingMode === "horizontal") {
+      setReadingMode("vertical");
+      toast.info("El modo horizontal es exclusivo para usuarios Premium. 👑", {
+        description: "Se ha restablecido la lectura al modo cascada."
+      });
+    }
+  }, [authLoaded, isPremium, readingMode, setReadingMode]);
+
+  useEffect(() => {
+    let lastScrollY = typeof window !== "undefined" ? window.scrollY : 0;
+    let ticking = false;
+
+    const updateScroll = () => {
+      const currentScrollY = window.scrollY;
+      setIsAtTop(currentScrollY < 120);
+
+      if (Math.abs(currentScrollY - lastScrollY) > 8) {
+        const direction = currentScrollY > lastScrollY ? "down" : "up";
+        setScrollDirection(direction);
+      }
+      lastScrollY = currentScrollY;
+      ticking = false;
+
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = document.documentElement.clientHeight;
+      const totalScrollable = scrollHeight - clientHeight;
+      if (totalScrollable > 0) {
+        const scrolledPercentage = (currentScrollY / totalScrollable) * 100;
+        setScrollProgress(scrolledPercentage);
+        setShowNextChapterBanner(scrolledPercentage > 90 && scrolledPercentage < 97 && !!nextChapterRef.current);
+      }
+    };
+
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(updateScroll);
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
+  // Track and save vertical reading progress
+  useEffect(() => {
+    if (readingMode !== "vertical" || pages.length === 0 || !currentChapter?.id) return;
+
+    let scrollTimeout: number;
+
+    const handleVerticalScroll = () => {
+      window.clearTimeout(scrollTimeout);
+      scrollTimeout = window.setTimeout(() => {
+        const pageElements = document.querySelectorAll("[data-page-index]");
+        let currentVisibleIndex = 0;
+        let minDistance = Infinity;
+
+        pageElements.forEach((el) => {
+          const rect = el.getBoundingClientRect();
+          const distance = Math.abs(rect.top);
+          if (distance < minDistance) {
+            minDistance = distance;
+            currentVisibleIndex = parseInt(el.getAttribute("data-page-index") || "0", 10);
+          }
+        });
+
+        try {
+          localStorage.setItem(
+            `mangastoon_last_page:${mangaId}:${currentChapter.id}`,
+            String(currentVisibleIndex)
+          );
+        } catch {}
+      }, 150);
+    };
+
+    window.addEventListener("scroll", handleVerticalScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleVerticalScroll);
+      window.clearTimeout(scrollTimeout);
+    };
+  }, [readingMode, pages, mangaId, currentChapter?.id]);
+
+  // Restore vertical scroll progress when pages or chapter changes
+  useEffect(() => {
+    if (readingMode !== "vertical" || pages.length === 0 || !currentChapter?.id || loading) return;
+
+    const restoreVerticalScroll = () => {
+      try {
+        const saved = localStorage.getItem(`mangastoon_last_page:${mangaId}:${currentChapter.id}`);
+        if (saved) {
+          const pageIndex = parseInt(saved, 10);
+          if (Number.isFinite(pageIndex) && pageIndex > 0 && pageIndex < pages.length) {
+            setTimeout(() => {
+              const el = document.querySelector(`[data-page-index="${pageIndex}"]`);
+              if (el) {
+                el.scrollIntoView({ behavior: "instant", block: "start" });
+              }
+            }, 120);
+          }
+        }
+      } catch {}
+    };
+
+    restoreVerticalScroll();
+  }, [readingMode, pages, mangaId, currentChapter?.id, loading]);
+
+  const showControlsUI = isAtTop || scrollDirection === "up";
+
   const autoScrollIntervalRef = useRef<number | null>(null);
   const initialRequestKeyRef = useRef(
     initialData ? `${mangaId}:${readerLanguage}:${currentChapterParam ?? ""}` : null
@@ -777,6 +934,10 @@ export default function ReaderClient({
           requestParams.set("chapter", currentChapterParam);
         }
 
+        if (chapters.length > 0) {
+          requestParams.set("excludeChapters", "true");
+        }
+
         const controller = new AbortController();
         const timeout = window.setTimeout(() => controller.abort(), READER_REQUEST_TIMEOUT_MS);
         const response = await fetch(`/api/read/${mangaId}?${requestParams.toString()}`, {
@@ -805,7 +966,11 @@ export default function ReaderClient({
 
         setMangaTitle(payload.mangaTitle ?? "Mangastoon");
         setCoverImage(payload.coverImage ?? "");
-        setChapters(feed);
+        
+        if (feed && feed.length > 0) {
+          setChapters(feed);
+        }
+        
         setCurrentChapter(selectedChapter);
         setEnglishFallbackChapter(payload.englishFallbackChapter ?? null);
 
@@ -864,6 +1029,8 @@ export default function ReaderClient({
       1: 1,
       2: 2,
       3: 3,
+      4: 5.5,
+      5: 8,
     };
 
     autoScrollIntervalRef.current = window.setInterval(() => {
@@ -877,6 +1044,40 @@ export default function ReaderClient({
       }
     };
   }, [autoScroll, scrollSpeed]);
+
+  // Pausar auto-scroll automáticamente cuando el usuario interactúa manualmente con la pantalla
+  useEffect(() => {
+    if (!autoScroll) return;
+
+    const stopAutoScroll = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        // Ignorar clics o gestos dentro del panel de control
+        if (
+          target.closest('[data-is-controls-panel="true"]') ||
+          target.closest('button') ||
+          target.closest('input') ||
+          target.closest('select') ||
+          target.closest('[role="button"]')
+        ) {
+          return;
+        }
+      }
+      setAutoScroll(false);
+    };
+
+    window.addEventListener("wheel", stopAutoScroll, { passive: true });
+    window.addEventListener("touchstart", stopAutoScroll, { passive: true });
+    window.addEventListener("mousedown", stopAutoScroll, { passive: true });
+    window.addEventListener("keydown", stopAutoScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener("wheel", stopAutoScroll);
+      window.removeEventListener("touchstart", stopAutoScroll);
+      window.removeEventListener("mousedown", stopAutoScroll);
+      window.removeEventListener("keydown", stopAutoScroll);
+    };
+  }, [autoScroll]);
 
   useEffect(() => {
     if (!currentChapter?.id || !mangaId || pages.length === 0) {
@@ -930,6 +1131,10 @@ export default function ReaderClient({
     (currentChapterNumber === null && currentChapterIndex > 0
       ? readableChapters[currentChapterIndex - 1]
       : null);
+
+  useEffect(() => {
+    nextChapterRef.current = nextChapter;
+  }, [nextChapter]);
   const pdfStartChapterIndex = Math.max(
     0,
     findChapterIndexByIdOrNumber(
@@ -949,7 +1154,7 @@ export default function ReaderClient({
   const normalizedPdfStartIndex = Math.max(0, Math.min(pdfStartChapterIndex, pdfEndChapterIndex));
   const normalizedPdfEndIndex = Math.max(pdfStartChapterIndex, pdfEndChapterIndex);
   const requestedPdfChapterCount = normalizedPdfEndIndex - normalizedPdfStartIndex + 1;
-  const maxPdfEndIndex = Math.min(readableChapters.length - 1, normalizedPdfStartIndex + MAX_PDF_CHAPTERS - 1);
+  const maxPdfEndIndex = Math.min(readableChapters.length - 1, normalizedPdfStartIndex + maxPdfChapters - 1);
   const allowedPdfEndIndex = Math.min(normalizedPdfEndIndex, maxPdfEndIndex);
   const pdfEndOptions = readableChapters.slice(normalizedPdfStartIndex, maxPdfEndIndex + 1);
   const selectedPdfChapters = readableChapters
@@ -966,7 +1171,7 @@ export default function ReaderClient({
       return;
     }
 
-    if (requestedPdfChapterCount > MAX_PDF_CHAPTERS) {
+    if (requestedPdfChapterCount > maxPdfChapters) {
       toast.error(dictionary.pdfLimitExceeded);
       return;
     }
@@ -1019,9 +1224,91 @@ export default function ReaderClient({
     setScrollSpeed((current) => {
       if (current === 1) return 2;
       if (current === 2) return 3;
+      if (current === 3) {
+        if (isPremium) {
+          return 4;
+        } else {
+          setShowPremiumModal(true);
+          toast.info("Las velocidades 4x y 5x son beneficios Premium.");
+          return 1;
+        }
+      }
+      if (current === 4) return 5;
       return 1;
     });
   }
+
+  function cycleTheme() {
+    const themes: ReaderTheme[] = ["dark", "amoled", "sepia", "light", "gray"];
+    const currentIndex = themes.indexOf(readerTheme);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    const nextTheme = themes[nextIndex];
+
+    if (nextTheme !== "dark" && !isPremium) {
+      setShowPremiumModal(true);
+      toast.info("¡Los temas de lectura son un beneficio Premium! Pasate a Premium para desbloquearlos.");
+      return;
+    }
+
+    setReaderTheme(nextTheme);
+    localStorage.setItem(READER_THEME_KEY, nextTheme);
+    toast.success(`Tema cambiado a ${nextTheme.toUpperCase()}`);
+  }
+
+  function selectTheme(theme: ReaderTheme) {
+    if (theme !== "dark" && !isPremium) {
+      setShowPremiumModal(true);
+      toast.info("¡Los temas de lectura son un beneficio Premium! Pasate a Premium para desbloquearlos.");
+      return;
+    }
+
+    setReaderTheme(theme);
+    localStorage.setItem(READER_THEME_KEY, theme);
+    toast.success(`Tema cambiado a ${theme.toUpperCase()}`);
+  }
+
+  async function handleUpgradePremium() {
+    try {
+      const response = await upgradeToPremiumAction();
+      if (response.error) {
+        toast.error(response.error);
+        return;
+      }
+      setIsPremium(true);
+      setShowPremiumModal(false);
+      toast.success("¡Bienvenido al Club Premium de MangaStoon! 🎉 Disfrutá de todos tus beneficios.");
+    } catch {
+      toast.error("Ocurrió un error al activar tu cuenta Premium.");
+    }
+  }
+
+  useEffect(() => {
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (
+        document.activeElement?.tagName === "INPUT" ||
+        document.activeElement?.tagName === "SELECT" ||
+        document.activeElement?.tagName === "TEXTAREA"
+      ) {
+        return;
+      }
+
+      if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+
+      if (e.key === " " && readingMode === "vertical") {
+        e.preventDefault();
+        window.scrollBy({
+          top: window.innerHeight * 0.8,
+          behavior: "smooth",
+        });
+      }
+    }
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [readingMode]);
 
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1042,73 +1329,49 @@ export default function ReaderClient({
 
   return (
     <main
-      className="min-h-screen bg-[#0a0a0c] px-4 pb-10 pt-2 text-white sm:px-4 md:px-6 md:pt-3"
+      className={`min-h-screen ${THEME_CLASSES[readerTheme].bg} ${THEME_CLASSES[readerTheme].text} px-4 pb-10 pt-2 sm:px-4 md:px-6 md:pt-3 transition-colors duration-300`}
     >
-      <AnimatePresence>
-        {isReaderUiVisible ? (
-          <motion.div
-            key="reader-tools-visible"
-            initial={{ opacity: 0, x: 18, scale: 0.96 }}
-            animate={{ opacity: 1, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 18, scale: 0.96 }}
-            transition={{ duration: 0.22 }}
-            className="fixed right-3 top-1/2 z-50 flex -translate-y-1/2 flex-col gap-3 rounded-2xl border border-white/10 bg-[#141519]/78 p-2 shadow-2xl shadow-black/45 backdrop-blur-xl md:right-4"
-          >
-            <ToolButton title={dictionary.hideControls} onClick={() => setReaderUiVisibility(false)}>
-              <EyeOff className="h-5 w-5" />
-            </ToolButton>
+      <ReaderHeader
+        isAtTop={isAtTop}
+        scrollDirection={scrollDirection}
+        readingMode={readingMode}
+        loading={loading}
+        error={error}
+        readerTheme={readerTheme}
+        routeSlug={routeSlug}
+        mangaTitle={mangaTitle}
+        isPremium={isPremium}
+        currentChapter={currentChapter}
+        dictionary={dictionary}
+        previousChapter={previousChapter}
+        nextChapter={nextChapter}
+        handleChapterNavigation={handleChapterNavigation}
+        openChapterList={openChapterList}
+        setShowPdfModal={setShowPdfModal}
+        downloading={downloading}
+        pagesCount={pages.length}
+      />
 
-            <ToolButton title={dictionary.fullscreen} onClick={toggleFullscreen}>
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3" />
-                <path d="M16 3h3a2 2 0 0 1 2 2v3" />
-                <path d="M8 21H5a2 2 0 0 1-2-2v-3" />
-                <path d="M16 21h3a2 2 0 0 0 2-2v-3" />
-              </svg>
-            </ToolButton>
-
-            <ToolButton
-              title={autoScroll ? dictionary.pause : dictionary.play}
-              onClick={() => setAutoScroll((current) => !current)}
-            >
-              {autoScroll ? (
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                  <rect x="6" y="5" width="4" height="14" rx="1" />
-                  <rect x="14" y="5" width="4" height="14" rx="1" />
-                </svg>
-              ) : (
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              )}
-            </ToolButton>
-
-            <ToolButton title={`${scrollSpeed}x`} onClick={cycleSpeed}>
-              <span className="text-sm font-semibold">{scrollSpeed}x</span>
-            </ToolButton>
-
-            <ToolButton title={dictionary.scrollTop} onClick={scrollToTop}>
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 19V5" />
-                <path d="m5 12 7-7 7 7" />
-              </svg>
-            </ToolButton>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="reader-tools-hidden"
-            initial={{ opacity: 0, x: 10, scale: 0.92 }}
-            animate={{ opacity: 0.58, x: 0, scale: 1 }}
-            exit={{ opacity: 0, x: 10, scale: 0.92 }}
-            transition={{ duration: 0.22 }}
-            className="fixed right-3 top-1/2 z-50 -translate-y-1/2 md:right-4"
-          >
-            <ToolButton title={dictionary.controls} onClick={() => setReaderUiVisibility(true)}>
-              <Eye className="h-5 w-5" />
-            </ToolButton>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ReaderSettingsPanel
+        isReaderUiVisible={isReaderUiVisible}
+        showControlsUI={showControlsUI}
+        readerTheme={readerTheme}
+        dictionary={dictionary}
+        setReaderUiVisibility={setReaderUiVisibility}
+        toggleFullscreen={toggleFullscreen}
+        cycleTheme={cycleTheme}
+        selectTheme={selectTheme}
+        readingMode={readingMode}
+        setReadingMode={setReadingMode}
+        setAutoScroll={setAutoScroll}
+        autoScroll={autoScroll}
+        scrollSpeed={scrollSpeed}
+        cycleSpeed={cycleSpeed}
+        scrollToTop={scrollToTop}
+        isPremium={isPremium}
+        pageSize={pageSize}
+        setPageSize={setPageSize}
+      />
 
       {loading ? (
         <section className="flex min-h-[70vh] items-center justify-center">
@@ -1121,30 +1384,29 @@ export default function ReaderClient({
         <>
           <section className="mx-auto max-w-5xl pt-0">
             <div className="mb-2 flex w-full items-center justify-between px-1 sm:px-2 md:px-4">
-              <button
-                type="button"
-                onClick={() => router.push("/")}
-                className="flex min-h-10 items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 shadow-lg shadow-black/20 transition-all duration-300 hover:bg-[#ff6b00] hover:text-white"
+              <Link
+                href="/"
+                className="flex min-h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.03] px-4 py-2 text-xs font-bold text-gray-300 shadow-md transition-all duration-300 hover:border-orange-500/30 hover:bg-orange-500/10 hover:text-orange-400"
               >
-                <ArrowLeft size={24} />
-                <span className="hidden font-medium sm:inline">{dictionary.backHome}</span>
-              </button>
+                <ArrowLeft size={18} />
+                <span className="hidden font-bold sm:inline">{dictionary.backHome}</span>
+              </Link>
 
               <button
                 type="button"
                 disabled
-                className="flex min-h-10 items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 opacity-50"
+                className="flex min-h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.03] px-4 py-2 text-xs font-bold text-gray-300 opacity-40 disabled:cursor-not-allowed"
               >
-                <Download size={24} />
-                <span className="hidden font-medium sm:inline">{dictionary.downloadPdf}</span>
+                <Download size={18} />
+                <span className="hidden font-bold sm:inline">{dictionary.downloadPdf}</span>
               </button>
             </div>
 
             <div className="mb-2 flex flex-col items-center justify-center px-3 text-center">
-              <h1 className="mb-1 line-clamp-1 max-w-3xl hyphens-auto text-xl font-semibold leading-tight tracking-tight text-orange-500 md:text-2xl">
+              <h1 className="mb-1 line-clamp-1 max-w-3xl hyphens-auto text-xl font-bold leading-tight tracking-tight text-orange-500 md:text-2xl">
                 {mangaTitle}
               </h1>
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400 mt-1">
                 {getChapterLabel(currentChapter, dictionary)}
               </h2>
             </div>
@@ -1160,7 +1422,7 @@ export default function ReaderClient({
           </section>
 
           <section className="flex min-h-[38vh] items-center justify-center px-1">
-            <div className="w-full max-w-3xl rounded-3xl border border-white/10 bg-neutral-900/50 p-6 text-center sm:p-8">
+            <div className={`w-full max-w-3xl rounded-3xl border ${THEME_CLASSES[readerTheme].border} ${THEME_CLASSES[readerTheme].card} p-6 text-center sm:p-8 transition-colors duration-300`}>
               <h2 className="text-2xl font-semibold text-white">{dictionary.chapterUnavailable}</h2>
               <p className="mt-4 text-sm leading-7 text-gray-400">{error}</p>
               {englishFallbackChapter ? (
@@ -1170,7 +1432,7 @@ export default function ReaderClient({
                     setAutoScroll(false);
                     router.push(buildReaderUrl(routeSlug, englishFallbackChapter.id, "en"));
                   }}
-                  className="mt-6 inline-flex items-center justify-center rounded-full bg-orange-500 px-6 py-3 text-sm font-semibold text-black transition hover:bg-orange-400"
+                  className="mt-6 inline-flex items-center justify-center rounded-xl bg-orange-500 px-6 py-3 text-sm font-semibold text-black transition hover:bg-orange-400"
                 >
                   {dictionary.readInEnglish}
                 </button>
@@ -1182,102 +1444,122 @@ export default function ReaderClient({
         <>
           <section className="mx-auto max-w-5xl pt-0">
             <div className="mb-2 flex w-full items-center justify-between px-1 sm:px-2 md:px-4">
-              <button
-                type="button"
-                onClick={() => router.push("/")}
-                className="flex min-h-10 items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 shadow-lg shadow-black/20 transition-all duration-300 hover:bg-[#ff6b00] hover:text-white"
+              <Link
+                href={`/comics/${routeSlug}`}
+                className="group inline-flex cursor-pointer items-center gap-2 rounded-full border border-orange-500/25 bg-orange-500/10 px-4 py-2 text-xs font-bold text-orange-400 backdrop-blur transition-all hover:border-orange-500/50 hover:bg-orange-500 hover:text-black shadow-md"
               >
-                <ArrowLeft size={24} />
-                <span className="hidden font-medium sm:inline">{dictionary.backHome}</span>
-              </button>
+                <ArrowLeft size={18} className="transition-transform group-hover:-translate-x-1" />
+                <span>{dictionary.backToSeries}</span>
+              </Link>
 
               <button
                 type="button"
                 onClick={() => setShowPdfModal(true)}
                 disabled={downloading || pages.length === 0}
-                className="flex min-h-10 items-center gap-2 rounded-full bg-[#1a1b20] px-4 py-2 text-sm font-semibold text-gray-300 shadow-lg shadow-black/20 transition-all duration-300 hover:bg-[#ff6b00] hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-10 items-center gap-2 rounded-xl border border-white/5 bg-white/[0.03] px-4 py-2 text-xs font-bold text-gray-300 shadow-md transition-all duration-300 hover:border-orange-500/30 hover:bg-orange-500/10 hover:text-orange-400 disabled:opacity-40 disabled:pointer-events-none"
               >
-                <Download size={24} />
-                <span className="hidden font-medium sm:inline">
+                <Download size={18} />
+                <span className="hidden font-bold sm:inline">
                   {downloading ? dictionary.generatingPdf : dictionary.downloadPdf}
                 </span>
               </button>
             </div>
 
             <div className="mb-2 flex flex-col items-center justify-center px-3 text-center">
-              <h1 className="mb-1 line-clamp-1 max-w-3xl hyphens-auto text-xl font-semibold leading-tight tracking-tight text-orange-500 md:text-2xl">
+              <h1 className="flex items-center justify-center gap-1.5 mb-1 line-clamp-1 max-w-3xl hyphens-auto text-xl font-bold leading-tight tracking-tight text-orange-500 md:text-2xl">
                 {mangaTitle}
+                {isPremium && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-black border border-yellow-300/40 shadow-[0_0_15px_rgba(245,158,11,0.25)]">
+                    👑 Premium
+                  </span>
+                )}
               </h1>
-              <h2 className="text-base font-semibold text-white">
+              <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400 mt-1">
                 {getChapterLabel(currentChapter, dictionary)}
               </h2>
             </div>
-
-            <ChapterNavigation
-              dictionary={dictionary}
-              previousChapter={previousChapter}
-              nextChapter={nextChapter}
-              onPrevious={() => previousChapter && handleChapterNavigation(previousChapter.id)}
-              onNext={() => nextChapter && handleChapterNavigation(nextChapter.id)}
-              onList={openChapterList}
-            />
           </section>
 
           <section className="pb-0 pt-0">
-            <div className="mx-auto flex w-full max-w-3xl flex-col">
-              {pages.map((pageUrl, index) => (
-                <MangaPageImage
-                  key={pageUrl}
-                  pageUrl={pageUrl}
-                  alt={`${dictionary.page} ${index + 1} · ${getChapterLabel(currentChapter, dictionary)}`}
-                  priority={index < 2}
-                />
-              ))}
-            </div>
+            {readingMode === "horizontal" ? (
+              <HorizontalReader
+                pages={pages}
+                dictionary={dictionary}
+                chapterLabel={getChapterLabel(currentChapter, dictionary)}
+                onNextChapter={() => nextChapter && handleChapterNavigation(nextChapter.id)}
+                onPreviousChapter={() => previousChapter && handleChapterNavigation(previousChapter.id)}
+                hasNextChapter={!!nextChapter}
+                hasPreviousChapter={!!previousChapter}
+                onList={openChapterList}
+                mangaId={mangaId}
+                chapterId={currentChapter?.id || ""}
+                pageSize={pageSize}
+                isReaderUiVisible={isReaderUiVisible}
+                showControlsUI={showControlsUI}
+              />
+            ) : (
+              <div className={`mx-auto flex w-full flex-col transition-all duration-300 ${PAGE_SIZE_CLASSES[pageSize]}`}>
+                {pages.map((pageUrl, index) => (
+                  <MangaPageImage
+                    key={pageUrl}
+                    pageUrl={pageUrl}
+                    alt={`${dictionary.page} ${index + 1} · ${getChapterLabel(currentChapter, dictionary)}`}
+                    priority={index < 2}
+                    retryVersion={pageRetryVersions[index] || 0}
+                    onRetrySubsequent={() => handleRetrySubsequent(index)}
+                    pageIndex={index}
+                  />
+                ))}
+              </div>
+            )}
           </section>
 
           <section className="mx-auto max-w-5xl px-4">
             {nextChapter ? (
-              <div className="mt-10 mb-20 flex items-center justify-center gap-6">
-                {previousChapter ? (
+              <div className={`mt-14 mb-24 mx-auto max-w-2xl rounded-2xl border ${THEME_CLASSES[readerTheme].border} ${THEME_CLASSES[readerTheme].card} p-8 text-center shadow-xl shadow-black/45 transition-colors duration-300`}>
+                <span className="text-[10px] font-bold uppercase tracking-[0.25em] text-orange-500">Capítulo Completado</span>
+                <h3 className="mt-2 text-lg font-bold text-white">{getChapterLabel(currentChapter, dictionary)}</h3>
+                <p className="mt-1 text-xs text-gray-400">¿Querés seguir con la lectura? El siguiente capítulo ya está listo.</p>
+                
+                <div className="mt-6 flex items-center justify-center gap-4">
+                  {previousChapter ? (
+                    <button
+                      type="button"
+                      onClick={() => handleChapterNavigation(previousChapter.id)}
+                      className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/5 bg-white/[0.03] text-gray-400 hover:border-orange-500/30 hover:text-orange-400 transition-colors"
+                      title={dictionary.previousChapter}
+                    >
+                      <ArrowLeft size={18} />
+                    </button>
+                  ) : null}
+
                   <button
                     type="button"
-                    onClick={() => handleChapterNavigation(previousChapter.id)}
-                    className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-800 text-gray-500 transition-all hover:border-orange-500/50 hover:text-white"
-                    aria-label={dictionary.previousChapter}
+                    onClick={() => handleChapterNavigation(nextChapter.id)}
+                    className="flex items-center gap-2.5 rounded-xl bg-orange-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-orange-950/20 hover:bg-orange-500 hover:scale-[1.02] active:scale-95 transition-all"
                   >
-                    <ArrowLeft aria-hidden="true" className="h-5 w-5" />
+                    <span>{dictionary.nextChapterCta} · {getChapterLabel(nextChapter, dictionary)}</span>
+                    <ArrowRight size={16} strokeWidth={2.5} />
                   </button>
-                ) : null}
-
-                <button
-                  type="button"
-                  onClick={() => handleChapterNavigation(nextChapter.id)}
-                  className="flex items-center gap-3 rounded-full bg-orange-600 px-6 py-3 text-white shadow-lg transition-transform hover:scale-105 hover:bg-orange-500"
-                >
-                  <span className="text-sm font-bold">
-                    {dictionary.nextChapterCta} · {getChapterLabel(nextChapter, dictionary)}
-                  </span>
-                  <ArrowRight aria-hidden="true" className="h-5 w-5" />
-                </button>
+                </div>
               </div>
             ) : (
-              <div className="mx-auto my-14 max-w-5xl rounded-[28px] border border-white/10 bg-[#111316]/90 p-6 text-center shadow-2xl shadow-black/30 md:p-8">
-                <p className="text-xs font-black uppercase tracking-[0.28em] text-orange-500">MangaStoon</p>
-                <h2 className="mt-3 text-2xl font-black text-white md:text-3xl">{dictionary.endReachedTitle}</h2>
-                <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-gray-400">{dictionary.endReachedBody}</p>
+              <div className={`mx-auto my-16 max-w-3xl rounded-3xl border ${THEME_CLASSES[readerTheme].border} ${THEME_CLASSES[readerTheme].card} p-8 text-center shadow-2xl shadow-black/50 md:p-10 transition-colors duration-300`}>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-orange-500">MangaStoon</span>
+                <h2 className="mt-3 text-2xl font-black text-white md:text-3xl tracking-tight">{dictionary.endReachedTitle}</h2>
+                <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-gray-400">{dictionary.endReachedBody}</p>
 
                 {suggestedComics.length > 0 ? (
-                  <div className="mt-8 text-left">
-                    <h3 className="mb-4 text-sm font-bold uppercase tracking-[0.22em] text-gray-500">{dictionary.suggestedTitle}</h3>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+                  <div className="mt-10 text-left">
+                    <h3 className="mb-4 text-xs font-bold uppercase tracking-[0.2em] text-gray-500 border-b border-white/5 pb-2">{dictionary.suggestedTitle}</h3>
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
                       {suggestedComics.map((comic, index) => (
                         <a
                           key={comic.slug}
                           href={buildComicPath(comic.title, comic.slug)}
                           className={`group block ${index >= 4 ? "hidden lg:block" : ""}`}
                         >
-                          <div className="aspect-[2/3] overflow-hidden rounded-lg border border-gray-800 bg-gray-900 transition-colors group-hover:border-orange-500/40">
+                          <div className="aspect-[2/3] overflow-hidden rounded-xl border border-white/5 bg-[#0f1015] shadow-md transition-all duration-300 group-hover:border-orange-500/40 group-hover:shadow-[0_0_15px_rgba(249,115,22,0.15)] group-hover:scale-[1.03]">
                             {comic.coverImage ? (
                               <RetryableSuggestedImage
                                 src={comic.coverImage}
@@ -1285,7 +1567,7 @@ export default function ReaderClient({
                               />
                             ) : null}
                           </div>
-                          <p className="mt-2 line-clamp-2 text-xs font-bold text-white group-hover:text-orange-400">
+                          <p className="mt-2 line-clamp-2 text-xs font-bold text-gray-300 group-hover:text-orange-400 transition-colors leading-tight">
                             {comic.title}
                           </p>
                         </a>
@@ -1294,26 +1576,38 @@ export default function ReaderClient({
                   </div>
                 ) : null}
 
-                <a
-                  href="/explore"
-                  className="mt-8 inline-flex rounded-full border border-orange-500/40 bg-orange-500/10 px-5 py-2.5 text-sm font-bold text-orange-300 transition hover:bg-orange-500 hover:text-white"
-                >
-                  {dictionary.exploreMore}
-                </a>
+                <div className="mt-10 pt-6 border-t border-white/5">
+                  <a
+                    href="/explore"
+                    className="inline-flex rounded-xl border border-orange-500/20 bg-orange-500/5 px-6 py-2.5 text-xs font-bold text-orange-400 hover:bg-orange-500 hover:text-black transition-all duration-300 active:scale-95"
+                  >
+                    {dictionary.exploreMore}
+                  </a>
+                </div>
               </div>
             )}
           </section>
 
+          <section className="mx-auto max-w-3xl px-4 mt-6">
+            <CommentsSection
+              chapterId={routeChapterId}
+              mangaId={mangaId}
+              currentUser={currentUser}
+              currentProfile={currentProfile}
+              onLoginRequired={() => setIsAuthModalOpen(true)}
+            />
+          </section>
+
           {showPdfModal ? (
             <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
-              <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#141519] p-6 shadow-2xl">
+              <div className="w-full max-w-md rounded-2xl border border-white/5 bg-[#141519] p-6 shadow-2xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-orange-500">
                   {dictionary.pdfModalTitle}
                 </p>
                 <h2 className="mt-2 line-clamp-2 text-xl font-semibold text-white">{mangaTitle}</h2>
                 <p className="mt-2 text-sm leading-6 text-gray-400">{dictionary.pdfModalBody}</p>
 
-                <div className="mt-5 rounded-xl border border-white/10 bg-black/35 p-4">
+                <div className="mt-5 rounded-xl border border-white/5 bg-black/35 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
                     {dictionary.currentDownload}
                   </p>
@@ -1329,7 +1623,7 @@ export default function ReaderClient({
                       <select
                         value={pdfStartChapterId || currentChapter?.id || ""}
                         onChange={(event) => setPdfStartChapterId(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-orange-500"
+                        className="mt-2 w-full rounded-xl border border-white/5 bg-[#0f1015] px-4 py-3 text-sm text-white outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/35 transition-all shadow-inner"
                       >
                         {readableChapters.map((chapter) => (
                           <option key={chapter.id} value={chapter.id}>
@@ -1354,7 +1648,7 @@ export default function ReaderClient({
                             : pdfEndOptions[pdfEndOptions.length - 1]?.id ?? ""
                         }
                         onChange={(event) => setPdfEndChapterId(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-orange-500"
+                        className="mt-2 w-full rounded-xl border border-white/5 bg-[#0f1015] px-4 py-3 text-sm text-white outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/35 transition-all shadow-inner"
                       >
                         {pdfEndOptions.map((chapter) => (
                           <option key={chapter.id} value={chapter.id}>
@@ -1370,9 +1664,39 @@ export default function ReaderClient({
                       {dictionary.downloadRange}
                     </p>
                     <p className="mt-2 text-sm font-medium text-orange-400">{pdfRangeLabel}</p>
-                    <p className="mt-2 text-xs text-gray-500">{dictionary.maxChaptersNotice}</p>
+                    <p className="mt-2 text-xs text-gray-500">
+                      {isPremium 
+                        ? dictionary.maxChaptersNotice 
+                        : readerLanguage === "es" 
+                          ? "Límite de 10 capítulos para usuarios gratuitos. ¡Subí a Premium para descargar hasta 50!" 
+                          : readerLanguage === "pt" 
+                            ? "Limite de 10 capítulos para usuários gratuitos. Faça upgrade para Premium para baixar até 50!" 
+                            : "Free limit is 10 chapters per PDF. Upgrade to Premium to download up to 50!"}
+                    </p>
                   </div>
                 </div>
+
+                {!isPremium && (
+                  <div className="mt-4 rounded-xl border border-orange-500/20 bg-orange-500/5 p-3.5 text-center">
+                    <p className="text-xs text-orange-400 font-semibold flex items-center justify-center gap-1">
+                      <Sparkles size={14} className="animate-pulse" />
+                      {readerLanguage === "es" ? "Límite gratuito de 10 capítulos" : readerLanguage === "pt" ? "Limite gratuito de 10 capítulos" : "Free limit of 10 chapters"}
+                    </p>
+                    <p className="mt-1 text-[11px] text-gray-400">
+                      {readerLanguage === "es" ? "¿Querés descargar hasta 50 capítulos de una?" : readerLanguage === "pt" ? "Quer baixar até 50 capítulos de uma vez?" : "Want to download up to 50 chapters at once?"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPdfModal(false);
+                        setShowPremiumModal(true);
+                      }}
+                      className="mt-2.5 w-full rounded-lg bg-orange-600/20 border border-orange-500/30 py-1.5 text-xs font-bold text-orange-400 hover:bg-orange-600 hover:text-black transition-all"
+                    >
+                      {readerLanguage === "es" ? "Desbloquear 50 capítulos" : readerLanguage === "pt" ? "Desbloquear 50 capítulos" : "Unlock 50 chapters"}
+                    </button>
+                  </div>
+                )}
 
                 <div className="mt-6 flex gap-3">
                   <button
@@ -1386,7 +1710,7 @@ export default function ReaderClient({
                     type="button"
                     onClick={handleDownloadPdf}
                     disabled={downloading}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-full bg-orange-500 px-5 py-3 text-sm font-bold text-black shadow-lg shadow-orange-950/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-black shadow-lg shadow-orange-950/30 transition hover:bg-orange-400 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <FileText aria-hidden="true" className="h-4 w-4" />
                     <span>{downloading ? `${dictionary.generatingPdf} ${pdfProgress}%` : dictionary.download}</span>
@@ -1395,6 +1719,66 @@ export default function ReaderClient({
               </div>
             </div>
           ) : null}
+
+          {/* Floating Bottom Next Chapter Banner */}
+          <AnimatePresence>
+            {showNextChapterBanner && nextChapter && (
+              <motion.div
+                initial={{ opacity: 0, y: 50, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 50, scale: 0.95 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                className="fixed bottom-6 left-1/2 z-40 w-[90%] max-w-sm -translate-x-1/2"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleChapterNavigation(nextChapter.id)}
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-orange-500/30 bg-orange-600 px-5 py-3.5 text-black shadow-[0_12px_24px_rgba(0,0,0,0.4),0_0_15px_rgba(249,115,22,0.2)] hover:bg-orange-500 hover:scale-[1.02] active:scale-95 transition-all duration-300"
+                >
+                  <div className="flex items-center gap-3 text-left">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-black/10">
+                      <ArrowRight size={16} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-wider text-black/60 leading-none">
+                        {readerLanguage === "es" ? "Próximo Capítulo" : readerLanguage === "pt" ? "Próximo Capítulo" : "Next Chapter"}
+                      </p>
+                      <p className="mt-1 text-xs font-extrabold text-black truncate max-w-[180px]">
+                        {getChapterLabel(nextChapter, dictionary)}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-black uppercase tracking-wider bg-black/15 px-2.5 py-1 rounded-lg">
+                    {readerLanguage === "es" ? "Leer Ahora" : readerLanguage === "pt" ? "Ler Agora" : "Read Now"}
+                  </span>
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Premium benefits modal */}
+          {showPremiumModal ? (
+            <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+              <div className="relative w-full max-w-md">
+                <button
+                  type="button"
+                  onClick={() => setShowPremiumModal(false)}
+                  className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/45 text-gray-400 hover:text-white transition-colors"
+                >
+                  ✕
+                </button>
+                <PremiumBenefitsCard
+                  lang={readerLanguage}
+                  onUpgrade={handleUpgradePremium}
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <AuthModal
+            open={isAuthModalOpen}
+            onClose={() => setIsAuthModalOpen(false)}
+          />
         </>
       )}
     </main>
