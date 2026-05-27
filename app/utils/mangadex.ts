@@ -2,6 +2,7 @@ import { logger } from "./logger";
 import type { MangaShowcaseItem } from "../components/home-carousel";
 import type { SupportedLanguage } from "../components/language-provider";
 import { getLocalizedTitle } from "./get-localized-title";
+import { sanitizeText } from "./translation";
 import {
   appendMangaDexAvailableLanguageFilters,
   getMangaDexAvailableLanguages,
@@ -9,7 +10,9 @@ import {
   toMangaDexApiUrl,
 } from "./mangadex-config";
 import { translateTagName } from "./tagTranslations";
-import { buildComicPath } from "./slugify";
+import { buildComicPath, slugify } from "./slugify";
+import { MONLINE_API_URL as MONLINE_CONFIG_API_URL } from "./monline-config";
+import { getCached, setCached } from "./server-cache";
 
 export type MangaDexLocalizedText = Record<string, string>;
 
@@ -37,6 +40,38 @@ export type MangaDexManga = {
     id: string;
     type: string;
     attributes?: {
+      fileName?: string;
+    };
+  }>;
+};
+
+export type MangaDetails = {
+  id: string;
+  type?: string;
+  author?: string;
+  attributes?: {
+    title?: MangaDexLocalizedText;
+    altTitles?: MangaDexLocalizedText[];
+    description?: MangaDexLocalizedText;
+    status?: string;
+    contentRating?: string;
+    originalLanguage?: string;
+    createdAt?: string;
+    updatedAt?: string;
+    tags?: Array<{
+      id: string;
+      type?: string;
+      attributes?: {
+        name?: MangaDexLocalizedText;
+        group?: string;
+      };
+    }>;
+  };
+  relationships?: Array<{
+    id: string;
+    type: string;
+    attributes?: {
+      name?: string;
       fileName?: string;
     };
   }>;
@@ -150,7 +185,7 @@ export function getMangaTitle(manga: MangaDexManga, language: SupportedLanguage)
 }
 
 export function getMangaSynopsis(manga: MangaDexManga, language: SupportedLanguage) {
-  return getLocalizedValue(manga.attributes.description, language, ["en"]);
+  return sanitizeText(getLocalizedValue(manga.attributes.description, language, ["en"]) ?? "");
 }
 
 export function getCoverUrl(manga: MangaDexManga) {
@@ -227,7 +262,8 @@ export function isRecentlyCreated(manga: MangaDexManga) {
   return Number.isFinite(createdAt) && Date.now() - createdAt < 7 * 24 * 60 * 60 * 1000;
 }
 
-export function hasSensitiveAdultTag(manga: MangaDexManga) {
+export function hasSensitiveAdultTag(manga: MangaDexManga | MangaDetails) {
+  if (!manga.attributes) return false;
   const sensitiveTags = new Set(["Sexual Violence", "Erotica", "Hentai"]);
   const hasSensitiveTag = (manga.attributes.tags ?? []).some((tag) => {
     const rawName = tag.attributes?.name?.en ?? Object.values(tag.attributes?.name ?? {})[0] ?? "";
@@ -238,6 +274,36 @@ export function hasSensitiveAdultTag(manga: MangaDexManga) {
     hasSensitiveTag ||
     manga.attributes.contentRating === "erotica" ||
     manga.attributes.contentRating === "pornographic"
+  );
+}
+
+export function isAdultShowcaseItem(item: Pick<MangaShowcaseItem, "isNsfw" | "genres" | "tags">) {
+  if (item.isNsfw === true) {
+    return true;
+  }
+
+  const adultKeywords = new Set([
+    "hentai",
+    "ecchi",
+    "erotica",
+    "nsfw",
+    "+18",
+    "18+",
+    "erotic",
+    "erotico",
+    "adult",
+    "porn",
+    "xxx",
+    "sexual violence",
+    "sexual-violence"
+  ]);
+
+  const genres = item.genres?.map((g) => g.name.toLowerCase()) ?? [];
+  const tags = item.tags?.map((t) => t.toLowerCase()) ?? [];
+
+  return (
+    genres.some((g) => adultKeywords.has(g) || /\b(adult|nsfw|hentai|erotic|erotico|porn|xxx|\+18|18\+|ecchi|sexual violence)\b/i.test(g)) ||
+    tags.some((t) => adultKeywords.has(t) || /\b(adult|nsfw|hentai|erotic|erotico|porn|xxx|\+18|18\+|ecchi|sexual violence)\b/i.test(t))
   );
 }
 
@@ -367,12 +433,18 @@ function getLocalStringValue(source: Record<string, unknown>, keys: string[]) {
 
 function normalizeLocalImageUrl(value: string, apiBaseUrl: string) {
   if (!value) return "";
-  const imageUrl =
-    value.startsWith("http://") || value.startsWith("https://")
-      ? value
-      : value.startsWith("//")
-        ? `https:${value}`
-        : `${apiBaseUrl.replace(/\/$/, "")}/${value.replace(/^\/+/, "")}`;
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return `/api/proxy-image?url=${encodeURIComponent(value)}`;
+  }
+  if (value.startsWith("//")) {
+    return `/api/proxy-image?url=${encodeURIComponent(`https:${value}`)}`;
+  }
+
+  if (apiBaseUrl.startsWith("/")) {
+    return `${apiBaseUrl.replace(/\/$/, "")}/${value.replace(/^\/+/, "")}`;
+  }
+
+  const imageUrl = `${apiBaseUrl.replace(/\/$/, "")}/${value.replace(/^\/+/, "")}`;
   return `/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
 }
 
@@ -396,7 +468,7 @@ function getLocalGenres(source: LocalApiComic) {
     .slice(0, 4);
 }
 
-function formatLocalRelativeTime(dateString: string | null | undefined) {
+function formatLocalRelativeTime(dateString: string | null | undefined, language: SupportedLanguage = "es") {
   if (!dateString) return "";
 
   const date = new Date(dateString);
@@ -405,20 +477,25 @@ function formatLocalRelativeTime(dateString: string | null | undefined) {
   const diffMs = Math.max(0, Date.now() - date.getTime());
   const minutes = Math.floor(diffMs / 60_000);
 
-  if (minutes < 1) return "hace instantes";
-  if (minutes < 60) return `hace ${minutes} min`;
+  if (minutes < 1) {
+    return language === "en" ? "just now" : language === "pt" ? "agora mesmo" : "hace instantes";
+  }
+  if (minutes < 60) {
+    return language === "en" ? `${minutes} min ago` : language === "pt" ? `ha ${minutes} min` : `hace ${minutes} min`;
+  }
 
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `hace ${hours} h`;
+  if (hours < 24) {
+    return language === "en" ? `${hours}h ago` : language === "pt" ? `ha ${hours} h` : `hace ${hours} h`;
+  }
 
   const days = Math.floor(hours / 24);
-  if (days < 30) return `hace ${days} d`;
-
   const months = Math.floor(days / 30);
-  if (months < 12) return `hace ${months} mes${months === 1 ? "" : "es"}`;
-
   const years = Math.floor(days / 365);
-  return `hace ${years} a\u00f1o${years === 1 ? "" : "s"}`;
+
+  if (years >= 1) return language === "en" ? `${years}y ago` : language === "pt" ? `ha ${years}a` : `hace ${years} año${years === 1 ? "" : "s"}`;
+  if (months >= 1) return language === "en" ? `${months}mo ago` : language === "pt" ? `ha ${months}m` : `hace ${months} mes${months === 1 ? "" : "es"}`;
+  return language === "en" ? `${days}d ago` : language === "pt" ? `ha ${days}d` : `hace ${days} d`;
 }
 
 function getLocalChapterDate(chapter: Record<string, unknown>) {
@@ -454,12 +531,49 @@ function getLocalChapterNumber(chapter: Record<string, unknown>) {
 }
 
 function getLocalChapterNumericNumber(chapter: Record<string, unknown>) {
-  const parsed = Number.parseFloat(getLocalChapterNumber(chapter).replace(",", "."));
+  const cleaned = cleanLocalChapterLabel(getLocalChapterNumber(chapter));
+  const parsed = Number.parseFloat(cleaned.replace(",", "."));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
 function cleanLocalChapterLabel(value: string) {
-  return value.replace(/^Cap[íi]tulo\s*/i, "").replace(/^Cap\.\s*/i, "");
+  return value.replace(/^Cap[íi]tulo\s*/i, "").replace(/^Cap\.\s*/i, "").trim();
+}
+
+function getLocalChapterSortValue(chapter: Record<string, unknown>) {
+  const numericNumber = getLocalChapterNumericNumber(chapter);
+
+  if (numericNumber !== null) {
+    return numericNumber;
+  }
+
+  return getLocalChapterTimestamp(chapter);
+}
+
+function selectLatestAndPenultimateLocalChapters(chapters: Record<string, unknown>[]) {
+  const uniqueChapters = new Map<string, Record<string, unknown>>();
+
+  chapters.forEach((chapter) => {
+    const id = getLocalStringValue(chapter, ["id", "chapterId", "chapter_id", "mangadex_chapter_id", "mangaDexChapterId"]);
+    const chapterNumber = cleanLocalChapterLabel(getLocalChapterNumber(chapter));
+    const key = id || chapterNumber;
+
+    if (key && !uniqueChapters.has(key)) {
+      uniqueChapters.set(key, chapter);
+    }
+  });
+
+  const ordered = [...uniqueChapters.values()]
+    .filter((chapter) => {
+      const numericNumber = getLocalChapterNumericNumber(chapter);
+      return numericNumber === null || numericNumber > 0;
+    })
+    .sort((a, b) => getLocalChapterSortValue(a) - getLocalChapterSortValue(b));
+
+  const latest = ordered[ordered.length - 1];
+  const penultimate = ordered[ordered.length - 2];
+
+  return [latest, penultimate].filter((chapter): chapter is Record<string, unknown> => Boolean(chapter));
 }
 
 function mapLocalChapterPreviews(chapters: Record<string, unknown>[]) {
@@ -475,23 +589,7 @@ function mapLocalChapterPreviews(chapters: Record<string, unknown>[]) {
     }
   });
 
-  return [...uniqueChapters.values()].sort((a, b) => {
-    const aNumber = getLocalChapterNumericNumber(a);
-    const bNumber = getLocalChapterNumericNumber(b);
-
-    if (aNumber !== null && bNumber !== null && aNumber !== bNumber) {
-      return bNumber - aNumber;
-    }
-
-    const aDate = getLocalChapterTimestamp(a);
-    const bDate = getLocalChapterTimestamp(b);
-
-    if (aDate > 0 && bDate > 0 && aDate !== bDate) {
-      return bDate - aDate;
-    }
-
-    return 0;
-  }).flatMap((chapter) => {
+  return selectLatestAndPenultimateLocalChapters([...uniqueChapters.values()]).flatMap((chapter) => {
     const publishedAt = getLocalChapterDate(chapter);
     const chapterNumber = cleanLocalChapterLabel(getLocalChapterNumber(chapter));
 
@@ -653,12 +751,8 @@ export function mapLocalApiComicsToShowcaseItems(
   });
 }
 
-export async function fetchLocalTop(limit = 10, language: SupportedLanguage = "es") {
-  const apiBaseUrl = (
-    process.env.MONLINE_API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    "http://46.224.213.127:8085"
-  ).replace(/\/$/, "");
+export async function fetchLocalTop(limit = 10, language: SupportedLanguage = "es", isAdult = false) {
+  const apiBaseUrl = MONLINE_CONFIG_API_URL;
 
   try {
     const params = new URLSearchParams();
@@ -674,7 +768,8 @@ export async function fetchLocalTop(limit = 10, language: SupportedLanguage = "e
     }
 
     const payload = (await response.json()) as LocalApiComicsResponse;
-    return mapLocalApiComicsToShowcaseItems(extractLocalApiComics(payload), language, apiBaseUrl);
+    return mapLocalApiComicsToShowcaseItems(extractLocalApiComics(payload), language, apiBaseUrl)
+      .filter((comic) => isAdult || !isAdultShowcaseItem(comic));
   } catch (error) {
     logger.error("Error al conectar con la API local", error);
     return [];
@@ -715,3 +810,798 @@ export function buildMangaDexMangaUrl(
   appendStandardMangaDexFilters(params, isAdult, language);
   return toMangaDexApiUrl(`/manga?${params.toString()}`);
 }
+
+export async function fetchMangaDexChapterPreviews(
+  mangaId: string,
+  language: SupportedLanguage,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams();
+  params.set("limit", "100");
+  params.set("order[chapter]", "asc");
+
+  getMangaDexAvailableLanguages(language).forEach((translatedLanguage) => {
+    params.append("translatedLanguage[]", translatedLanguage);
+  });
+
+  try {
+    const response = await fetch(
+      `/api/mangadex/feed/${mangaId}?${params.toString()}`,
+      { signal }
+    );
+
+    if (!response.ok) {
+      return [];
+    }
+
+    const payload = await response.json();
+    const total = payload.total ?? payload.data?.length ?? 0;
+    let chapters = payload.data ?? [];
+
+    if (total > chapters.length) {
+      const tailParams = new URLSearchParams(params);
+      tailParams.set("offset", String(Math.max(0, total - 100)));
+      const tailResponse = await fetch(
+        `/api/mangadex/feed/${mangaId}?${tailParams.toString()}`,
+        { signal }
+      );
+
+      if (tailResponse.ok) {
+        const tailPayload = await tailResponse.json();
+        chapters = tailPayload.data ?? chapters;
+      }
+    }
+
+    // Deduplicate chapters by chapter number (attributes.chapter)
+    const uniqueChaptersMap = new Map<string, any>();
+    chapters.forEach((ch: any) => {
+      const chNum = ch.attributes?.chapter ?? "";
+      if (chNum) {
+        uniqueChaptersMap.set(chNum, ch);
+      } else {
+        uniqueChaptersMap.set(ch.id, ch);
+      }
+    });
+
+    const dedupedChapters = [...uniqueChaptersMap.values()].sort((a, b) => {
+      const aNum = Number.parseFloat(a.attributes?.chapter ?? "0");
+      const bNum = Number.parseFloat(b.attributes?.chapter ?? "0");
+      return aNum - bNum;
+    });
+
+    const selectedChapters = [dedupedChapters[dedupedChapters.length - 1], dedupedChapters[dedupedChapters.length - 2]]
+      .filter((chapter): chapter is NonNullable<typeof chapter> => Boolean(chapter));
+
+    return selectedChapters.map((chapter) => {
+      const chapterNum = chapter.attributes?.chapter ?? "";
+      const publishAt = chapter.attributes?.publishAt || chapter.attributes?.readableAt;
+      return {
+        id: chapter.id,
+        chapter: chapterNum,
+        timeAgo: formatLocalRelativeTime(publishAt, language),
+        publishedAt: publishAt || null,
+      };
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw error;
+    }
+    return [];
+  }
+}
+
+const LOCAL_API_URL = MONLINE_CONFIG_API_URL;
+const LOCAL_COMIC_LOOKUP_LIMIT = 2000;
+const MANGAVF_API_URL = process.env.NEXT_PUBLIC_MANGAVF_API_URL || process.env.MANGAVF_API_URL || "http://localhost:3001";
+const MANGADEX_RETRY_DELAY_MS = 1200;
+
+export type MangaDetailsResponse = {
+  data?: MangaDetails;
+};
+
+export type MangaVfChapter = {
+  number?: string;
+  title?: string;
+  url?: string;
+};
+
+export type MangaVfDetails = {
+  manga_title?: string;
+  title?: string;
+  cover?: string;
+  synopsis?: string;
+  status?: string;
+  genres?: string[];
+  chapters?: MangaVfChapter[];
+};
+
+export type MangaVfSearchResponse = {
+  results?: Array<{ title?: string; slug?: string; url?: string; cover?: string }>;
+};
+
+function isMangaDexUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
+async function fetchMangaDex(url: string, retries = 1): Promise<Response> {
+  let response: Response;
+
+  try {
+    response = await fetch(toMangaDexApiUrl(url), {
+      headers: getMangaDexRequestHeaders(),
+      next: { revalidate: 3600 },
+    });
+  } catch (error) {
+    logger.error("[mangadex-fetch-details] MangaDex fetch failed", error);
+    return new Response(null, { status: 502 });
+  }
+
+  if (response.status === 429 && retries > 0) {
+    const retryAfter = Number(response.headers.get("retry-after"));
+    await new Promise((resolve) =>
+      setTimeout(
+        resolve,
+        Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : MANGADEX_RETRY_DELAY_MS
+      )
+    );
+    return fetchMangaDex(url, retries - 1);
+  }
+
+  return response;
+}
+
+async function fetchLocalComicBySlug(slug: string) {
+  try {
+    const cleanTitle = slug.replace(/-/g, " ");
+    const searchParams = new URLSearchParams();
+    searchParams.set("title", cleanTitle);
+    searchParams.set("limit", "15");
+
+    let listResponse = await fetch(
+      `${LOCAL_API_URL}/api/comics?${searchParams.toString()}`,
+      { cache: "no-store" }
+    );
+    let comics: any[] = [];
+
+    if (listResponse.ok) {
+      comics = extractLocalApiComics(await listResponse.json());
+    }
+
+    let summary = comics.find((comic) => {
+      const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
+      return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+    });
+
+    if (!summary) {
+      const fallbackResponse = await fetch(
+        `${LOCAL_API_URL}/api/comics?limit=300`,
+        { cache: "no-store" }
+      );
+      if (fallbackResponse.ok) {
+        const allComics = extractLocalApiComics(await fallbackResponse.json());
+        summary = allComics.find((comic) => {
+          const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
+          return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+        });
+      }
+    }
+
+    const numericId = getLocalStringValue(summary ?? {}, ["id"]);
+
+    if (!summary || !numericId) return null;
+
+    const detailResponse = await fetch(
+      `${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`,
+      { cache: "no-store" }
+    );
+    if (!detailResponse.ok) return summary;
+
+    return extractLocalApiComics(await detailResponse.json())[0] ?? summary;
+  } catch {
+    return null;
+  }
+}
+
+function getLocalTextMap(source: LocalApiComic, baseKeys: string[], prefix: string) {
+  const baseText = getLocalStringValue(source, baseKeys);
+  const englishText = getLocalStringValue(source, [`english_${prefix}`, `${prefix}_en`, `en_${prefix}`]);
+  const spanishText = getLocalStringValue(source, [`spanish_${prefix}`, `${prefix}_es`, `es_${prefix}`]);
+  const portugueseText = getLocalStringValue(source, [`portuguese_${prefix}`, `${prefix}_pt`, `pt_${prefix}`]);
+
+  const map: Record<string, string> = {};
+  if (baseText) map.es = baseText;
+  if (englishText) map.en = englishText;
+  if (spanishText) map.es = spanishText;
+  if (portugueseText) map.pt = portugueseText;
+
+  return map;
+}
+
+function mapLocalComicToMangaDetails(comic: LocalApiComic): MangaDetails | null {
+  const slug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
+  if (!slug) return null;
+
+  const title = getLocalStringValue(comic, ["title", "name", "comic_title", "original_title"]) || slug;
+  const description = getLocalStringValue(comic, ["synopsis", "description", "summary"]);
+  const titleMap = getLocalTextMap(comic, ["title", "name", "comic_title", "original_title"], "title");
+  const descriptionMap = getLocalTextMap(comic, ["synopsis", "description", "summary"], "description");
+  const coverImage = normalizeLocalImageUrl(
+    getLocalStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"]),
+    LOCAL_API_URL
+  );
+  const genres = getLocalGenres(comic);
+  const author = getLocalStringValue(comic, ["author", "artist", "creator"]);
+
+  return {
+    id: slug,
+    author,
+    attributes: {
+      title: Object.keys(titleMap).length > 0 ? titleMap : { es: title },
+      altTitles: [],
+      description: Object.keys(descriptionMap).length > 0 ? descriptionMap : description ? { es: description } : {},
+      contentRating: comic.isNsfw || comic.nsfw || comic.adult ? "erotica" : "safe",
+      tags: genres.map((genre, index) => ({
+        id: `local-${index}-${genre.toLowerCase().replace(/\s+/g, "-")}`,
+        attributes: { name: { es: genre, en: genre }, group: "genre" },
+      })),
+    },
+    relationships: [
+      ...(coverImage ? [{ id: slug, type: "cover_art", attributes: { fileName: coverImage } }] : []),
+      {
+        id: "local-author",
+        type: "author",
+        attributes: { name: author || "Autor desconocido" },
+      },
+    ],
+  };
+}
+
+async function fetchMangaVfSourceBySlug(id: string) {
+  const cleanId = id.startsWith("lc-") ? id.substring(3) : id;
+  const lookupId = cleanId.replace(/^manga[-_]?vf[-_]?/i, "");
+  const query = lookupId.replace(/-/g, " ");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+
+  try {
+    const response = await fetch(
+      `${MANGAVF_API_URL}/api/v1/manga/search?q=${encodeURIComponent(query)}`,
+      { cache: "no-store", signal: controller.signal }
+    );
+    if (!response.ok) return null;
+    const payload = (await response.json()) as MangaVfSearchResponse;
+    const results = payload.results ?? [];
+
+    const source =
+      results.find((item) => item.slug === lookupId) ??
+      results.find((item) => slugify(item.title) === lookupId) ??
+      null;
+
+    return source?.url?.includes("leercapitulo.co") ? source : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function fetchMangaVfDetailsBySlug(id: string) {
+  const source = await fetchMangaVfSourceBySlug(id);
+  const sourceUrl = source?.url?.trim();
+  if (!sourceUrl) return null;
+
+  try {
+    const response = await fetch(
+      `${MANGAVF_API_URL}/api/v1/manga/chapters?url=${encodeURIComponent(sourceUrl)}`,
+      { cache: "no-store" }
+    );
+    if (!response.ok) return null;
+    return (await response.json()) as MangaVfDetails;
+  } catch {
+    return null;
+  }
+}
+
+function mapMangaVfToMangaDetails(id: string, details: MangaVfDetails): MangaDetails | null {
+  const title = details.manga_title?.trim() || details.title?.trim();
+  if (!title) return null;
+
+  const genres = Array.isArray(details.genres) ? details.genres.filter(Boolean).slice(0, 8) : [];
+  const synopsis = sanitizeText(details.synopsis ?? "") || "Sin sinopsis disponible";
+  const coverImage = details.cover?.trim() || "";
+
+  return {
+    id,
+    author: "M",
+    attributes: {
+      title: { es: title, en: title, pt: title },
+      altTitles: [],
+      description: { es: synopsis, en: synopsis, pt: synopsis },
+      status: details.status?.trim() || undefined,
+      contentRating: "safe",
+      tags: genres.map((genre, index) => ({
+        id: `vf-${index}-${genre.toLowerCase().replace(/\s+/g, "-")}`,
+        attributes: { name: { es: genre, en: genre, pt: genre }, group: "genre" },
+      })),
+    },
+    relationships: [
+      ...(coverImage ? [{ id: id, type: "cover_art", attributes: { fileName: coverImage } }] : []),
+      { id: "vf-author", type: "author", attributes: { name: "M" } },
+    ],
+  };
+}
+
+export async function fetchMangaDetails(id: string, language?: string): Promise<MangaDetails | null> {
+  const localComic = await fetchLocalComicBySlug(id);
+  const localManga = localComic ? mapLocalComicToMangaDetails(localComic) : null;
+
+  if (localManga) {
+    return localManga;
+  }
+
+  // If the language is NOT Spanish, we bypass LeerCapitulo entirely
+  if (language && language !== "es") {
+    if (!isMangaDexUuid(id)) return null;
+    try {
+      const response = await fetchMangaDex(
+        `https://api.mangadex.org/manga/${id}?includes[]=cover_art&includes[]=author`
+      );
+      if (!response.ok) return null;
+      const payload = (await response.json()) as MangaDetailsResponse;
+      return payload.data ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  const resolution = await resolveBestSource(id);
+  if (resolution.source === "leercapitulo" && resolution.leercapituloSlug && resolution.leercapituloDetails) {
+    return mapMangaVfToMangaDetails(id, resolution.leercapituloDetails);
+  }
+
+  if (resolution.mangadexId) {
+    try {
+      const response = await fetchMangaDex(
+        `https://api.mangadex.org/manga/${resolution.mangadexId}?includes[]=cover_art&includes[]=author`
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = (await response.json()) as MangaDetailsResponse;
+      if (!payload.data) {
+        logger.warn(`[MangaStoon] MangaDex devolvio detalles vacios para manga ${resolution.mangadexId}`);
+      }
+
+      const mangaDetails = payload.data ?? null;
+      if (mangaDetails) {
+        mangaDetails.id = id;
+      }
+      return mangaDetails;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+async function searchMangaDexByTitle(title: string): Promise<string | null> {
+  try {
+    const params = new URLSearchParams();
+    params.set("title", title);
+    params.set("limit", "5");
+    const response = await fetch(`https://api.mangadex.org/manga?${params.toString()}`);
+    if (!response.ok) return null;
+    const payload = await response.json();
+    const results = payload.data ?? [];
+
+    const slugifiedTarget = slugify(title);
+    const matched = results.find((manga: any) => {
+      const titleMap = manga.attributes?.title ?? {};
+      const altTitles = manga.attributes?.altTitles ?? [];
+      const allTitles = [
+        ...Object.values(titleMap),
+        ...altTitles.flatMap((t: any) => Object.values(t))
+      ].map((t) => slugify(t as string));
+
+      return allTitles.includes(slugifiedTarget);
+    });
+
+    return matched?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function searchLeerCapituloByTitle(title: string): Promise<string | null> {
+  try {
+    const response = await fetch(
+      `${MANGAVF_API_URL}/api/v1/manga/search?q=${encodeURIComponent(title)}`,
+      { cache: "no-store" }
+    );
+    if (!response.ok) return null;
+    const payload = await response.json() as MangaVfSearchResponse;
+    const results = payload.results ?? [];
+
+    const slugifiedTarget = slugify(title);
+    const matched =
+      results.find((item) => slugify(item.title || "") === slugifiedTarget) ??
+      results.find((item) => item.title?.toLowerCase() === title.toLowerCase()) ??
+      null;
+
+    if (matched?.url?.includes("leercapitulo.co")) {
+      return (matched.slug || slugify(matched.title || "")).replace(/^manga[-_]?vf[-_]?/i, "");
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function getMangaDexSpanishChapterCount(mangaId: string): Promise<number> {
+  try {
+    const params = new URLSearchParams();
+    params.append("translatedLanguage[]", "es");
+    params.append("translatedLanguage[]", "es-la");
+    params.set("limit", "1");
+    const response = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}/feed?${params.toString()}`);
+    if (!response.ok) return 0;
+    const payload = await response.json();
+    return payload.total ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+export type ResolvedSource = {
+  source: "mangadex" | "leercapitulo";
+  mangadexId?: string;
+  leercapituloSlug?: string;
+  leercapituloDetails?: MangaVfDetails | null;
+};
+
+export async function resolveBestSource(idOrSlug: string): Promise<ResolvedSource> {
+  const cacheKey = `source-resolution:${idOrSlug}`;
+  const cached = await getCached<ResolvedSource>(cacheKey);
+  if (cached) return cached;
+
+  let source: "mangadex" | "leercapitulo" = "mangadex";
+  let mangadexId: string | undefined;
+  let leercapituloSlug: string | undefined;
+  let leercapituloDetails: MangaVfDetails | null = null;
+
+  if (isMangaDexUuid(idOrSlug)) {
+    mangadexId = idOrSlug;
+    try {
+      const response = await fetchMangaDex(
+        `https://api.mangadex.org/manga/${idOrSlug}`
+      );
+      if (response.ok) {
+        const payload = await response.json();
+        const titleMap = payload.data?.attributes?.title ?? {};
+        const title = titleMap.es || titleMap.en || Object.values(titleMap)[0] as string || "";
+        if (title) {
+          leercapituloSlug = await searchLeerCapituloByTitle(title);
+        }
+      }
+    } catch {}
+  } else {
+    leercapituloSlug = idOrSlug;
+    leercapituloDetails = await fetchMangaVfDetailsBySlug(idOrSlug);
+    const title = leercapituloDetails?.manga_title || leercapituloDetails?.title;
+    if (title) {
+      mangadexId = await searchMangaDexByTitle(title) ?? undefined;
+    }
+  }
+
+  let mdChaptersCount = 0;
+  let lcChaptersCount = 0;
+
+  if (mangadexId) {
+    mdChaptersCount = await getMangaDexSpanishChapterCount(mangadexId);
+  }
+
+  if (leercapituloSlug) {
+    if (!leercapituloDetails) {
+      leercapituloDetails = await fetchMangaVfDetailsBySlug(leercapituloSlug);
+    }
+    lcChaptersCount = leercapituloDetails?.chapters?.length ?? 0;
+  }
+
+  if (leercapituloSlug && lcChaptersCount > mdChaptersCount) {
+    source = "leercapitulo";
+  } else if (mangadexId) {
+    source = "mangadex";
+  } else if (leercapituloSlug) {
+    source = "leercapitulo";
+  }
+
+  const result: ResolvedSource = {
+    source,
+    mangadexId,
+    leercapituloSlug,
+    leercapituloDetails,
+  };
+
+  await setCached(cacheKey, result, 7200); // 2 hours
+  return result;
+}
+
+export type ChapterFeedItem = {
+  id: string;
+  localPages?: string[];
+  attributes?: {
+    chapter?: string | null;
+    title?: string | null;
+    translatedLanguage?: string | null;
+    readableAt?: string | null;
+    publishAt?: string | null;
+    createdAt?: string | null;
+    updatedAt?: string | null;
+  };
+};
+
+export type ChapterFeedResponse = {
+  data?: ChapterFeedItem[];
+  limit?: number;
+  offset?: number;
+  total?: number;
+};
+
+export function getMangaVfChapterId(chapter: MangaVfChapter) {
+  const number = chapter.number?.trim() || chapter.title?.match(/\d+(?:\.\d+)?/)?.[0] || "1";
+  return slugify(`${number}-${chapter.title || "capitulo"}`);
+}
+
+export function mapMangaVfChapters(details: MangaVfDetails): ChapterFeedItem[] {
+  const chapters = Array.isArray(details.chapters) ? details.chapters : [];
+  const now = new Date().toISOString();
+
+  return chapters.flatMap((chapter) => {
+    const chapterUrl = chapter.url?.trim();
+    if (!chapterUrl) return [];
+    const number = chapter.number?.trim() || chapter.title?.match(/\d+(?:\.\d+)?/)?.[0] || "1";
+
+    return [{
+      id: getMangaVfChapterId(chapter),
+      attributes: {
+        chapter: number,
+        title: chapter.title?.trim() || `Capítulo ${number}`,
+        translatedLanguage: "es",
+        readableAt: now,
+        publishAt: now,
+        createdAt: now,
+        updatedAt: now,
+      },
+    }];
+  });
+}
+
+function getChapterLanguageVariants(language: string): string[] {
+  if (language === "es") return ["es", "es-la"];
+  if (language === "pt") return ["pt", "pt-br"];
+  return [language];
+}
+
+export async function fetchMangaDexChaptersOnly(mangaId: string, language: string): Promise<ChapterFeedItem[]> {
+  const limit = 100;
+  let offset = 0;
+  let total = 0;
+  const chapters: ChapterFeedItem[] = [];
+
+  try {
+    do {
+      const params = new URLSearchParams();
+      getChapterLanguageVariants(language).forEach((variant) => {
+        params.append("translatedLanguage[]", variant);
+      });
+      params.set("order[chapter]", "desc");
+      params.set("limit", String(limit));
+      params.set("offset", String(offset));
+      params.append("includes[]", "scanlation_group");
+
+      const response = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}/feed?${params.toString()}`);
+      if (!response.ok) {
+        return chapters;
+      }
+
+      const payload = (await response.json()) as ChapterFeedResponse;
+      const batch = payload.data ?? [];
+      total = payload.total ?? batch.length;
+      chapters.push(...batch);
+      offset += payload.limit ?? limit;
+    } while (offset < total);
+  } catch {
+    return chapters;
+  }
+
+  return chapters;
+}
+
+export async function fetchLeerCapituloChaptersOnly(slug: string): Promise<ChapterFeedItem[]> {
+  const details = await fetchMangaVfDetailsBySlug(slug);
+  return details ? mapMangaVfChapters(details) : [];
+}
+
+export async function fetchMangaChapters(id: string, language: string): Promise<ChapterFeedItem[]> {
+  const resolution = await resolveBestSource(id);
+
+  // If the language is NOT Spanish, we ONLY fetch from MangaDex (no merging)
+  if (language !== "es") {
+    const mangaId = resolution.mangadexId || id;
+    if (!isMangaDexUuid(mangaId)) return [];
+    return fetchMangaDexChaptersOnly(mangaId, language);
+  }
+
+  // If Spanish, fetch both in parallel and merge them
+  const [mdChapters, lcChapters] = await Promise.all([
+    resolution.mangadexId ? fetchMangaDexChaptersOnly(resolution.mangadexId, language) : Promise.resolve([]),
+    resolution.leercapituloSlug ? fetchLeerCapituloChaptersOnly(resolution.leercapituloSlug) : Promise.resolve([])
+  ]);
+
+  let mainChapters: ChapterFeedItem[];
+  let secondaryChapters: ChapterFeedItem[];
+
+  if (lcChapters.length > mdChapters.length) {
+    mainChapters = lcChapters;
+    secondaryChapters = mdChapters;
+  } else {
+    mainChapters = mdChapters;
+    secondaryChapters = lcChapters;
+  }
+
+  const mainNumbers = new Set(
+    mainChapters
+      .map((ch) => ch.attributes?.chapter?.trim())
+      .filter(Boolean)
+  );
+
+  const missingChapters = secondaryChapters.filter((ch) => {
+    const num = ch.attributes?.chapter?.trim();
+    return num && !mainNumbers.has(num);
+  });
+
+  const mergedChapters = [...mainChapters, ...missingChapters];
+
+  // Sort descending by chapter number
+  mergedChapters.sort((a, b) => {
+    const aNum = parseFloat(a.attributes?.chapter || "0");
+    const bNum = parseFloat(b.attributes?.chapter || "0");
+    return bNum - aNum;
+  });
+
+  return mergedChapters;
+}
+
+export async function fetchMangaVfPages(details: MangaVfDetails, chapterId: string) {
+  const chapterUrl = (details.chapters ?? []).find((chapter) => getMangaVfChapterId(chapter) === chapterId)?.url?.trim();
+  if (!chapterUrl) return [];
+
+  try {
+    const response = await fetch(
+      `${MANGAVF_API_URL}/api/v1/manga/extract?url=${encodeURIComponent(chapterUrl)}`,
+      { cache: "no-store" }
+    );
+    if (!response.ok) return [];
+    const payload = (await response.json()) as any;
+    const pages = Array.isArray(payload.images) ? payload.images : [];
+    return pages.filter(Boolean) as string[];
+  } catch {
+    return [];
+  }
+}
+
+export type LeerCapituloLatestItem = {
+  title: string;
+  slug: string;
+  url: string;
+  cover: string;
+  chapters?: Array<{
+    number: string;
+    title: string;
+    url: string;
+    time?: string;
+  }>;
+};
+
+export type LeerCapituloLatestResponse = {
+  success: boolean;
+  recientes?: LeerCapituloLatestItem[];
+  tendencias?: LeerCapituloLatestItem[];
+};
+
+export function parseRelativeTimeToDate(timeStr: string): Date {
+  const now = new Date();
+  const clean = timeStr.toLowerCase().trim();
+  const num = parseInt(clean) || 0;
+  
+  if (clean.includes("year") || clean.includes("año")) {
+    now.setFullYear(now.getFullYear() - num);
+    return now;
+  }
+  if (clean.includes("month") || clean.includes("mes")) {
+    now.setMonth(now.getMonth() - num);
+    return now;
+  }
+  if (clean.includes("week") || clean.includes("semana")) {
+    now.setDate(now.getDate() - (num * 7));
+    return now;
+  }
+  if (clean.includes("day") || clean.includes("dia") || clean.match(/\b\d+d\b/) || clean.endsWith("d")) {
+    now.setDate(now.getDate() - num);
+    return now;
+  }
+  if (clean.includes("hour") || clean.includes("hora") || clean.match(/\b\d+h\b/) || clean.endsWith("h")) {
+    now.setHours(now.getHours() - num);
+    return now;
+  }
+  if (clean.includes("min") || clean.match(/\b\d+m\b/) || clean.endsWith("m")) {
+    now.setMinutes(now.getMinutes() - num);
+    return now;
+  }
+  
+  // Si no se reconoce el patrón (o está vacío), devolvemos una fecha muy antigua (Unix epoch)
+  // en lugar de 'now' para evitar que se posicione al principio de la lista de novedades.
+  return new Date(0);
+}
+
+export function mapLeerCapituloLatestToShowcase(
+  items: LeerCapituloLatestItem[],
+  language: SupportedLanguage
+): MangaDexShowcaseItem[] {
+  return items.map((item, index): MangaDexShowcaseItem => {
+    const title = item.title;
+    const slug = `lc-${item.slug}`;
+    const rawCover = item.cover;
+    const coverImage = rawCover ? `/api/proxy-image?url=${encodeURIComponent(rawCover)}` : "";
+    const latestChapters = (item.chapters ?? []).slice(0, 2).map((ch) => {
+      const pubDate = ch.time ? parseRelativeTimeToDate(ch.time) : new Date();
+      return {
+        id: `lc-ch-${ch.number}`,
+        chapter: ch.number,
+        timeAgo: ch.time || "",
+        publishedAt: pubDate.toISOString(),
+      };
+    });
+
+    return {
+      mal_id: index + 1000,
+      title,
+      synopsis: null,
+      score: null,
+      url: buildComicPath(title, slug),
+      mangaDexId: slug,
+      titleMap: { es: title },
+      featuredTag: `#${index + 1}`,
+      createdAt: new Date().toISOString(),
+      genres: [],
+      tags: [],
+      latestChapters,
+      isLocal: true,
+      images: {
+        webp: { large_image_url: coverImage, image_url: coverImage },
+        jpg: { large_image_url: coverImage, image_url: coverImage },
+      },
+    };
+  });
+}
+
+export async function fetchLeerCapituloLatest(language: SupportedLanguage = "es"): Promise<MangaDexShowcaseItem[]> {
+  try {
+    const response = await fetch(`${MANGAVF_API_URL}/api/v1/manga/latest`, {
+      next: { revalidate: 600 }
+    });
+    if (!response.ok) return [];
+    const payload = (await response.json()) as LeerCapituloLatestResponse;
+    const recientes = payload.recientes ?? [];
+    return mapLeerCapituloLatestToShowcase(recientes, language);
+  } catch (error) {
+    logger.error("Error fetching LeerCapitulo latest", error);
+    return [];
+  }
+}
+
