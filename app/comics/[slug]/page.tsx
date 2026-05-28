@@ -1495,10 +1495,21 @@ export default async function MangaDetailsPage({
             <span>{currentLanguage === "es" ? "Comunidad" : currentLanguage === "pt" ? "Comunidade" : "Community"}</span>
           </a>
         </div>
+
+        {/* Mobile Header Title */}
+        <div className="mb-6 md:hidden text-center">
+          <h1 className="text-2xl font-bold tracking-tight text-white font-heading leading-tight">
+            {displayTitle}
+          </h1>
+          <p className="mt-2 text-sm font-semibold text-amber-400">
+            ★ {ratingSummary.ratingValue}/{aggregateRating.bestRating} · {ratingSummary.ratingCount} {copy.ratingVotes}
+          </p>
+        </div>
+
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12 md:gap-8">
           <aside className="md:col-span-4 lg:col-span-3">
-            <div className="grid grid-cols-[112px_minmax(0,1fr)] items-start gap-4 sm:grid-cols-[150px_minmax(0,1fr)] md:block">
-              <div className="max-h-[300px] max-w-[180px] overflow-hidden rounded-xl shadow-2xl shadow-black/50 sm:max-w-[220px] md:max-h-none md:max-w-none">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start md:flex-col md:gap-4 w-full">
+              <div className="mx-auto sm:mx-0 max-h-[300px] max-w-[180px] overflow-hidden rounded-xl shadow-2xl shadow-black/50 sm:max-w-[220px] md:max-h-none md:max-w-none w-full shrink-0">
                 {primaryCoverUrl ? (
                   <div className="relative aspect-[2/3] w-full">
                     <ComicCoverImage
@@ -1512,7 +1523,8 @@ export default async function MangaDetailsPage({
                 )}
               </div>
 
-              <div className="rounded-xl border border-white/5 bg-[#141519] p-3 text-center md:mt-4 md:p-4 md:text-left flex flex-col gap-2">
+              <div className="w-full rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#1b1c22]/60 to-[#101115]/80 p-4 text-center md:mt-4 md:p-5 md:text-left flex flex-col gap-2.5 shadow-xl">
+                <ContinueReadingButton mangaId={manga.id} />
                 <FavoriteButton manga={favoriteManga} label={copy.addToFavorites} variant="inline" />
                 <LikeButton
                   mangaId={manga.id}
@@ -1523,7 +1535,6 @@ export default async function MangaDetailsPage({
                   label={currentLanguage === "es" ? "Me gusta" : currentLanguage === "pt" ? "Curtir" : "Like"}
                   likedLabel={currentLanguage === "es" ? "Te gusta" : currentLanguage === "pt" ? "Curtiu" : "Liked"}
                 />
-                <ContinueReadingButton mangaId={manga.id} />
                 <AddToListButton
                   mangaId={manga.id}
                   mangaTitle={displayTitle}
@@ -1531,18 +1542,18 @@ export default async function MangaDetailsPage({
                   language={currentLanguage}
                 />
 
-                <div className="mt-2 md:mt-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500 md:text-[11px]">
+                <div className="mt-4 border-t border-white/[0.06] pt-4 text-left">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">
                     {copy.author}
                   </p>
-                  <p className="mt-2 text-sm text-white">{realAuthor || copy.noAuthorDb}</p>
+                  <p className="mt-1.5 text-sm font-semibold text-white">{realAuthor || copy.noAuthorDb}</p>
                   <a
                     href={
                       "https://twitter.com/search?q=" +
                       encodeURIComponent(authorSearchQuery)
                     }
                     target="_blank"
-                    className="inline-flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 mt-1 transition-colors"
+                    className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 mt-2 transition-colors duration-200"
                   >
                     <svg
                       aria-hidden="true"
@@ -1551,7 +1562,7 @@ export default async function MangaDetailsPage({
                     >
                       <path d="M18.9 2H22l-6.8 7.8L23.2 22h-6.3l-4.9-7.4L6.4 22H3.3l7.3-8.4L2.9 2h6.4l4.4 6.6L18.9 2Zm-1.1 17.9h1.7L8.4 4H6.6l11.2 15.9Z" />
                     </svg>
-                    {copy.supportOnX}
+                    <span className="font-medium">{copy.supportOnX}</span>
                   </a>
                 </div>
 
@@ -1560,11 +1571,11 @@ export default async function MangaDetailsPage({
           </aside>
 
           <section className="text-center md:col-span-8 md:text-left lg:col-span-9">
-            <h1 className="mb-3 line-clamp-2 hyphens-auto text-center text-2xl font-semibold leading-tight text-white md:text-left md:text-3xl">
+            <h1 className="hidden md:block mb-3 line-clamp-2 hyphens-auto text-2xl font-bold leading-tight text-white md:text-3xl font-heading">
               {displayTitle}
             </h1>
-            <p className="mb-4 text-center text-sm font-medium text-amber-300 md:text-left">
-              {"\u2605"} {aggregateRating.ratingValue}/{aggregateRating.bestRating} {"\u00b7"} {aggregateRating.ratingCount} {copy.ratingVotes}
+            <p className="hidden md:block mb-4 text-sm font-medium text-amber-300">
+              {"\u2605"} {ratingSummary.ratingValue}/{aggregateRating.bestRating} {"\u00b7"} {ratingSummary.ratingCount} {copy.ratingVotes}
             </p>
 
             <div className="flex flex-wrap justify-center gap-2 md:justify-start">

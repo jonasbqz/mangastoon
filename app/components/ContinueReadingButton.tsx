@@ -40,10 +40,10 @@ export default function ContinueReadingButton({ mangaId }: { mangaId: string }) 
   return (
     <Link
       href={buildChapterPath(progress.mangaTitle, mangaId, progress.chapterId)}
-      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ff6b00] px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-orange-600"
+      className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#ff6b00] px-4 py-3.5 text-sm font-heading font-bold text-white transition-all duration-300 hover:bg-orange-600 hover:scale-[1.02] active:scale-95 shadow-[0_4px_20px_rgba(255,107,0,0.22)] hover:shadow-[0_4px_25px_rgba(255,107,0,0.35)]"
     >
       <BookOpen className="h-4 w-4" />
-      Continuar leyendo - {progress.chapterLabel}
+      <span>Continuar leyendo - {progress.chapterLabel}</span>
     </Link>
   );
 }
