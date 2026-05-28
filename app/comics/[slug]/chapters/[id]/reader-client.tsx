@@ -72,10 +72,10 @@ const THEME_CLASSES: Record<ReaderTheme, { bg: string; text: string; headerBg: s
 };
 
 const PAGE_SIZE_CLASSES: Record<PageSize, string> = {
-  small: "w-full md:max-w-xl",
-  medium: "w-full md:max-w-3xl",
-  large: "w-full md:max-w-5xl",
-  full: "w-full",
+  small: "w-full max-w-[80%] md:max-w-xl",
+  medium: "w-full max-w-[90%] md:max-w-3xl",
+  large: "w-full max-w-[96%] md:max-w-5xl",
+  full: "w-full max-w-full",
 };
 
 const MAX_IMAGE_RETRIES = 3;
@@ -1506,11 +1506,11 @@ export default function ReaderClient({
               </button>
             </div>
 
-            <div className="mb-2 flex flex-col items-center justify-center px-3 text-center">
-              <h1 className="flex items-center justify-center gap-1.5 mb-1 line-clamp-1 max-w-3xl hyphens-auto text-xl font-bold leading-tight tracking-tight text-amber-500 md:text-2xl">
-                {mangaTitle}
+            <div className="mb-2 px-3 text-center">
+              <h1 className="mb-1 text-xl font-bold leading-tight tracking-tight text-amber-500 md:text-2xl select-text">
+                <span className="align-middle mr-2">{mangaTitle}</span>
                 {isPremium && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 px-2.5 py-1 text-[10px] font-heading font-bold uppercase tracking-wider text-black border border-yellow-300/40 shadow-[0_0_15px_rgba(245,158,11,0.25)]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 px-2.5 py-1 text-[10px] font-heading font-bold uppercase tracking-wider text-black border border-yellow-300/40 shadow-[0_0_15px_rgba(245,158,11,0.25)] align-middle select-none">
                     <Crown size={10} className="fill-black mr-0.5" /> Premium
                   </span>
                 )}

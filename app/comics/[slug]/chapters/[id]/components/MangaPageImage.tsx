@@ -94,7 +94,7 @@ export default function MangaPageImage({
     <div
       ref={containerRef}
       className="relative w-full overflow-hidden bg-[#0a0a0c] min-h-[50vh] sm:min-h-[70vh]"
-      style={{ contentVisibility: "auto", containIntrinsicSize: "1000px" }}
+      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 1000px" }}
       data-page-index={pageIndex}
     >
       {/* Premium Skeleton Placeholder (LQIP/Shimmer simulation) */}

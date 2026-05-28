@@ -33,6 +33,7 @@ interface ProfileData {
   reading_direction: string | null;
   is_premium?: boolean | null;
   updated_at?: string | null;
+  created_at?: string | null;
 }
 
 interface UserData {
@@ -466,7 +467,7 @@ export default function ProfileForm({ profile, user }: Props) {
   const initials = (profile?.username ?? user.email ?? "?").charAt(0).toUpperCase();
   const displayAvatar = avatarPreview ?? avatarUrl;
   const isPremium = !!profile?.is_premium;
-  const premiumSince = user.user_metadata?.premium_since || profile?.updated_at;
+  const premiumSince = user.user_metadata?.premium_since || profile?.created_at || user.created_at;
 
   // ── Avatar: validación cliente + envío ───────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -11,7 +11,7 @@ export async function getProfile() {
 
   let { data: profile } = await supabase
     .from("profiles")
-    .select("id, username, avatar_url, username_updated_at, updated_at, reading_direction, is_premium")
+    .select("id, username, avatar_url, username_updated_at, updated_at, reading_direction, is_premium, created_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -29,13 +29,29 @@ export async function getProfile() {
         avatar_url: fallbackAvatar,
         updated_at: new Date().toISOString(),
       })
-      .select("id, username, avatar_url, username_updated_at, updated_at, reading_direction, is_premium")
+      .select("id, username, avatar_url, username_updated_at, updated_at, reading_direction, is_premium, created_at")
       .maybeSingle();
 
     if (!insertError && newProfile) {
       profile = newProfile;
     } else {
       console.error("[getProfile] failed to auto-create profile:", insertError);
+    }
+  }
+
+  // Restaurar premium_since en metadatos de auth si es premium pero Discord/OAuth lo borró
+  if (profile && profile.is_premium && !user.user_metadata?.premium_since) {
+    const defaultPremiumSince = profile.created_at || user.created_at || new Date().toISOString();
+    try {
+      await supabase.auth.updateUser({
+        data: {
+          premium_since: defaultPremiumSince
+        }
+      });
+      if (!user.user_metadata) user.user_metadata = {};
+      user.user_metadata.premium_since = defaultPremiumSince;
+    } catch (e) {
+      console.warn("[getProfile] failed to restore premium_since metadata:", e);
     }
   }
 
@@ -263,15 +279,18 @@ export async function upgradeToPremiumAction(type: "gifted" | "paid" = "paid") {
     updated_at: new Date().toISOString(),
   };
 
-  // Guardar premium_since en los metadatos de auth del usuario para persistir la fecha original
-  const { error: authMetaError } = await supabase.auth.updateUser({
-    data: {
-      premium_since: new Date().toISOString()
-    }
-  });
+  // Guardar premium_since en los metadatos de auth del usuario para persistir la fecha original si no existe ya
+  const existingPremiumSince = user.user_metadata?.premium_since;
+  if (!existingPremiumSince) {
+    const { error: authMetaError } = await supabase.auth.updateUser({
+      data: {
+        premium_since: new Date().toISOString()
+      }
+    });
 
-  if (authMetaError) {
-    console.warn("[upgradeToPremiumAction] failed to update auth metadata:", authMetaError.message);
+    if (authMetaError) {
+      console.warn("[upgradeToPremiumAction] failed to update auth metadata:", authMetaError.message);
+    }
   }
 
   // Intentamos guardar con premium_type primero
