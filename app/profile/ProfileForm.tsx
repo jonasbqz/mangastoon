@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  User, Check, AlertCircle, Clock, Edit3, 
+  User, Check, AlertCircle, Clock, Edit3, Bug,
   Camera, Loader2, ArrowLeft, LogOut, Trash2, 
   Mail, ShieldAlert, BookOpen, Settings, Crown, History, Heart, HeartCrack, Book, Key, Scroll,
-  Globe, Lock, Plus, Link as LinkIcon, Share2, FolderHeart, Sparkles, X
+  Globe, Lock, Plus, Link as LinkIcon, Share2, FolderHeart, Sparkles, X, Eye, EyeOff
 } from "lucide-react";
 import { updateUsername, uploadAvatar, updateReadingDirection, deleteAccountAction, upgradeToPremiumAction } from "../actions/profile";
 import { getUserMangaLists, createMangaListAction, deleteMangaListAction } from "../actions/lists";
@@ -66,8 +66,8 @@ const PROFILE_FORM_COPY = {
     cascadeDesc: "Lectura vertical continua",
     traditionalManga: "Manga Tradicional",
     traditionalDesc: "Página por página horizontal",
-    premiumReadingNoticeTitle: "El modo de lectura horizontal es un beneficio Premium.",
-    premiumReadingNoticeDesc: "¡Activa tu Pase Premium gratis para habilitar esta opción!",
+    premiumReadingNoticeTitle: "El modo de lectura en Cascada es un beneficio Premium.",
+    premiumReadingNoticeDesc: "¡Activá tu Pase Premium gratis para habilitar esta opción!",
     publicUsername: "Nombre de usuario público",
     availableIn: "Disponible en {days} día{plural}",
     usernamePlaceholder: "Tu usuario público",
@@ -120,6 +120,26 @@ const PROFILE_FORM_COPY = {
     resetPasswordSuccess: "Correo de restablecimiento enviado. ¡Revisa tu casilla!",
     resetPasswordErrFallback: "Ocurrió un error inesperado al intentar cambiar la contraseña.",
     deleteAccountErrFallback: "Ocurrió un error inesperado al intentar borrar la cuenta.",
+    support: "Soporte de la Plataforma",
+    supportDesc: "Si encontrás algún problema técnico, bug o tenés dudas, repórtalo directamente para que podamos ayudarte.",
+    reportBug: "Reportar un Error",
+    editEmail: "Editar Correo",
+    changeEmailTitle: "Cambiar Correo Electrónico",
+    newEmailLabel: "Nuevo Correo Electrónico",
+    changeEmailConfirm: "Cambiar Correo",
+    changeEmailCancel: "Cancelar",
+    currentPasswordLabel: "Contraseña Actual",
+    newPasswordLabel: "Nueva Contraseña",
+    confirmPasswordLabel: "Confirmar Nueva Contraseña",
+    changePasswordConfirm: "Cambiar Contraseña",
+    deleteListModalTitle: "¿Eliminar esta lista?",
+    deleteListModalDesc: 'Se eliminará la lista "{name}". Esta acción no se puede deshacer y perderás los cómics guardados en ella.',
+    deleteListConfirm: "Eliminar lista",
+    deleteListCancel: "Cancelar",
+    confirmUsernameTitle: "Confirmar cambio de usuario",
+    confirmUsernameDesc: "Se cambiará tu nombre de usuario a {username}. Una vez confirmado, no podrás volver a modificarlo por 7 días.",
+    confirmUsernameBtn: "Confirmar Cambio",
+    confirmUsernameCancel: "Cancelar",
   },
   en: {
     backToHome: "Back to Home",
@@ -137,7 +157,7 @@ const PROFILE_FORM_COPY = {
     cascadeDesc: "Continuous vertical reading",
     traditionalManga: "Traditional Manga",
     traditionalDesc: "Horizontal page-by-page reading",
-    premiumReadingNoticeTitle: "Horizontal reading mode is a Premium benefit.",
+    premiumReadingNoticeTitle: "Cascade reading mode is a Premium benefit.",
     premiumReadingNoticeDesc: "Activate your free Premium Pass to enable this option!",
     publicUsername: "Public Username",
     availableIn: "Available in {days} day{plural}",
@@ -191,6 +211,26 @@ const PROFILE_FORM_COPY = {
     resetPasswordSuccess: "Reset email sent. Check your inbox!",
     resetPasswordErrFallback: "An unexpected error occurred while trying to change your password.",
     deleteAccountErrFallback: "An unexpected error occurred while trying to delete your account.",
+    support: "Platform Support",
+    supportDesc: "If you encounter any technical issues, bugs, or have questions, report them directly so we can help you.",
+    reportBug: "Report a Bug",
+    editEmail: "Edit Email",
+    changeEmailTitle: "Change Email Address",
+    newEmailLabel: "New Email Address",
+    changeEmailConfirm: "Change Email",
+    changeEmailCancel: "Cancel",
+    currentPasswordLabel: "Current Password",
+    newPasswordLabel: "New Password",
+    confirmPasswordLabel: "Confirm New Password",
+    changePasswordConfirm: "Change Password",
+    deleteListModalTitle: "Delete this list?",
+    deleteListModalDesc: 'The list "{name}" will be deleted. This action cannot be undone and you will lose the saved comics in it.',
+    deleteListConfirm: "Delete list",
+    deleteListCancel: "Cancel",
+    confirmUsernameTitle: "Confirm Username Change",
+    confirmUsernameDesc: "Your username will be changed to {username}. Once confirmed, you won't be able to change it again for 7 days.",
+    confirmUsernameBtn: "Confirm Change",
+    confirmUsernameCancel: "Cancel",
   },
   pt: {
     backToHome: "Voltar ao Início",
@@ -208,7 +248,7 @@ const PROFILE_FORM_COPY = {
     cascadeDesc: "Leitura vertical contínua",
     traditionalManga: "Mangá Tradicional",
     traditionalDesc: "Leitura horizontal página por página",
-    premiumReadingNoticeTitle: "O modo de leitura horizontal é um benefício Premium.",
+    premiumReadingNoticeTitle: "O modo de leitura em Cascata é um benefício Premium.",
     premiumReadingNoticeDesc: "Ative seu Passe Premium gratuito para habilitar esta opção!",
     publicUsername: "Nome de usuário público",
     availableIn: "Disponível em {days} dia{plural}",
@@ -262,6 +302,26 @@ const PROFILE_FORM_COPY = {
     resetPasswordSuccess: "E-mail de redefinição enviado. Verifique sua caixa de entrada!",
     resetPasswordErrFallback: "Ocorreu um erro inesperado ao tentar alterar sua senha.",
     deleteAccountErrFallback: "Ocorreu um erro inesperado ao tentar excluir sua conta.",
+    support: "Suporte da Plataforma",
+    supportDesc: "Se você encontrar problemas técnicos, bugs ou tiver dúvidas, relate-os diretamente para que possamos ajudá-lo.",
+    reportBug: "Relatar um Bug",
+    editEmail: "Editar E-mail",
+    changeEmailTitle: "Alterar Endereço de E-mail",
+    newEmailLabel: "Novo Endereço de E-mail",
+    changeEmailConfirm: "Alterar E-mail",
+    changeEmailCancel: "Cancelar",
+    currentPasswordLabel: "Senha Atual",
+    newPasswordLabel: "Nova Senha",
+    confirmPasswordLabel: "Confirmar Nova Senha",
+    changePasswordConfirm: "Alterar Senha",
+    deleteListModalTitle: "Excluir esta lista?",
+    deleteListModalDesc: 'A lista "{name}" será excluída. Esta ação não pode ser desfeita e você perderá os quadrinhos salvos nela.',
+    deleteListConfirm: "Excluir lista",
+    deleteListCancel: "Cancelar",
+    confirmUsernameTitle: "Confirmar alteração de usuário",
+    confirmUsernameDesc: "Seu nome de usuário será alterado para {username}. Uma vez confirmado, você não poderá alterá-lo novamente por 7 dias.",
+    confirmUsernameBtn: "Confirmar Alteração",
+    confirmUsernameCancel: "Cancelar",
   }
 };
 
@@ -378,7 +438,9 @@ export default function ProfileForm({ profile, user }: Props) {
 
   // ── Preferencias de lectura ──────────────────────────────────────────────
   const [readingDirection, setReadingDirection] = useState<"vertical" | "horizontal">(
-    (profile?.reading_direction as "vertical" | "horizontal") ?? "vertical"
+    profile?.is_premium
+      ? ((profile?.reading_direction as "vertical" | "horizontal") ?? "horizontal")
+      : "horizontal"
   );
   const [isPrefPending, startPrefTransition] = useTransition();
   const [prefSuccess, setPrefSuccess] = useState(false);
@@ -420,11 +482,18 @@ export default function ProfileForm({ profile, user }: Props) {
   // Restablecimiento de contraseña
   const [sendingReset, setSendingReset] = useState(false);
 
-  // Sync Supabase reading_direction → local Zustand store on mount
+  // Sync Supabase reading_direction → local Zustand store on mount, with self-healing check
   useEffect(() => {
-    const direction = (profile?.reading_direction as "vertical" | "horizontal") ?? "vertical";
-    setStoreReadingMode(direction);
-  }, [profile?.reading_direction, setStoreReadingMode]);
+    const isUserPremium = !!profile?.is_premium;
+    const direction = (profile?.reading_direction as "vertical" | "horizontal") ?? "horizontal";
+    if (!isUserPremium && direction === "vertical") {
+      setStoreReadingMode("horizontal");
+      setReadingDirection("horizontal");
+      updateReadingDirection("horizontal");
+    } else {
+      setStoreReadingMode(direction);
+    }
+  }, [profile?.reading_direction, profile?.is_premium, setStoreReadingMode]);
 
   // ── Acciones de Cuenta (Logout & Delete) ─────────────────────────────────
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -461,9 +530,178 @@ export default function ProfileForm({ profile, user }: Props) {
     }
   };
 
+  // ── Change Email & Password States & Handlers ────────────────────────────
+  const [isChangeEmailModalOpen, setIsChangeEmailModalOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [isEmailPending, setIsEmailPending] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailCooldown, setEmailCooldown] = useState(0);
+  const [showUsernameConfirm, setShowUsernameConfirm] = useState(false);
+
+  // Email change cooldown timer
+  useEffect(() => {
+    if (emailCooldown <= 0) return;
+    const t = setTimeout(() => setEmailCooldown(emailCooldown - 1), 1000);
+    return () => clearTimeout(t);
+  }, [emailCooldown]);
+
+  // Check stored email cooldown on mount
+  useEffect(() => {
+    const lastEmailChange = localStorage.getItem("mangastoon_last_email_change_sent");
+    if (lastEmailChange) {
+      const elapsed = Math.floor((Date.now() - parseInt(lastEmailChange, 10)) / 1000);
+      if (elapsed < 120) {
+        setEmailCooldown(120 - elapsed);
+      }
+    }
+  }, []);
+
+  const [isChangePasswordModalOpen, setIsChangePasswordModalOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isPasswordPending, setIsPasswordPending] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [showOldPwd, setShowOldPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+
+  // ── Delete List States & Handlers ────────────────────────────────────────
+  const [listToDelete, setListToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [isDeletingList, setIsDeletingList] = useState(false);
+
+  const handleConfirmDeleteList = async () => {
+    if (!listToDelete) return;
+    setIsDeletingList(true);
+    try {
+      const res = await deleteMangaListAction(listToDelete.id);
+      if (res.success) {
+        toast.success(
+          language === "es"
+            ? "Lista eliminada"
+            : language === "pt"
+            ? "Lista excluída"
+            : "List deleted"
+        );
+        loadLists();
+        setListToDelete(null);
+      } else {
+        toast.error(res.error || "Error");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Error");
+    } finally {
+      setIsDeletingList(false);
+    }
+  };
+
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isEmailPending) return;
+    setEmailError(null);
+
+    if (emailCooldown > 0) {
+      setEmailError(
+        language === "es"
+          ? `Espera ${emailCooldown}s antes de intentar otro cambio.`
+          : language === "pt"
+          ? `Aguarde ${emailCooldown}s antes de tentar outra alteração.`
+          : `Wait ${emailCooldown}s before trying another change.`
+      );
+      return;
+    }
+
+    if (!newEmail.includes("@")) {
+      setEmailError(language === "es" ? "Ingresá un correo válido." : language === "pt" ? "Insira um e-mail válido." : "Please enter a valid email address.");
+      return;
+    }
+
+    setIsEmailPending(true);
+    const { error } = await supabase.auth.updateUser({ email: newEmail });
+    setIsEmailPending(false);
+
+    if (error) {
+      setEmailError(error.message);
+      return;
+    }
+
+    toast.success(
+      language === "es"
+        ? "¡Solicitud enviada! Confirmá el cambio desde tu bandeja de entrada."
+        : language === "pt"
+        ? "Solicitação enviada! Confirme a alteração na sua caixa de entrada."
+        : "Request sent! Please confirm the change in your inbox."
+    );
+    localStorage.setItem("mangastoon_last_email_change_sent", String(Date.now()));
+    setEmailCooldown(120);
+    setIsChangeEmailModalOpen(false);
+    setNewEmail("");
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isPasswordPending) return;
+    setPasswordError(null);
+
+    if (newPassword.length < 8) {
+      setPasswordError(language === "es" ? "La nueva contraseña debe tener al menos 8 caracteres." : language === "pt" ? "A nova senha deve ter pelo menos 8 caracteres." : "New password must be at least 8 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError(language === "es" ? "Las nuevas contraseñas no coinciden." : language === "pt" ? "As novas senhas não coincidem." : "New passwords do not match.");
+      return;
+    }
+    if (newPassword === oldPassword) {
+      setPasswordError(language === "es" ? "La nueva contraseña debe ser diferente a la anterior." : language === "pt" ? "A nova senha deve ser diferente da antiga." : "New password should be different from the old password.");
+      return;
+    }
+
+    setIsPasswordPending(true);
+
+    // Verify old password by signing in
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: user.email || "",
+      password: oldPassword
+    });
+
+    if (signInError) {
+      setIsPasswordPending(false);
+      setPasswordError(
+        language === "es"
+          ? "La contraseña actual es incorrecta."
+          : language === "pt"
+          ? "A senha atual está incorreta."
+          : "The current password is incorrect."
+      );
+      return;
+    }
+
+    // Update to new password
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    setIsPasswordPending(false);
+
+    if (updateError) {
+      setPasswordError(updateError.message);
+      return;
+    }
+
+    toast.success(
+      language === "es"
+        ? "Contraseña actualizada correctamente."
+        : language === "pt"
+        ? "Senha atualizada com sucesso."
+        : "Password updated successfully."
+    );
+    setIsChangePasswordModalOpen(false);
+    setOldPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+  };
+
   const daysLeft = getDaysLeft(profile?.username_updated_at ?? null);
   const isLocked = daysLeft !== null;
   const isDiscord = (user.app_metadata?.provider ?? "email") === "discord";
+  const isOAuth = (user.app_metadata?.provider ?? "email") !== "email";
   const initials = (profile?.username ?? user.email ?? "?").charAt(0).toUpperCase();
   const displayAvatar = avatarPreview ?? avatarUrl;
   const isPremium = !!profile?.is_premium;
@@ -516,8 +754,23 @@ export default function ProfileForm({ profile, user }: Props) {
   // ── Username: guardar ─────────────────────────────────────────────────────
   const handleUsernameSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isUsernamePending) return;
     setUsernameError(null);
     setUsernameSuccess(null);
+
+    const cleanUsername = username.trim();
+    if (cleanUsername.length < 3) {
+      setUsernameError(copy.usernameMinErr);
+      return;
+    }
+    if (cleanUsername.length > 30) {
+      setUsernameError(copy.usernameMaxErr);
+      return;
+    }
+    if (!/^[a-zA-Z0-9._-]+$/.test(cleanUsername)) {
+      setUsernameError(copy.usernamePatternErr);
+      return;
+    }
 
     if (isLocked) {
       setUsernameError(
@@ -527,6 +780,13 @@ export default function ProfileForm({ profile, user }: Props) {
       );
       return;
     }
+
+    setShowUsernameConfirm(true);
+  };
+
+  const handleConfirmUsernameSubmit = () => {
+    if (isUsernamePending) return;
+    setShowUsernameConfirm(false);
 
     startUsernameTransition(async () => {
       const result = await updateUsername(username);
@@ -585,6 +845,64 @@ export default function ProfileForm({ profile, user }: Props) {
       toast.error(copy.resetPasswordErrFallback);
     } finally {
       setSendingReset(false);
+    }
+  };
+
+  // ── Reportar Error (Soporte) ─────────────────────────────────────────────
+  const handleReportBug = () => {
+    const userId = user.id;
+    const userEmail = user.email || "No especificado";
+    const userLang = typeof window !== "undefined" ? window.navigator.language : "es";
+    const appLang = language;
+    const userAgent = typeof window !== "undefined" ? window.navigator.userAgent : "Desconocido";
+    const timestamp = new Date().toISOString();
+
+    const recipient = "soporte@mangastoon.com";
+    const subject = encodeURIComponent("Reporte de Error - MangaStoon");
+    
+    let bodyText = "";
+    if (language === "es") {
+      bodyText = `Por favor, describe detalladamente el error que experimentaste:\n\n\n\n` +
+                 `-----------------------------------------\n` +
+                 `DATOS DE DIAGNÓSTICO (No borrar)\n` +
+                 `-----------------------------------------\n` +
+                 `ID de Usuario: ${userId}\n` +
+                 `Email: ${userEmail}\n` +
+                 `Idioma del Navegador: ${userLang}\n` +
+                 `Idioma de la App: ${appLang}\n` +
+                 `Fecha y Hora: ${timestamp}\n` +
+                 `User-Agent: ${userAgent}\n` +
+                 `-----------------------------------------`;
+    } else if (language === "pt") {
+      bodyText = `Por favor, descreva em detalhes o erro que você experimentou:\n\n\n\n` +
+                 `-----------------------------------------\n` +
+                 `DADOS DE DIAGNÓSTICO (Não apagar)\n` +
+                 `-----------------------------------------\n` +
+                 `ID do Usuário: ${userId}\n` +
+                 `Email: ${userEmail}\n` +
+                 `Idioma do Navegador: ${userLang}\n` +
+                 `Idioma do App: ${appLang}\n` +
+                 `Data e Hora: ${timestamp}\n` +
+                 `User-Agent: ${userAgent}\n` +
+                 `-----------------------------------------`;
+    } else {
+      bodyText = `Please describe the error you experienced in detail:\n\n\n\n` +
+                 `-----------------------------------------\n` +
+                 `DIAGNOSTIC DATA (Do not delete)\n` +
+                 `-----------------------------------------\n` +
+                 `User ID: ${userId}\n` +
+                 `Email: ${userEmail}\n` +
+                 `Browser Language: ${userLang}\n` +
+                 `App Language: ${appLang}\n` +
+                 `Timestamp: ${timestamp}\n` +
+                 `User-Agent: ${userAgent}\n` +
+                 `-----------------------------------------`;
+    }
+
+    const body = encodeURIComponent(bodyText);
+    
+    if (typeof window !== "undefined") {
+      window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
     }
   };
 
@@ -755,14 +1073,11 @@ export default function ProfileForm({ profile, user }: Props) {
 
                 <div className="flex flex-col gap-1 min-w-0">
                   <div className="flex items-center gap-2.5">
-                    <p className="truncate text-xl font-extrabold" style={{ color: C.fg }}>
+                    <p className={`truncate text-xl font-extrabold ${isPremium ? "premium-username-shimmer" : ""}`} style={isPremium ? undefined : { color: C.fg }}>
                       {profile?.username ?? copy.noUsername}
                     </p>
                     {isPremium && (
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 px-2 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wider text-black border border-yellow-300/30 shadow-[0_0_8px_rgba(245,158,11,0.2)] shrink-0 select-none" title="Premium">
-                        <Crown size={8} className="fill-black" />
-                        <span>Premium</span>
-                      </span>
+                      <Crown size={16} className="text-amber-500 fill-amber-500 drop-shadow-[0_0_6px_rgba(245,158,11,0.3)] shrink-0 animate-pulse" />
                     )}
                   </div>
                   <p className="truncate text-sm font-semibold" style={{ color: C.dim }}>{user.email}</p>
@@ -826,7 +1141,7 @@ export default function ProfileForm({ profile, user }: Props) {
                         disabled={isPrefPending}
                         onClick={() => {
                           if (isActive || isPrefPending) return;
-                          if (direction === "horizontal" && !isPremium) {
+                          if (direction === "vertical" && !isPremium) {
                             toast.error(copy.premiumReadingNoticeTitle, {
                               description: copy.premiumReadingNoticeDesc
                             });
@@ -864,7 +1179,7 @@ export default function ProfileForm({ profile, user }: Props) {
                         <div>
                           <h4 className="text-base md:text-lg font-heading font-bold tracking-tight animate-fade-in flex items-center justify-center gap-1.5" style={{ color: isActive ? C.fg : C.muted }}>
                             <span>{title}</span>
-                            {direction === "horizontal" && (
+                            {direction === "vertical" && (
                               <Crown size={14} className="text-amber-500 fill-amber-500 shrink-0" />
                             )}
                           </h4>
@@ -1177,20 +1492,8 @@ export default function ProfileForm({ profile, user }: Props) {
                       toast.success(language === "es" ? "¡Enlace copiado al portapapeles!" : language === "pt" ? "Link copiado!" : "Link copied to clipboard!");
                     };
 
-                    const handleDelete = async () => {
-                      if (!confirm(language === "es" ? "¿Seguro que querés eliminar esta lista?" : language === "pt" ? "Tem certeza?" : "Delete this list?")) return;
-                      try {
-                        const res = await deleteMangaListAction(list.id);
-                        if (res.success) {
-                          toast.success(language === "es" ? "Lista eliminada" : "List deleted");
-                          loadLists();
-                        } else {
-                          toast.error(res.error || "Error");
-                        }
-                      } catch (err) {
-                        console.error(err);
-                        toast.error("Error");
-                      }
+                    const handleDelete = () => {
+                      setListToDelete({ id: list.id, name: list.name });
                     };
 
                     return (
@@ -1415,23 +1718,34 @@ export default function ProfileForm({ profile, user }: Props) {
 
                 <div className="rounded-2xl p-5 flex flex-col gap-4 border" style={{ background: "rgba(247,242,232,0.01)", borderColor: C.border }}>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm min-w-0">
-                    <span className="flex items-center gap-2 font-bold" style={{ color: C.dim }}>
+                    <span className="flex items-center gap-2 font-bold shrink-0" style={{ color: C.dim }}>
                       <Mail size={16} /> {copy.email}
                     </span>
-                    <span className="font-extrabold truncate text-neutral-200">
-                      {user.email}
-                    </span>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="font-extrabold truncate text-neutral-200">
+                        {user.email}
+                      </span>
+                      {!isOAuth && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => setIsChangeEmailModalOpen(true)}
+                          className="px-3 py-1.5 text-[11px] h-auto min-h-0 shrink-0"
+                          icon={<Edit3 size={11} />}
+                        >
+                          {copy.editEmail}
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
-                  {!isDiscord && (
+                  {!isOAuth && (
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t pt-4 text-sm" style={{ borderColor: C.border }}>
                       <span className="flex items-center gap-2 font-bold" style={{ color: C.dim }}>
                         <Key size={16} /> {copy.password}
                       </span>
                       <Button
                         variant="secondary"
-                        loading={sendingReset}
-                        onClick={handleResetPassword}
+                        onClick={() => setIsChangePasswordModalOpen(true)}
                         className="px-4 py-2.5 text-xs"
                         icon={<Key size={13} />}
                       >
@@ -1471,6 +1785,27 @@ export default function ProfileForm({ profile, user }: Props) {
                 >
                   {copy.deleteAccountPerm}
                 </Button>
+              </div>
+
+              {/* Soporte de la Plataforma */}
+              <div className="border-t pt-6" style={{ borderColor: C.border }}>
+                <h2 className="text-sm font-heading font-bold uppercase tracking-wider flex items-center gap-2" style={{ color: C.fg }}>
+                  <Bug size={16} className="text-orange-500" />
+                  {copy.support}
+                </h2>
+                <p className="text-sm mt-1.5 leading-normal" style={{ color: C.dim }}>
+                  {copy.supportDesc}
+                </p>
+                <div className="mt-4">
+                  <Button
+                    variant="secondary"
+                    onClick={handleReportBug}
+                    className="w-full border-zinc-800 cursor-pointer"
+                    icon={<Bug size={16} />}
+                  >
+                    {copy.reportBug}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -1641,6 +1976,357 @@ export default function ProfileForm({ profile, user }: Props) {
                   </Button>
                 </div>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL PARA CAMBIAR CORREO ELECTRÓNICO ───────────────────────────── */}
+      <AnimatePresence>
+        {isChangeEmailModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md"
+            style={{ background: "rgba(0, 0, 0, 0.8)" }}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-3xl p-7 text-left relative overflow-hidden"
+              style={{
+                background: "#131110",
+                border: "1px solid rgba(255, 107, 0, 0.3)",
+                boxShadow: "0 24px 50px rgba(0, 0, 0, 0.9)"
+              }}
+            >
+              <div className="flex items-center gap-3 text-orange-500 mb-4">
+                <Mail size={24} className="shrink-0" />
+                <h3 className="text-xl font-bold" style={{ color: C.fg }}>
+                  {copy.changeEmailTitle}
+                </h3>
+              </div>
+
+              <form onSubmit={handleChangeEmail} className="flex flex-col gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-2 text-zinc-400">
+                    {copy.newEmailLabel}
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="ejemplo@email.com"
+                    disabled={isEmailPending}
+                    className="w-full px-4 py-2.5 rounded-xl border bg-neutral-900/60 text-sm font-medium focus:outline-none transition-all"
+                    style={{
+                      borderColor: "rgba(247,242,232,0.15)",
+                      color: C.fg,
+                    }}
+                  />
+                </div>
+
+                {emailError && (
+                  <div className="mb-2">
+                    <StatusBanner error={emailError} />
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-3.5 mt-2">
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    loading={isEmailPending}
+                    disabled={emailCooldown > 0}
+                    loadingText={language === "es" ? "Enviando..." : language === "pt" ? "Enviando..." : "Sending..."}
+                    className="flex-1"
+                  >
+                    {emailCooldown > 0
+                      ? (language === "es" ? `Esperá ${emailCooldown}s` : language === "pt" ? `Aguarde ${emailCooldown}s` : `Wait ${emailCooldown}s`)
+                      : copy.changeEmailConfirm}
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    disabled={isEmailPending}
+                    onClick={() => {
+                      setIsChangeEmailModalOpen(false);
+                      setEmailError(null);
+                      setNewEmail("");
+                    }}
+                    className="flex-1"
+                  >
+                    {copy.changeEmailCancel}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL PARA CAMBIAR CONTRASEÑA (ESTILO ICLOUD) ───────────────────────────── */}
+      <AnimatePresence>
+        {isChangePasswordModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md"
+            style={{ background: "rgba(0, 0, 0, 0.8)" }}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-3xl p-7 text-left relative overflow-hidden"
+              style={{
+                background: "#131110",
+                border: "1px solid rgba(255, 107, 0, 0.3)",
+                boxShadow: "0 24px 50px rgba(0, 0, 0, 0.9)"
+              }}
+            >
+              <div className="flex items-center gap-3 text-orange-500 mb-4">
+                <Lock size={24} className="shrink-0" />
+                <h3 className="text-xl font-bold" style={{ color: C.fg }}>
+                  {copy.changePassword}
+                </h3>
+              </div>
+
+              <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
+                {/* Contraseña Actual */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-2 text-zinc-400">
+                    {copy.currentPasswordLabel}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showOldPwd ? "text" : "password"}
+                      required
+                      value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)}
+                      placeholder="••••••••"
+                      disabled={isPasswordPending}
+                      className="w-full pl-4 pr-10 py-2.5 rounded-xl border bg-neutral-900/60 text-sm font-medium focus:outline-none transition-all"
+                      style={{
+                        borderColor: "rgba(247,242,232,0.15)",
+                        color: C.fg,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPwd(!showOldPwd)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                    >
+                      {showOldPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Nueva Contraseña */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-2 text-zinc-400">
+                    {copy.newPasswordLabel}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showNewPwd ? "text" : "password"}
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Mínimo 8 caracteres"
+                      disabled={isPasswordPending}
+                      className="w-full pl-4 pr-10 py-2.5 rounded-xl border bg-neutral-900/60 text-sm font-medium focus:outline-none transition-all"
+                      style={{
+                        borderColor: "rgba(247,242,232,0.15)",
+                        color: C.fg,
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPwd(!showNewPwd)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                    >
+                      {showNewPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Confirmar Nueva Contraseña */}
+                <div>
+                  <label className="block text-[11px] font-bold uppercase tracking-wider mb-2 text-zinc-400">
+                    {copy.confirmPasswordLabel}
+                  </label>
+                  <input
+                    type={showNewPwd ? "text" : "password"}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Mínimo 8 caracteres"
+                    disabled={isPasswordPending}
+                    className="w-full px-4 py-2.5 rounded-xl border bg-neutral-900/60 text-sm font-medium focus:outline-none transition-all"
+                    style={{
+                      borderColor: "rgba(247,242,232,0.15)",
+                      color: C.fg,
+                    }}
+                  />
+                </div>
+
+                {passwordError && (
+                  <div className="mb-2">
+                    <StatusBanner error={passwordError} />
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-3.5 mt-2">
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    loading={isPasswordPending}
+                    className="flex-1"
+                  >
+                    {copy.changePasswordConfirm}
+                  </Button>
+
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    disabled={isPasswordPending}
+                    onClick={() => {
+                      setIsChangePasswordModalOpen(false);
+                      setPasswordError(null);
+                      setOldPassword("");
+                      setNewPassword("");
+                      setConfirmPassword("");
+                    }}
+                    className="flex-1"
+                  >
+                    {copy.deleteModalCancel}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL PARA CONFIRMAR ELIMINACIÓN DE LISTA ───────────────────────────── */}
+      <AnimatePresence>
+        {listToDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md"
+            style={{ background: "rgba(0, 0, 0, 0.8)" }}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-3xl p-7 text-left relative overflow-hidden"
+              style={{
+                background: "#131110",
+                border: "1px solid rgba(255, 107, 0, 0.3)",
+                boxShadow: "0 24px 50px rgba(0, 0, 0, 0.9)"
+              }}
+            >
+              <div className="flex items-center gap-3 text-orange-500 mb-4">
+                <Trash2 size={28} className="shrink-0 animate-pulse" />
+                <h3 className="text-xl font-bold" style={{ color: C.fg }}>
+                  {copy.deleteListModalTitle}
+                </h3>
+              </div>
+
+              <p className="text-sm leading-relaxed mb-6" style={{ color: C.muted }}>
+                {copy.deleteListModalDesc.replace("{name}", listToDelete.name)}
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3.5">
+                <Button
+                  variant="danger"
+                  loading={isDeletingList}
+                  disabled={isDeletingList}
+                  onClick={handleConfirmDeleteList}
+                  className="flex-1"
+                >
+                  {copy.deleteListConfirm}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  disabled={isDeletingList}
+                  onClick={() => setListToDelete(null)}
+                  className="flex-1"
+                >
+                  {copy.deleteListCancel}
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── MODAL PARA CONFIRMAR CAMBIO DE NOMBRE DE USUARIO ───────────────────────────── */}
+      <AnimatePresence>
+        {showUsernameConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md"
+            style={{ background: "rgba(0, 0, 0, 0.8)" }}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-full max-w-md rounded-3xl p-7 text-left relative overflow-hidden"
+              style={{
+                background: "#131110",
+                border: "1px solid rgba(255, 107, 0, 0.3)",
+                boxShadow: "0 24px 50px rgba(0, 0, 0, 0.9)"
+              }}
+            >
+              <div className="flex items-center gap-3 text-orange-500 mb-4">
+                <User size={28} className="shrink-0 animate-pulse" />
+                <h3 className="text-xl font-bold" style={{ color: C.fg }}>
+                  {copy.confirmUsernameTitle}
+                </h3>
+              </div>
+
+              <p className="text-sm leading-relaxed mb-6" style={{ color: C.muted }}>
+                {copy.confirmUsernameDesc.replace("{username}", username)}
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3.5">
+                <Button
+                  variant="primary"
+                  loading={isUsernamePending}
+                  disabled={isUsernamePending}
+                  onClick={handleConfirmUsernameSubmit}
+                  className="flex-1"
+                >
+                  {copy.confirmUsernameBtn}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  disabled={isUsernamePending}
+                  onClick={() => setShowUsernameConfirm(false)}
+                  className="flex-1"
+                >
+                  {copy.confirmUsernameCancel}
+                </Button>
+              </div>
             </motion.div>
           </motion.div>
         )}

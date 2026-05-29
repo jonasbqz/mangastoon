@@ -4,7 +4,13 @@ import { getProfile } from "../actions/profile";
 import SiteHeader, { type SupportedLanguage } from "../components/site-header";
 import ProfileForm from "./ProfileForm";
 
-export const metadata = { title: "Mi Perfil — Mangastoon" };
+export const metadata = {
+  title: "Mi Perfil — Mangastoon",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 function normalizeLanguage(value: string | undefined): SupportedLanguage {
   if (value === "en" || value === "pt") return value;

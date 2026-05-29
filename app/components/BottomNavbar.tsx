@@ -41,7 +41,7 @@ export default function BottomNavbar() {
         {navItems.map((item) => {
           const Icon = item.icon;
           // Coincidencia exacta para "/" o coincidencia de prefijo para subrutas
-          const isBlocked = (item.label === "Perfil" || item.label === "Favoritos") && !user;
+          const isBlocked = item.label === "Perfil" && !user;
           const isActive = !isBlocked && (
             item.path === "/"
               ? pathname === "/"
@@ -52,8 +52,9 @@ export default function BottomNavbar() {
             <Link
               key={item.label}
               href={item.path}
+              data-no-transition-loader={item.label === "Perfil" && !user ? "true" : undefined}
               onClick={(e) => {
-                if ((item.label === "Perfil" || item.label === "Favoritos") && !user) {
+                if (item.label === "Perfil" && !user) {
                   e.preventDefault();
                   window.dispatchEvent(new CustomEvent("open-auth-modal"));
                 }

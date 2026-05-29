@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { MANGADEX_API_URL, MONLINE_API_URL, SITE_IMAGE, SITE_NAME, absoluteUrl } from "../../../../utils/seo";
 import { getLocalizedTitle } from "../../../../utils/get-localized-title";
 import { extractComicIdFromSlugId } from "../../../../utils/slugify";
+import { getOrSetCached } from "../../../../utils/server-cache";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -95,12 +96,16 @@ function normalizeLocalImageUrl(value: string) {
 
 async function getLocalReadMetadata(slug: string) {
   try {
-    const response = await fetch(`${MONLINE_API_URL}/api/comics?limit=100`, { cache: "no-store" });
-    if (!response.ok) return null;
+    const cacheKey = `local-read-metadata-comics-list`;
+    const comics = await getOrSetCached(cacheKey, 300, async () => {
+      const response = await fetch(`${MONLINE_API_URL}/api/comics?limit=100`, { cache: "no-store" });
+      if (!response.ok) return [];
+      const payload = (await response.json()) as LocalComicsResponse;
+      return extractLocalComics(payload);
+    });
 
-    const payload = (await response.json()) as LocalComicsResponse;
-    const comic = extractLocalComics(payload).find((item) => {
-      const comicSlug = getStringValue(item, ["slug", "manga_slug", "comic_slug"]);
+    const comic = comics.find((item) => {
+      const comicSlug = getStringValue(item as Record<string, unknown>, ["slug", "manga_slug", "comic_slug"]);
       return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
     });
 
@@ -108,14 +113,14 @@ async function getLocalReadMetadata(slug: string) {
 
     const title = getLocalizedTitle(
       {
-        titleMap: getLocalTitleMap(comic),
-        title: getStringValue(comic, ["title", "name", "comic_title", "original_title"]),
+        titleMap: getLocalTitleMap(comic as Record<string, unknown>),
+        title: getStringValue(comic as Record<string, unknown>, ["title", "name", "comic_title", "original_title"]),
       },
       "es"
     ) || SITE_NAME;
-    const description = getStringValue(comic, ["description", "synopsis", "summary"]);
+    const description = getStringValue(comic as Record<string, unknown>, ["description", "synopsis", "summary"]);
     const image = normalizeLocalImageUrl(
-      getStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
+      getStringValue(comic as Record<string, unknown>, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])
     );
 
     return { title, description, image };
@@ -125,31 +130,35 @@ async function getLocalReadMetadata(slug: string) {
 }
 
 async function getMangaDexReadMetadata(id: string) {
-  try {
-    const response = await fetch(`${MANGADEX_API_URL}/manga/${id}?includes[]=cover_art`, {
-      next: { revalidate: 3600 },
-    });
+  const cacheKey = `mangadex-read-metadata:${id}`;
+  return getOrSetCached(cacheKey, 3600, async () => {
+    try {
+      const response = await fetch(`${MANGADEX_API_URL}/manga/${id}?includes[]=cover_art`, {
+        next: { revalidate: 3600 },
+      });
 
-    if (!response.ok) return null;
+      if (!response.ok) return null;
 
-    const payload = (await response.json()) as MangaDexMetadataPayload;
-    const manga = payload.data;
-    if (!manga) return null;
+      const payload = (await response.json()) as MangaDexMetadataPayload;
+      const manga = payload.data;
+      if (!manga) return null;
 
-    const title = getLocalizedTitle(manga, "es") || getLocalizedTitle(manga, "en") || SITE_NAME;
-    const description =
-      manga.attributes?.description?.es ||
-      manga.attributes?.description?.["es-la"] ||
-      manga.attributes?.description?.en ||
-      `Lee ${title} online en ${SITE_NAME}.`;
-    const cover = manga.relationships?.find((relationship) => relationship.type === "cover_art")?.attributes?.fileName;
-    const image = cover ? `https://uploads.mangadex.org/covers/${id}/${cover}` : SITE_IMAGE;
+      const title = getLocalizedTitle(manga, "es") || getLocalizedTitle(manga, "en") || SITE_NAME;
+      const description =
+        manga.attributes?.description?.es ||
+        manga.attributes?.description?.["es-la"] ||
+        manga.attributes?.description?.en ||
+        `Lee ${title} online en ${SITE_NAME}.`;
+      const cover = manga.relationships?.find((relationship) => relationship.type === "cover_art")?.attributes?.fileName;
+      const image = cover ? `https://uploads.mangadex.org/covers/${id}/${cover}` : SITE_IMAGE;
 
-    return { title, description, image };
-  } catch {
-    return null;
-  }
+      return { title, description, image };
+    } catch {
+      return null;
+    }
+  });
 }
+
 
 function getChapterLabel(chapterId?: string, chapter?: ChapterFeedItem | null) {
   const chapterNumber = chapter?.attributes?.chapter || chapterId;
@@ -189,7 +198,7 @@ export async function generateMetadata({
       canonical,
     },
     robots: {
-      index: true,
+      index: false,
       follow: true,
     },
     openGraph: {

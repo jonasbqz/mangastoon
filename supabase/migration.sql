@@ -56,3 +56,6 @@ $$;
 
 -- Asegurar que los perfiles nuevos no tengan premium automáticamente por defecto
 ALTER TABLE public.profiles ALTER COLUMN is_premium SET DEFAULT false;
+
+-- Cambiar valor por defecto de lectura a horizontal tradicional para nuevos usuarios
+ALTER TABLE public.profiles ALTER COLUMN reading_direction SET DEFAULT 'horizontal';

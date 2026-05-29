@@ -193,13 +193,13 @@ export default function ReaderSettingsPanel({
             title={readingMode === "vertical" ? `${dictionary.modeHorizontal} (Premium)` : dictionary.modeVertical}
             onClick={() => {
               if (readingMode === "vertical" && !isPremium) {
-                toast.error("El modo de lectura horizontal es un beneficio Premium.", {
+                toast.error("El modo de lectura Horizontal es un beneficio Premium.", {
                   description: "¡Activá tu Pase de Regalo gratis en tu perfil para habilitar esta opción!"
                 });
                 return;
               }
               setReadingMode(readingMode === "vertical" ? "horizontal" : "vertical");
-              if (readingMode === "horizontal") {
+              if (readingMode === "vertical") {
                 setAutoScroll(false);
               }
             }}

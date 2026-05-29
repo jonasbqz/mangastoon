@@ -1,0 +1,115 @@
+"use client";
+
+import { Share2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+type ShareButtonProps = {
+  title: string;
+  text?: string;
+  url?: string;
+  variant?: "inline" | "compact" | "icon";
+  label?: string;
+};
+
+export default function ShareButton({ title, text, url, variant = "inline", label }: ShareButtonProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
+  const handleShare = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const shareUrl = url || window.location.href;
+    const shareTitle = title || "MangaStoon";
+    const shareText = text || `¡Leé ${shareTitle} en MangaStoon!`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+      } catch (err) {
+        if ((err as Error).name !== "AbortError") {
+          console.error("Error sharing:", err);
+          fallbackCopy(shareUrl);
+        }
+      }
+    } else {
+      fallbackCopy(shareUrl);
+    }
+  };
+
+  const fallbackCopy = (shareUrl: string) => {
+    navigator.clipboard.writeText(shareUrl).then(
+      () => {
+        toast.success("¡Enlace copiado al portapapeles!", {
+          description: "Ya podés compartirlo con tus amigos.",
+        });
+      },
+      (err) => {
+        console.error("Failed to copy URL:", err);
+        toast.error("No se pudo copiar el enlace.");
+      }
+    );
+  };
+
+  if (variant === "inline") {
+    return (
+      <button
+        type="button"
+        onClick={handleShare}
+        className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/5 py-3 text-sm font-heading font-semibold text-gray-300 transition-all duration-300 hover:border-white/20 hover:bg-white/10 hover:text-white"
+      >
+        <Share2 className="h-4.5 w-4.5" />
+        <span>{label ?? "Compartir"}</span>
+      </button>
+    );
+  }
+
+  if (variant === "compact") {
+    return (
+      <button
+        type="button"
+        aria-label={label ?? "Compartir"}
+        onClick={handleShare}
+        className="rounded-full p-1.5 backdrop-blur-md transition-all border bg-black/60 border-white/10 text-white hover:bg-white/10 hover:border-white/30"
+      >
+        <Share2 className="h-4 w-4" />
+      </button>
+    );
+  }
+
+  if (variant === "icon") {
+    return (
+      <button
+        type="button"
+        aria-label={label ?? "Compartir"}
+        onClick={handleShare}
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/5 bg-white/[0.03] text-gray-400 hover:border-amber-500/30 hover:bg-amber-500/10 hover:text-amber-400 transition-colors shrink-0"
+      >
+        <Share2 className="h-4.5 w-4.5" />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      aria-label={label ?? "Compartir"}
+      onClick={handleShare}
+      className="rounded-full p-2 backdrop-blur-md transition-all border bg-black/50 border-white/10 text-white hover:bg-white/10 hover:border-white/30"
+    >
+      <Share2 size={16} className="hover:scale-105 transition-transform" />
+    </button>
+  );
+}

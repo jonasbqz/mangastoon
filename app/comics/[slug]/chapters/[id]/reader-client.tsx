@@ -649,6 +649,11 @@ export default function ReaderClient({
   const mangaId = initialMangaId ?? extractComicIdFromSlugId(routeSlug);
   const currentChapterParam = initialChapterParam ?? searchParams.get("chapter") ?? routeChapterId;
   const readerLanguage = initialReaderLanguage ?? normalizeReaderLanguage(searchParams.get("lang"), language);
+  
+  if (typeof window !== "undefined") {
+    console.log("[Reader Client] readerLanguage:", readerLanguage, "| initialReaderLanguage:", initialReaderLanguage, "| languageState:", language, "| urlLangParam:", searchParams.get("lang"));
+  }
+
   const dictionary = UI_COPY[readerLanguage];
   const addHistory = useHistoryStore((state) => state.addHistory);
   const readingMode = useReaderSettingsStore((state) => state.readingMode);
@@ -680,6 +685,7 @@ export default function ReaderClient({
   const [downloading, setDownloading] = useState(false);
   const [pdfProgress, setPdfProgress] = useState(0);
   const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfMode, setPdfMode] = useState<"single" | "range">("single");
   const [pdfStartChapterId, setPdfStartChapterId] = useState("");
   const [pdfEndChapterId, setPdfEndChapterId] = useState("");
   const [autoScroll, setAutoScroll] = useState(false);
@@ -717,12 +723,11 @@ export default function ReaderClient({
   const [currentProfile, setCurrentProfile] = useState<any | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authLoaded, setAuthLoaded] = useState(false);
-  const [dismissedRegBanner, setDismissedRegBanner] = useState(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("mangastoon:dismiss-reg-banner") === "true";
-    }
-    return false;
-  });
+  const [dismissedRegBanner, setDismissedRegBanner] = useState(false);
+
+  // Protect readingMode: only allow "horizontal" if the user is confirmed premium.
+  // While auth is still loading, default to "vertical" to prevent flash of horizontal mode.
+  const activeReadingMode = (authLoaded && isPremium) ? readingMode : "vertical";
 
   const handleDismissRegBanner = () => {
     setDismissedRegBanner(true);
@@ -735,13 +740,22 @@ export default function ReaderClient({
     async function loadPremiumAndTheme() {
       try {
         const storedTheme = localStorage.getItem(READER_THEME_KEY) as ReaderTheme;
-        if (storedTheme) {
-          setReaderTheme(storedTheme);
+        
+        // Default to "dark" (free/classic) theme initially to prevent flash of premium theme
+        setReaderTheme("dark");
+
+        const dismissed = sessionStorage.getItem("mangastoon:dismiss-reg-banner") === "true";
+        if (dismissed) {
+          setDismissedRegBanner(true);
         }
 
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
+          // Guests can only use "dark" theme
+          if (storedTheme && storedTheme !== "dark") {
+            localStorage.setItem(READER_THEME_KEY, "dark");
+          }
           setAuthLoaded(true);
           return;
         }
@@ -753,14 +767,28 @@ export default function ReaderClient({
           .eq("id", user.id)
           .maybeSingle();
 
+        let isUserPremium = false;
         if (data) {
           setCurrentProfile(data);
           if (data.is_premium) {
             setIsPremium(true);
+            isUserPremium = true;
+          }
+        }
+
+        if (isUserPremium && storedTheme) {
+          // Premium users get their stored theme applied
+          setReaderTheme(storedTheme);
+        } else {
+          // Non-premium users are forced to "dark" theme
+          setReaderTheme("dark");
+          if (storedTheme && storedTheme !== "dark") {
+            localStorage.setItem(READER_THEME_KEY, "dark");
           }
         }
       } catch (err) {
         console.warn("[ReaderClient] Error loading premium/theme:", err);
+        setReaderTheme("dark");
       } finally {
         setAuthLoaded(true);
       }
@@ -771,11 +799,21 @@ export default function ReaderClient({
   useEffect(() => {
     if (authLoaded && !isPremium && readingMode === "horizontal") {
       setReadingMode("vertical");
-      toast.info("El modo horizontal es exclusivo para usuarios Premium.", {
-        description: "Se ha restablecido la lectura al modo cascada."
+      const title = readerLanguage === "en"
+        ? "Horizontal reading mode is exclusive for Premium users."
+        : readerLanguage === "pt"
+        ? "O modo de leitura horizontal é exclusivo para usuários Premium."
+        : "El modo horizontal es exclusivo para usuarios Premium.";
+      const desc = readerLanguage === "en"
+        ? "Reading mode has been reset to vertical scroll view."
+        : readerLanguage === "pt"
+        ? "O modo de leitura foi redefinido para a visualização vertical em cascata."
+        : "Se ha restablecido la lectura al modo vertical (cascada).";
+      toast.info(title, {
+        description: desc
       });
     }
-  }, [authLoaded, isPremium, readingMode, setReadingMode]);
+  }, [authLoaded, isPremium, readingMode, setReadingMode, readerLanguage]);
 
   useEffect(() => {
     let lastScrollY = typeof window !== "undefined" ? window.scrollY : 0;
@@ -817,7 +855,7 @@ export default function ReaderClient({
 
   // Track and save vertical reading progress
   useEffect(() => {
-    if (readingMode !== "vertical" || pages.length === 0 || !currentChapter?.id) return;
+    if (activeReadingMode !== "vertical" || pages.length === 0 || !currentChapter?.id) return;
 
     let scrollTimeout: number;
 
@@ -851,11 +889,11 @@ export default function ReaderClient({
       window.removeEventListener("scroll", handleVerticalScroll);
       window.clearTimeout(scrollTimeout);
     };
-  }, [readingMode, pages, mangaId, currentChapter?.id]);
+  }, [activeReadingMode, pages, mangaId, currentChapter?.id]);
 
   // Restore vertical scroll progress when pages or chapter changes
   useEffect(() => {
-    if (readingMode !== "vertical" || pages.length === 0 || !currentChapter?.id || loading) return;
+    if (activeReadingMode !== "vertical" || pages.length === 0 || !currentChapter?.id || loading) return;
 
     const restoreVerticalScroll = () => {
       try {
@@ -875,7 +913,7 @@ export default function ReaderClient({
     };
 
     restoreVerticalScroll();
-  }, [readingMode, pages, mangaId, currentChapter?.id, loading]);
+  }, [activeReadingMode, pages, mangaId, currentChapter?.id, loading]);
 
   const showControlsUI = isAtTop || scrollDirection === "up";
 
@@ -1146,23 +1184,27 @@ export default function ReaderClient({
     }
   }, [addHistory, coverImage, currentChapter, dictionary, mangaId, mangaTitle, pages.length]);
 
-  const readableChapters = dedupeChaptersByNumber(chapters);
+  const readableChapters = dedupeChaptersByNumber(chapters).sort((a, b) => {
+    const aNum = parseChapterNumber(a);
+    const bNum = parseChapterNumber(b);
+    if (aNum !== null && bNum !== null) {
+      return aNum - bNum;
+    }
+    const aStr = normalizeChapterNumber(a) || "";
+    const bStr = normalizeChapterNumber(b) || "";
+    return aStr.localeCompare(bStr, undefined, { numeric: true, sensitivity: "base" });
+  });
   const currentChapterIndex = findChapterIndexByIdOrNumber(
     readableChapters,
     currentChapter?.id,
     currentChapter
   );
-  const currentChapterNumber = parseChapterNumber(currentChapter);
   const previousChapter =
-    findChapterByNumberDelta(readableChapters, currentChapter, -1) ??
-    (currentChapterNumber === null && currentChapterIndex >= 0 && currentChapterIndex < readableChapters.length - 1
-      ? readableChapters[currentChapterIndex + 1]
-      : null);
+    currentChapterIndex > 0 ? readableChapters[currentChapterIndex - 1] : null;
   const nextChapter =
-    findChapterByNumberDelta(readableChapters, currentChapter, 1) ??
-    (currentChapterNumber === null && currentChapterIndex > 0
-      ? readableChapters[currentChapterIndex - 1]
-      : null);
+    currentChapterIndex >= 0 && currentChapterIndex < readableChapters.length - 1
+      ? readableChapters[currentChapterIndex + 1]
+      : null;
 
   useEffect(() => {
     nextChapterRef.current = nextChapter;
@@ -1203,7 +1245,7 @@ export default function ReaderClient({
       return;
     }
 
-    if (requestedPdfChapterCount > maxPdfChapters) {
+    if (pdfMode === "range" && requestedPdfChapterCount > maxPdfChapters) {
       toast.error(dictionary.pdfLimitExceeded);
       return;
     }
@@ -1212,7 +1254,7 @@ export default function ReaderClient({
     setPdfProgress(0);
 
     try {
-      const chaptersToExport = selectedPdfChapters.length > 0 ? selectedPdfChapters : [currentChapter];
+      const chaptersToExport = pdfMode === "single" ? [currentChapter] : (selectedPdfChapters.length > 0 ? selectedPdfChapters : [currentChapter]);
       const allImages: string[] = [];
 
       for (const chapter of chaptersToExport) {
@@ -1329,7 +1371,7 @@ export default function ReaderClient({
         toggleFullscreen();
       }
 
-      if (e.key === " " && readingMode === "vertical") {
+      if (e.key === " " && activeReadingMode === "vertical") {
         e.preventDefault();
         window.scrollBy({
           top: window.innerHeight * 0.8,
@@ -1340,7 +1382,7 @@ export default function ReaderClient({
 
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [readingMode]);
+  }, [activeReadingMode]);
 
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1366,7 +1408,7 @@ export default function ReaderClient({
       <ReaderHeader
         isAtTop={isAtTop}
         scrollDirection={scrollDirection}
-        readingMode={readingMode}
+        readingMode={activeReadingMode}
         loading={loading}
         error={error}
         readerTheme={readerTheme}
@@ -1393,7 +1435,7 @@ export default function ReaderClient({
         toggleFullscreen={toggleFullscreen}
         cycleTheme={cycleTheme}
         selectTheme={selectTheme}
-        readingMode={readingMode}
+        readingMode={activeReadingMode}
         setReadingMode={setReadingMode}
         setAutoScroll={setAutoScroll}
         autoScroll={autoScroll}
@@ -1508,12 +1550,7 @@ export default function ReaderClient({
 
             <div className="mb-2 px-3 text-center">
               <h1 className="mb-1 text-xl font-bold leading-tight tracking-tight text-amber-500 md:text-2xl select-text">
-                <span className="align-middle mr-2">{mangaTitle}</span>
-                {isPremium && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-600 px-2.5 py-1 text-[10px] font-heading font-bold uppercase tracking-wider text-black border border-yellow-300/40 shadow-[0_0_15px_rgba(245,158,11,0.25)] align-middle select-none">
-                    <Crown size={10} className="fill-black mr-0.5" /> Premium
-                  </span>
-                )}
+                <span className="align-middle">{mangaTitle}</span>
               </h1>
               <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-gray-400 mt-1">
                 {getChapterLabel(currentChapter, dictionary)}
@@ -1522,7 +1559,7 @@ export default function ReaderClient({
           </section>
 
           <section className="pb-0 pt-0">
-            {readingMode === "horizontal" ? (
+            {activeReadingMode === "horizontal" ? (
               <HorizontalReader
                 pages={pages}
                 dictionary={dictionary}
@@ -1641,122 +1678,288 @@ export default function ReaderClient({
 
           {showPdfModal ? (
             <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
-              <div className="w-full max-w-md rounded-2xl border border-white/5 bg-[#141519] p-6 shadow-2xl">
-                <p className="text-xs font-heading font-bold uppercase tracking-[0.2em] text-amber-500">
-                  {dictionary.pdfModalTitle}
-                </p>
-                <h2 className="mt-2 line-clamp-2 text-xl font-semibold text-white">{mangaTitle}</h2>
-                <p className="mt-2 text-sm leading-6 text-gray-400">{dictionary.pdfModalBody}</p>
+              <div className="relative w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-zinc-950/90 p-6 shadow-2xl backdrop-blur-xl">
+                {/* Background glow effects */}
+                <div className="absolute -right-16 -top-16 -z-10 h-36 w-36 rounded-full bg-amber-500/10 blur-3xl" />
+                <div className="absolute -left-16 -bottom-16 -z-10 h-36 w-36 rounded-full bg-yellow-500/10 blur-3xl" />
 
-                <div className="mt-5 rounded-xl border border-white/5 bg-black/35 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                    {dictionary.currentDownload}
-                  </p>
-                  <p className="mt-2 text-base font-semibold text-white">
-                    {getChapterLabel(currentChapter, dictionary)}
-                  </p>
+                <button
+                  type="button"
+                  onClick={() => !downloading && setShowPdfModal(false)}
+                  className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white transition-all disabled:opacity-40"
+                  disabled={downloading}
+                >
+                  ✕
+                </button>
 
-                  <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-2">
-                    <label className="block">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                        {dictionary.startChapter}
-                      </span>
-                      <select
-                        value={pdfStartChapterId || currentChapter?.id || ""}
-                        onChange={(event) => setPdfStartChapterId(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-white/5 bg-[#0f1015] px-4 py-3 text-sm text-white outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/35 transition-all shadow-inner"
+                {downloading ? (
+                  /* Premium Loading State */
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="relative flex items-center justify-center">
+                      {/* SVG circular progress */}
+                      <svg className="h-32 w-32 transform -rotate-90">
+                        <circle
+                          cx="64"
+                          cy="64"
+                          r="54"
+                          className="stroke-white/5 fill-none"
+                          strokeWidth="8"
+                        />
+                        <circle
+                          cx="64"
+                          cy="64"
+                          r="54"
+                          className="stroke-amber-500 fill-none transition-all duration-300 ease-out"
+                          strokeWidth="8"
+                          strokeDasharray={2 * Math.PI * 54}
+                          strokeDashoffset={2 * Math.PI * 54 * (1 - pdfProgress / 100)}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      {/* Inner percentage */}
+                      <div className="absolute flex flex-col items-center">
+                        <span className="text-2xl font-bold font-heading text-white">{pdfProgress}%</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500 animate-pulse">
+                          {dictionary.generatingPdf}
+                        </span>
+                      </div>
+                    </div>
+
+                    <h3 className="mt-8 text-lg font-bold text-white font-heading">
+                      {pdfProgress <= 25
+                        ? (readerLanguage === "es" ? "Descargando páginas..." : readerLanguage === "pt" ? "Baixando imagens..." : "Downloading images...")
+                        : pdfProgress <= 65
+                        ? (readerLanguage === "es" ? "Procesando y optimizando..." : readerLanguage === "pt" ? "Processando e otimizando..." : "Processing and optimizing...")
+                        : pdfProgress <= 90
+                        ? (readerLanguage === "es" ? "Compilando PDF en HD..." : readerLanguage === "pt" ? "Compilando PDF em HD..." : "Compiling PDF in HD...")
+                        : (readerLanguage === "es" ? "¡Listo! Guardando archivo..." : readerLanguage === "pt" ? "Pronto! Salvando arquivo..." : "Ready! Saving file...")}
+                    </h3>
+                    <p className="mt-2 text-xs text-gray-400 max-w-xs">
+                      {readerLanguage === "es" 
+                        ? "Por favor no cierres esta pestaña. Estamos compilando tu contenido de alta definición."
+                        : readerLanguage === "pt"
+                        ? "Por favor, não feche esta aba. Estamos compilando seu conteúdo de alta definição."
+                        : "Please do not close this tab. We are compiling your high-definition content."}
+                    </p>
+                  </div>
+                ) : (
+                  /* Standard Setup Mode */
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${isPremium ? "bg-amber-500/10 text-amber-500" : "bg-[#ff6b00]/10 text-[#ff6b00]"}`}>
+                          <FileText size={18} />
+                        </div>
+                        <span className={`text-xs font-heading font-bold uppercase tracking-[0.2em] ${isPremium ? "text-amber-500" : "text-[#ff6b00]"}`}>
+                          {dictionary.pdfModalTitle}
+                        </span>
+                      </div>
+                      {isPremium && (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500" title="Premium">
+                          <Crown size={14} className="fill-amber-500 text-amber-500 shrink-0 animate-pulse" />
+                        </div>
+                      )}
+                    </div>
+                    <h2 className="mt-3 text-xl font-bold text-white font-heading tracking-tight line-clamp-1">{mangaTitle}</h2>
+                    
+                    {/* Toggle Selector Tabs */}
+                    <div className="mt-5 rounded-2xl border border-white/5 bg-black/40 p-1 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setPdfMode("single")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-heading font-bold transition-all cursor-pointer ${
+                          pdfMode === "single"
+                            ? isPremium
+                              ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black shadow-lg shadow-amber-500/10"
+                              : "bg-[#ff6b00] text-white shadow-lg shadow-orange-500/20"
+                            : "text-gray-400 hover:text-white"
+                        }`}
                       >
-                        {readableChapters.map((chapter) => (
-                          <option key={chapter.id} value={chapter.id}>
-                            {getChapterLabel(chapter, dictionary)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="block">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                        {dictionary.endChapter}
-                      </span>
-                      <select
-                        value={
-                          pdfEndOptions.some(
-                            (chapter) =>
-                              chapter.id ===
-                              (pdfEndChapterId || pdfStartChapterId || currentChapter?.id)
-                          )
-                            ? pdfEndChapterId || pdfStartChapterId || currentChapter?.id || ""
-                            : pdfEndOptions[pdfEndOptions.length - 1]?.id ?? ""
-                        }
-                        onChange={(event) => setPdfEndChapterId(event.target.value)}
-                        className="mt-2 w-full rounded-xl border border-white/5 bg-[#0f1015] px-4 py-3 text-sm text-white outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/35 transition-all shadow-inner"
+                        <BookOpen size={14} />
+                        <span>{readerLanguage === "es" ? "Capítulo Actual" : readerLanguage === "pt" ? "Capítulo Atual" : "Current Chapter"}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPdfMode("range")}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-heading font-bold transition-all cursor-pointer ${
+                          pdfMode === "range"
+                            ? isPremium
+                              ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black shadow-lg shadow-amber-500/10"
+                              : "bg-[#ff6b00] text-white shadow-lg shadow-orange-500/20"
+                            : "text-gray-400 hover:text-white"
+                        }`}
                       >
-                        {pdfEndOptions.map((chapter) => (
-                          <option key={chapter.id} value={chapter.id}>
-                            {getChapterLabel(chapter, dictionary)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
+                        <FileText size={14} />
+                        <span>{readerLanguage === "es" ? "Varios Capítulos" : readerLanguage === "pt" ? "Vários Capítulos" : "Multiple Chapters"}</span>
+                      </button>
+                    </div>
 
-                  <div className="mt-4 border-t border-white/10 pt-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">
-                      {dictionary.downloadRange}
-                    </p>
-                    <p className="mt-2 text-sm font-medium text-amber-500">{pdfRangeLabel}</p>
-                    <p className="mt-2 text-xs text-gray-500">
-                      {isPremium 
-                        ? dictionary.maxChaptersNotice 
-                        : readerLanguage === "es" 
-                          ? "Límite de 10 capítulos para usuarios gratuitos. ¡Subí a Premium para descargar hasta 50!" 
-                          : readerLanguage === "pt" 
-                            ? "Limite de 10 capítulos para usuários gratuitos. Faça upgrade para Premium para baixar até 50!" 
-                            : "Free limit is 10 chapters per PDF. Upgrade to Premium to download up to 50!"}
-                    </p>
-                  </div>
-                </div>
+                    {pdfMode === "single" ? (
+                      /* Single Chapter Preview UI */
+                      <div className="mt-5 rounded-2xl border border-white/5 bg-black/25 p-5 flex flex-col gap-4 relative overflow-hidden">
+                        <div className="absolute right-0 top-0 translate-x-4 -translate-y-4 opacity-[0.02]">
+                          <BookOpen size={120} className="text-white" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+                            {readerLanguage === "es" ? "VISTA PREVIA DE DESCARGA" : readerLanguage === "pt" ? "PRÉVIA DE DOWNLOAD" : "DOWNLOAD PREVIEW"}
+                          </p>
+                          <h3 className="mt-2 text-base font-bold text-white tracking-tight leading-snug">
+                            {getChapterLabel(currentChapter, dictionary)}
+                          </h3>
+                        </div>
 
-                {!isPremium && (
-                  <div className="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3.5 text-center">
-                    <p className="text-xs text-amber-500 font-heading font-semibold flex items-center justify-center gap-1">
-                      <Sparkles size={14} className="animate-pulse" />
-                      {readerLanguage === "es" ? "Límite gratuito de 10 capítulos" : readerLanguage === "pt" ? "Limite gratuito de 10 capítulos" : "Free limit of 10 chapters"}
-                    </p>
-                    <p className="mt-1 text-[11px] text-gray-400">
-                      {readerLanguage === "es" ? "¿Quieres descargar hasta 50 capítulos a la vez?" : readerLanguage === "pt" ? "Quer baixar até 50 capítulos de uma vez?" : "Want to download up to 50 chapters at once?"}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPdfModal(false);
-                        setShowPremiumModal(true);
-                      }}
-                      className="mt-2.5 w-full rounded-xl bg-amber-500/20 border border-amber-500/30 py-1.5 text-xs font-heading font-semibold text-amber-500 hover:bg-amber-500 hover:text-black transition-all"
-                    >
-                      {readerLanguage === "es" ? "Desbloquear 50 capítulos" : readerLanguage === "pt" ? "Desbloquear 50 capítulos" : "Unlock 50 chapters"}
-                    </button>
-                  </div>
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1 rounded-lg bg-zinc-900 border border-white/5 px-2.5 py-1 text-xs text-gray-300">
+                            <span className={`font-semibold ${isPremium ? "text-amber-500" : "text-[#ff6b00]"}`}>{pages.length}</span>
+                            <span className="text-gray-500 font-medium">
+                              {pages.length === 1
+                                ? (readerLanguage === "es" ? "página" : readerLanguage === "pt" ? "página" : "page")
+                                : (readerLanguage === "es" ? "páginas" : readerLanguage === "pt" ? "páginas" : "pages")}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 rounded-lg bg-zinc-900 border border-white/5 px-2.5 py-1 text-xs text-gray-300">
+                            <span className="text-gray-500 font-medium">{readerLanguage === "es" ? "Formato:" : readerLanguage === "pt" ? "Formato:" : "Format:"}</span>
+                            <span className="font-semibold text-white">PDF</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Range Chapters Selection UI */
+                      <div className="mt-5 rounded-2xl border border-white/5 bg-black/25 p-5 flex flex-col gap-4">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <label className="block">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+                              {dictionary.startChapter}
+                            </span>
+                            <select
+                              value={pdfStartChapterId || currentChapter?.id || ""}
+                              onChange={(event) => setPdfStartChapterId(event.target.value)}
+                              className="mt-2 w-full rounded-xl border border-white/5 bg-[#0f1015] px-4 py-3 text-sm font-semibold text-white outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/35 transition-all shadow-inner cursor-pointer"
+                            >
+                              {readableChapters.map((chapter) => (
+                                <option key={chapter.id} value={chapter.id}>
+                                  {getChapterLabel(chapter, dictionary)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label className="block">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+                              {dictionary.endChapter}
+                            </span>
+                            <select
+                              value={
+                                pdfEndOptions.some(
+                                  (chapter) =>
+                                    chapter.id ===
+                                    (pdfEndChapterId || pdfStartChapterId || currentChapter?.id)
+                                )
+                                  ? pdfEndChapterId || pdfStartChapterId || currentChapter?.id || ""
+                                  : pdfEndOptions[pdfEndOptions.length - 1]?.id ?? ""
+                              }
+                              onChange={(event) => setPdfEndChapterId(event.target.value)}
+                              className="mt-2 w-full rounded-xl border border-white/5 bg-[#0f1015] px-4 py-3 text-sm font-semibold text-white outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/35 transition-all shadow-inner cursor-pointer"
+                            >
+                              {pdfEndOptions.map((chapter) => (
+                                <option key={chapter.id} value={chapter.id}>
+                                  {getChapterLabel(chapter, dictionary)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+
+                        <div className="border-t border-white/10 pt-4 flex flex-col gap-3">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500">
+                              {dictionary.downloadRange}
+                            </span>
+                            <p className={`mt-1 text-sm font-semibold ${isPremium ? "text-amber-500" : "text-[#ff6b00]"}`}>{pdfRangeLabel}</p>
+                          </div>
+                          
+                          {/* Clear Limits Indicator Box */}
+                          <div className={`rounded-xl border p-3.5 text-xs flex flex-col gap-1.5 transition-all ${
+                            isPremium
+                              ? "border-amber-500/20 bg-amber-500/5 text-amber-500"
+                              : "border-[#ff6b00]/20 bg-[#ff6b00]/5 text-[#ff6b00]"
+                          }`}>
+                            <div className="flex items-center justify-between font-bold text-sm">
+                              <span className="flex items-center gap-1">
+                                {isPremium ? <Crown size={13} className="fill-amber-500 text-amber-500 shrink-0" /> : <FileText size={13} className="shrink-0" />}
+                                {readerLanguage === "es" ? "Límite de capítulos:" : readerLanguage === "pt" ? "Limite de capítulos:" : "Chapter limit:"}
+                              </span>
+                              <span>{isPremium ? "50 Capítulos (Premium)" : "10 Capítulos (Gratuito)"}</span>
+                            </div>
+                            <p className="text-[11px] text-gray-400 leading-normal">
+                              {isPremium
+                                ? (readerLanguage === "es" ? "Tenés el beneficio Premium activo: podés compilar hasta 50 capítulos en un solo archivo PDF." : readerLanguage === "pt" ? "Você tem o benefício Premium ativo: pode compilar até 50 capítulos em um único PDF." : "You have active Premium benefits: compile up to 50 chapters in a single PDF file.")
+                                : (readerLanguage === "es" ? "Como usuario gratuito, el límite es de 10 capítulos. Subí a Premium para ampliar el límite y descargar hasta 50." : readerLanguage === "pt" ? "Como usuário gratuito, o limite é de 10 capítulos. Faça upgrade para Premium para aumentar o limite para 50." : "As a free user, the limit is 10 chapters. Upgrade to Premium to extend the limit and download up to 50.")
+                              }
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 rounded-lg bg-zinc-900/50 px-3 py-2 text-[11px] text-gray-400">
+                            <span>
+                              {readerLanguage === "es" ? "Capítulos seleccionados:" : readerLanguage === "pt" ? "Capítulos selecionados:" : "Selected chapters:"}
+                            </span>
+                            <span className={`font-bold ${requestedPdfChapterCount > maxPdfChapters ? "text-red-500" : "text-white"}`}>
+                              {requestedPdfChapterCount} / {maxPdfChapters}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {!isPremium && (
+                      <div className="mt-4 rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/5 to-yellow-500/5 p-4 text-center">
+                        <div className="flex items-center justify-center gap-1.5 text-xs text-amber-500 font-heading font-bold">
+                          <Sparkles size={14} className="animate-pulse text-amber-400" />
+                          <span>
+                            {readerLanguage === "es" ? "Límite de 10 capítulos por descarga" : readerLanguage === "pt" ? "Limite de 10 capítulos por download" : "Limit of 10 chapters per download"}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-gray-400 leading-normal">
+                          {readerLanguage === "es" ? "¿Querés descargas masivas e ilimitadas de hasta 50 capítulos?" : readerLanguage === "pt" ? "Quer downloads massivos e ilimitados de até 50 capítulos?" : "Want massive and unlimited downloads of up to 50 chapters?"}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowPdfModal(false);
+                            setShowPremiumModal(true);
+                          }}
+                          className="mt-3 w-full rounded-xl bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border border-amber-500/20 py-2 text-xs font-heading font-bold text-amber-400 hover:from-amber-500 hover:to-yellow-500 hover:text-black transition-all cursor-pointer"
+                        >
+                          {readerLanguage === "es" ? "Desbloquear 50 capítulos" : readerLanguage === "pt" ? "Desbloquear 50 capítulos" : "Unlock 50 chapters"}
+                        </button>
+                      </div>
+                    )}
+
+                    <div className="mt-6 flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowPdfModal(false)}
+                        className="flex-1 rounded-xl border border-white/5 bg-white/5 py-3 text-sm font-heading font-bold text-gray-300 transition-all hover:bg-white/10 active:scale-95 cursor-pointer"
+                      >
+                        {dictionary.cancel}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDownloadPdf}
+                        disabled={downloading || (pdfMode === "range" && requestedPdfChapterCount > maxPdfChapters)}
+                        className={`inline-flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-heading font-bold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer ${
+                          isPremium
+                            ? "bg-gradient-to-r from-amber-500 to-yellow-500 text-black shadow-lg shadow-amber-500/10 hover:from-amber-400 hover:to-yellow-400"
+                            : "bg-[#ff6b00] text-white hover:bg-[#ff8833] shadow-lg shadow-orange-500/20"
+                        }`}
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span>{dictionary.download}</span>
+                      </button>
+                    </div>
+                  </>
                 )}
-
-                <div className="mt-6 flex gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setShowPdfModal(false)}
-                    className="flex-1 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-gray-300 transition hover:bg-white/10"
-                  >
-                    {dictionary.cancel}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDownloadPdf}
-                    disabled={downloading}
-                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-5 py-3 text-sm font-heading font-bold text-black shadow-lg shadow-amber-500/10 transition hover:from-amber-400 hover:to-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    <FileText aria-hidden="true" className="h-4 w-4" />
-                    <span>{downloading ? `${dictionary.generatingPdf} ${pdfProgress}%` : dictionary.download}</span>
-                  </button>
-                </div>
               </div>
             </div>
           ) : null}

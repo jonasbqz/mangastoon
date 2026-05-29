@@ -12,7 +12,7 @@ import {
 import { translateTagName } from "./tagTranslations";
 import { buildComicPath, slugify } from "./slugify";
 import { MONLINE_API_URL as MONLINE_CONFIG_API_URL } from "./monline-config";
-import { getCached, setCached } from "./server-cache";
+import { getCached, setCached, getOrSetCached } from "./server-cache";
 
 export type MangaDexLocalizedText = Record<string, string>;
 
@@ -953,55 +953,58 @@ async function fetchMangaDex(url: string, retries = 1): Promise<Response> {
 }
 
 async function fetchLocalComicBySlug(slug: string) {
-  try {
-    const cleanTitle = slug.replace(/-/g, " ");
-    const searchParams = new URLSearchParams();
-    searchParams.set("title", cleanTitle);
-    searchParams.set("limit", "15");
+  const cacheKey = `local-comic-slug:${slug}`;
+  return getOrSetCached(cacheKey, 300, async () => {
+    try {
+      const cleanTitle = slug.replace(/-/g, " ");
+      const searchParams = new URLSearchParams();
+      searchParams.set("title", cleanTitle);
+      searchParams.set("limit", "15");
 
-    let listResponse = await fetch(
-      `${LOCAL_API_URL}/api/comics?${searchParams.toString()}`,
-      { cache: "no-store" }
-    );
-    let comics: any[] = [];
-
-    if (listResponse.ok) {
-      comics = extractLocalApiComics(await listResponse.json());
-    }
-
-    let summary = comics.find((comic) => {
-      const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
-      return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
-    });
-
-    if (!summary) {
-      const fallbackResponse = await fetch(
-        `${LOCAL_API_URL}/api/comics?limit=300`,
+      let listResponse = await fetch(
+        `${LOCAL_API_URL}/api/comics?${searchParams.toString()}`,
         { cache: "no-store" }
       );
-      if (fallbackResponse.ok) {
-        const allComics = extractLocalApiComics(await fallbackResponse.json());
-        summary = allComics.find((comic) => {
-          const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
-          return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
-        });
+      let comics: any[] = [];
+
+      if (listResponse.ok) {
+        comics = extractLocalApiComics(await listResponse.json());
       }
+
+      let summary = comics.find((comic) => {
+        const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
+        return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+      });
+
+      if (!summary) {
+        const fallbackResponse = await fetch(
+          `${LOCAL_API_URL}/api/comics?limit=300`,
+          { cache: "no-store" }
+        );
+        if (fallbackResponse.ok) {
+          const allComics = extractLocalApiComics(await fallbackResponse.json());
+          summary = allComics.find((comic) => {
+            const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
+            return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+          });
+        }
+      }
+
+      const numericId = getLocalStringValue(summary ?? {}, ["id"]);
+
+      if (!summary || !numericId) return null;
+
+      const detailResponse = await fetch(
+        `${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`,
+        { cache: "no-store" }
+      );
+      if (!detailResponse.ok) return summary;
+
+      return extractLocalApiComics(await detailResponse.json())[0] ?? summary;
+    } catch {
+      return null;
     }
-
-    const numericId = getLocalStringValue(summary ?? {}, ["id"]);
-
-    if (!summary || !numericId) return null;
-
-    const detailResponse = await fetch(
-      `${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`,
-      { cache: "no-store" }
-    );
-    if (!detailResponse.ok) return summary;
-
-    return extractLocalApiComics(await detailResponse.json())[0] ?? summary;
-  } catch {
-    return null;
-  }
+  });
 }
 
 function getLocalTextMap(source: LocalApiComic, baseKeys: string[], prefix: string) {
@@ -1134,59 +1137,62 @@ function mapMangaVfToMangaDetails(id: string, details: MangaVfDetails): MangaDet
 }
 
 export async function fetchMangaDetails(id: string, language?: string): Promise<MangaDetails | null> {
-  const localComic = await fetchLocalComicBySlug(id);
-  const localManga = localComic ? mapLocalComicToMangaDetails(localComic) : null;
+  const cacheKey = `manga-details:${id}:${language || "all"}`;
+  return getOrSetCached(cacheKey, 7200, async () => {
+    const localComic = await fetchLocalComicBySlug(id);
+    const localManga = localComic ? mapLocalComicToMangaDetails(localComic) : null;
 
-  if (localManga) {
-    return localManga;
-  }
-
-  // If the language is NOT Spanish, we bypass LeerCapitulo entirely
-  if (language && language !== "es") {
-    if (!isMangaDexUuid(id)) return null;
-    try {
-      const response = await fetchMangaDex(
-        `https://api.mangadex.org/manga/${id}?includes[]=cover_art&includes[]=author`
-      );
-      if (!response.ok) return null;
-      const payload = (await response.json()) as MangaDetailsResponse;
-      return payload.data ?? null;
-    } catch {
-      return null;
+    if (localManga) {
+      return localManga;
     }
-  }
 
-  const resolution = await resolveBestSource(id);
-  if (resolution.source === "leercapitulo" && resolution.leercapituloSlug && resolution.leercapituloDetails) {
-    return mapMangaVfToMangaDetails(id, resolution.leercapituloDetails);
-  }
-
-  if (resolution.mangadexId) {
-    try {
-      const response = await fetchMangaDex(
-        `https://api.mangadex.org/manga/${resolution.mangadexId}?includes[]=cover_art&includes[]=author`
-      );
-
-      if (!response.ok) {
+    // If the language is NOT Spanish, we bypass LeerCapitulo entirely
+    if (language && language !== "es") {
+      if (!isMangaDexUuid(id)) return null;
+      try {
+        const response = await fetchMangaDex(
+          `https://api.mangadex.org/manga/${id}?includes[]=cover_art&includes[]=author`
+        );
+        if (!response.ok) return null;
+        const payload = (await response.json()) as MangaDetailsResponse;
+        return payload.data ?? null;
+      } catch {
         return null;
       }
-
-      const payload = (await response.json()) as MangaDetailsResponse;
-      if (!payload.data) {
-        logger.warn(`[MangaStoon] MangaDex devolvio detalles vacios para manga ${resolution.mangadexId}`);
-      }
-
-      const mangaDetails = payload.data ?? null;
-      if (mangaDetails) {
-        mangaDetails.id = id;
-      }
-      return mangaDetails;
-    } catch {
-      return null;
     }
-  }
 
-  return null;
+    const resolution = await resolveBestSource(id);
+    if (resolution.source === "leercapitulo" && resolution.leercapituloSlug && resolution.leercapituloDetails) {
+      return mapMangaVfToMangaDetails(id, resolution.leercapituloDetails);
+    }
+
+    if (resolution.mangadexId) {
+      try {
+        const response = await fetchMangaDex(
+          `https://api.mangadex.org/manga/${resolution.mangadexId}?includes[]=cover_art&includes[]=author`
+        );
+
+        if (!response.ok) {
+          return null;
+        }
+
+        const payload = (await response.json()) as MangaDetailsResponse;
+        if (!payload.data) {
+          logger.warn(`[MangaStoon] MangaDex devolvio detalles vacios para manga ${resolution.mangadexId}`);
+        }
+
+        const mangaDetails = payload.data ?? null;
+        if (mangaDetails) {
+          mangaDetails.id = id;
+        }
+        return mangaDetails;
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  });
 }
 
 async function searchMangaDexByTitle(title: string): Promise<string | null> {
@@ -1428,53 +1434,56 @@ export async function fetchLeerCapituloChaptersOnly(slug: string): Promise<Chapt
 }
 
 export async function fetchMangaChapters(id: string, language: string): Promise<ChapterFeedItem[]> {
-  const resolution = await resolveBestSource(id);
+  const cacheKey = `manga-chapters:${id}:${language}`;
+  return getOrSetCached(cacheKey, 900, async () => {
+    const resolution = await resolveBestSource(id);
 
-  // If the language is NOT Spanish, we ONLY fetch from MangaDex (no merging)
-  if (language !== "es") {
-    const mangaId = resolution.mangadexId || id;
-    if (!isMangaDexUuid(mangaId)) return [];
-    return fetchMangaDexChaptersOnly(mangaId, language);
-  }
+    // If the language is NOT Spanish, we ONLY fetch from MangaDex (no merging)
+    if (language !== "es") {
+      const mangaId = resolution.mangadexId || id;
+      if (!isMangaDexUuid(mangaId)) return [];
+      return fetchMangaDexChaptersOnly(mangaId, language);
+    }
 
-  // If Spanish, fetch both in parallel and merge them
-  const [mdChapters, lcChapters] = await Promise.all([
-    resolution.mangadexId ? fetchMangaDexChaptersOnly(resolution.mangadexId, language) : Promise.resolve([]),
-    resolution.leercapituloSlug ? fetchLeerCapituloChaptersOnly(resolution.leercapituloSlug) : Promise.resolve([])
-  ]);
+    // If Spanish, fetch both in parallel and merge them
+    const [mdChapters, lcChapters] = await Promise.all([
+      resolution.mangadexId ? fetchMangaDexChaptersOnly(resolution.mangadexId, language) : Promise.resolve([]),
+      resolution.leercapituloSlug ? fetchLeerCapituloChaptersOnly(resolution.leercapituloSlug) : Promise.resolve([])
+    ]);
 
-  let mainChapters: ChapterFeedItem[];
-  let secondaryChapters: ChapterFeedItem[];
+    let mainChapters: ChapterFeedItem[];
+    let secondaryChapters: ChapterFeedItem[];
 
-  if (lcChapters.length > mdChapters.length) {
-    mainChapters = lcChapters;
-    secondaryChapters = mdChapters;
-  } else {
-    mainChapters = mdChapters;
-    secondaryChapters = lcChapters;
-  }
+    if (lcChapters.length > mdChapters.length) {
+      mainChapters = lcChapters;
+      secondaryChapters = mdChapters;
+    } else {
+      mainChapters = mdChapters;
+      secondaryChapters = lcChapters;
+    }
 
-  const mainNumbers = new Set(
-    mainChapters
-      .map((ch) => ch.attributes?.chapter?.trim())
-      .filter(Boolean)
-  );
+    const mainNumbers = new Set(
+      mainChapters
+        .map((ch) => ch.attributes?.chapter?.trim())
+        .filter(Boolean)
+    );
 
-  const missingChapters = secondaryChapters.filter((ch) => {
-    const num = ch.attributes?.chapter?.trim();
-    return num && !mainNumbers.has(num);
+    const missingChapters = secondaryChapters.filter((ch) => {
+      const num = ch.attributes?.chapter?.trim();
+      return num && !mainNumbers.has(num);
+    });
+
+    const mergedChapters = [...mainChapters, ...missingChapters];
+
+    // Sort descending by chapter number
+    mergedChapters.sort((a, b) => {
+      const aNum = parseFloat(a.attributes?.chapter || "0");
+      const bNum = parseFloat(b.attributes?.chapter || "0");
+      return bNum - aNum;
+    });
+
+    return mergedChapters;
   });
-
-  const mergedChapters = [...mainChapters, ...missingChapters];
-
-  // Sort descending by chapter number
-  mergedChapters.sort((a, b) => {
-    const aNum = parseFloat(a.attributes?.chapter || "0");
-    const bNum = parseFloat(b.attributes?.chapter || "0");
-    return bNum - aNum;
-  });
-
-  return mergedChapters;
 }
 
 export async function fetchMangaVfPages(details: MangaVfDetails, chapterId: string) {

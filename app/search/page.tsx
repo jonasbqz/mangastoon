@@ -14,6 +14,10 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "/search",
   },
+  robots: {
+    index: false,
+    follow: true,
+  },
   openGraph: {
     title: "Buscar manga online | MangaStoon",
     description:

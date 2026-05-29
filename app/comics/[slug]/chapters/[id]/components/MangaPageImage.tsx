@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ImageOff, RefreshCw } from "lucide-react";
+import { ImageOff, RefreshCw, ZoomIn, ZoomOut } from "lucide-react";
 
 const MAX_IMAGE_RETRIES = 3;
 
@@ -43,6 +43,7 @@ export default function MangaPageImage({
   const [failed, setFailed] = useState(false);
   const [currentSrc, setCurrentSrc] = useState(pageUrl);
   const [retryCount, setRetryCount] = useState(0);
+  const [zoomLevel, setZoomLevel] = useState<1 | 1.5 | 2>(1);
 
   useEffect(() => {
     setLoaded(false);
@@ -50,6 +51,7 @@ export default function MangaPageImage({
     setShouldLoad(priority);
     setCurrentSrc(pageUrl);
     setRetryCount(0);
+    setZoomLevel(1);
   }, [pageUrl, priority]);
 
   useEffect(() => {
@@ -90,10 +92,29 @@ export default function MangaPageImage({
     return () => observer.disconnect();
   }, [shouldLoad]);
 
+  const cycleZoom = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setZoomLevel((prev) => {
+      if (prev === 1) return 1.5;
+      if (prev === 1.5) return 2;
+      return 1;
+    });
+  };
+
+  const handleDoubleClick = () => {
+    setZoomLevel((prev) => {
+      if (prev === 1) return 1.5;
+      if (prev === 1.5) return 2;
+      return 1;
+    });
+  };
+
   return (
     <div
       ref={containerRef}
-      className="relative w-full overflow-hidden bg-[#0a0a0c] min-h-[50vh] sm:min-h-[70vh]"
+      className={`relative w-full bg-[#0a0a0c] min-h-[50vh] sm:min-h-[70vh] flex justify-center ${
+        zoomLevel > 1 ? "overflow-x-auto custom-scrollbar scrollbar-hide" : "overflow-hidden"
+      }`}
       style={{ contentVisibility: "auto", containIntrinsicSize: "auto 1000px" }}
       data-page-index={pageIndex}
     >
@@ -134,7 +155,7 @@ export default function MangaPageImage({
                 setCurrentSrc(withImageRetryParam(pageUrl, 0));
               }
             }}
-            className="mt-2 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-4 py-2 text-xs font-bold text-black shadow-md hover:from-amber-400 hover:to-yellow-400 transition-all hover:scale-[1.02] active:scale-95"
+            className="mt-2 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-4 py-2 text-xs font-bold text-black shadow-md hover:from-amber-400 hover:to-yellow-400 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             <span>Reintentar y siguientes</span>
@@ -144,7 +165,11 @@ export default function MangaPageImage({
         <img
           src={currentSrc}
           alt={alt}
-          className={`block h-auto w-full transition-opacity duration-500 ${loaded || priority ? "opacity-100" : "opacity-0"}`}
+          onDoubleClick={handleDoubleClick}
+          style={{ width: zoomLevel === 1 ? "100%" : `${zoomLevel * 100}%` }}
+          className={`block h-auto transition-all duration-300 ease-out select-none ${
+            zoomLevel === 1 ? "w-full cursor-zoom-in" : "max-w-none cursor-zoom-out"
+          } ${loaded || priority ? "opacity-100" : "opacity-0"}`}
           loading={priority ? "eager" : "lazy"}
           decoding="async"
           fetchPriority={priority ? "high" : "low"}
@@ -170,6 +195,17 @@ export default function MangaPageImage({
           }}
         />
       ) : null}
+
+      {loaded && !failed && (
+        <button
+          type="button"
+          onClick={cycleZoom}
+          className="absolute bottom-4 right-4 z-20 flex items-center gap-1.5 rounded-full bg-black/70 px-3 py-1.5 text-[11px] font-heading font-bold text-white border border-white/10 shadow-lg backdrop-blur-md transition-all hover:bg-black/90 active:scale-95 cursor-pointer select-none"
+        >
+          {zoomLevel === 1 ? <ZoomIn size={12} className="text-[#ff6b00]" /> : <ZoomOut size={12} className="text-amber-500" />}
+          <span>{zoomLevel}x</span>
+        </button>
+      )}
     </div>
   );
 }

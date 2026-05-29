@@ -87,10 +87,13 @@ export default async function ReadPage({
   searchParams: Promise<{ chapter?: string; lang?: string }>;
 }) {
   const [{ slug, id }, resolvedSearchParams] = await Promise.all([params, searchParams]);
-  const lang = normalizeLanguage(resolvedSearchParams.lang);
-  const mangaId = extractComicIdFromSlugId(slug);
-
   const cookieStore = await cookies();
+  const cookieLang = cookieStore.get("lang")?.value;
+  const lang = normalizeLanguage(resolvedSearchParams.lang || cookieLang);
+  const mangaId = extractComicIdFromSlugId(slug);
+  
+  console.log("[Reader Server] lang resolved:", lang, "| cookieLang:", cookieLang, "| searchParamLang:", resolvedSearchParams.lang, "| slug:", slug);
+
   const isAdult = cookieStore.get("mangastoon_adult")?.value === "true";
 
   if (!isAdult) {

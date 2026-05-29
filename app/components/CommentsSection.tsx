@@ -443,7 +443,7 @@ export default function CommentsSection({
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`text-sm font-bold tracking-wide truncate max-w-[150px] ${
-                          isPremium ? "text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.2)]" : "text-white"
+                          isPremium ? "premium-username-shimmer" : "text-white"
                         }`}>
                           {comment.userName}
                         </span>
@@ -703,7 +703,7 @@ export default function CommentsSection({
                                             <div className="flex items-center justify-between gap-2">
                                               <div className="flex flex-wrap items-center gap-1.5">
                                                 <span className={`text-xs font-bold tracking-wide truncate max-w-[120px] ${
-                                                  isReplyPremium ? "text-amber-400" : "text-white"
+                                                  isReplyPremium ? "premium-username-shimmer" : "text-white"
                                                 }`}>
                                                   {reply.userName}
                                                 </span>

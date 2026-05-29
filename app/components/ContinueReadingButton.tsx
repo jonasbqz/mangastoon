@@ -26,7 +26,15 @@ function readProgressMap() {
   }
 }
 
-export default function ContinueReadingButton({ mangaId }: { mangaId: string }) {
+export default function ContinueReadingButton({
+  mangaId,
+  mangaTitle,
+  language,
+}: {
+  mangaId: string;
+  mangaTitle?: string;
+  language?: string;
+}) {
   const [progress, setProgress] = useState<ReadingProgress | null>(null);
 
   useEffect(() => {
@@ -39,7 +47,7 @@ export default function ContinueReadingButton({ mangaId }: { mangaId: string }) 
 
   return (
     <Link
-      href={buildChapterPath(progress.mangaTitle, mangaId, progress.chapterId)}
+      href={buildChapterPath(mangaTitle || progress.mangaTitle, mangaId, progress.chapterId, language)}
       className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-4 py-3.5 text-sm font-heading font-bold text-black transition-all duration-300 hover:from-amber-600 hover:to-yellow-600 hover:scale-[1.02] active:scale-95 shadow-[0_4px_20px_rgba(245,158,11,0.25)] hover:shadow-[0_4px_25px_rgba(245,158,11,0.4)]"
     >
       <BookOpen className="h-4 w-4" />

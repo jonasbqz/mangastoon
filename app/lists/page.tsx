@@ -1,10 +1,17 @@
 import React from "react";
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { FolderHeart, User, Globe, ChevronRight, Layers, Crown } from "lucide-react";
 import { getPublicMangaLists } from "../actions/lists";
 import SiteHeader, { type SupportedLanguage } from "../components/site-header";
 import { C } from "../lib/colors";
+
+export const metadata: Metadata = {
+  title: "Listas de la Comunidad | MangaStoon",
+  description: "Explora las colecciones y listas de mangas, manhwas y cómics creadas y compartidas por la comunidad de MangaStoon.",
+};
+
 
 function normalizeLanguage(value: string | undefined): SupportedLanguage {
   if (value === "en" || value === "pt") return value;
@@ -85,7 +92,7 @@ export default async function CommunityListsPage() {
                     {/* List Meta */}
                     <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
                       <User size={13} className="text-orange-500 shrink-0" />
-                      <span className={`font-semibold truncate ${list.profiles?.is_premium ? "text-amber-400 font-bold drop-shadow-[0_0_6px_rgba(245,158,11,0.15)]" : "text-gray-400"}`}>
+                      <span className={`font-semibold truncate ${list.profiles?.is_premium ? "premium-username-shimmer" : "text-gray-400"}`}>
                         @{username}
                       </span>
                       {list.profiles?.is_premium && (

@@ -7,8 +7,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X, Mail, Lock, User, ArrowLeft, CheckCircle2, AlertCircle, Sparkles, LogIn, UserPlus } from "lucide-react";
 import { createClient } from "../../utils/supabase/client";
 import { toast } from "sonner";
+import { useLanguage } from "./language-provider";
 
 import { C } from "../lib/colors";
+
 
 
 // ─── Traducción de errores de Supabase ────────────────────────────────────
@@ -34,6 +36,40 @@ function translateError(raw: string): string {
   }
   return raw;
 }
+
+const AUTH_COPY = {
+  es: {
+    signIn: "Iniciar Sesión",
+    signInLoading: "Iniciando sesión...",
+    signUp: "Crear Cuenta",
+    signUpLoading: "Enviando...",
+    forgotBtn: "Enviar enlace de recuperación",
+    forgotLoading: "Enviando...",
+    wait: "Esperá",
+    waitSuffix: "s"
+  },
+  en: {
+    signIn: "Sign In",
+    signInLoading: "Signing in...",
+    signUp: "Create Account",
+    signUpLoading: "Sending...",
+    forgotBtn: "Send Recovery Link",
+    forgotLoading: "Sending...",
+    wait: "Wait",
+    waitSuffix: "s"
+  },
+  pt: {
+    signIn: "Entrar",
+    signInLoading: "Entrando...",
+    signUp: "Criar Conta",
+    signUpLoading: "Enviando...",
+    forgotBtn: "Enviar Link de Recuperação",
+    forgotLoading: "Enviando...",
+    wait: "Aguarde",
+    waitSuffix: "s"
+  }
+};
+
 
 const DISCORD_ICON = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" className="shrink-0">
@@ -77,6 +113,7 @@ declare global {
 }
 
 export default function AuthModal({ open, onClose, defaultTab }: Props) {
+  const { language } = useLanguage();
   const supabase = createClient();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
@@ -98,6 +135,43 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const isCaptchaEnabled = false;
+
+  const [forgotCooldown, setForgotCooldown] = useState(0);
+  const [signupCooldown, setSignupCooldown] = useState(0);
+
+  // Forgot password cooldown timer
+  useEffect(() => {
+    if (forgotCooldown <= 0) return;
+    const t = setTimeout(() => setForgotCooldown(forgotCooldown - 1), 1000);
+    return () => clearTimeout(t);
+  }, [forgotCooldown]);
+
+  // Signup cooldown timer
+  useEffect(() => {
+    if (signupCooldown <= 0) return;
+    const t = setTimeout(() => setSignupCooldown(signupCooldown - 1), 1000);
+    return () => clearTimeout(t);
+  }, [signupCooldown]);
+
+  // Check stored cooldowns on mount/open
+  useEffect(() => {
+    if (!open) return;
+    const lastForgot = localStorage.getItem("mangastoon_last_forgot_sent");
+    if (lastForgot) {
+      const elapsed = Math.floor((Date.now() - parseInt(lastForgot, 10)) / 1000);
+      if (elapsed < 120) {
+        setForgotCooldown(120 - elapsed);
+      }
+    }
+
+    const lastSignup = localStorage.getItem("mangastoon_last_signup_sent");
+    if (lastSignup) {
+      const elapsed = Math.floor((Date.now() - parseInt(lastSignup, 10)) / 1000);
+      if (elapsed < 120) {
+        setSignupCooldown(120 - elapsed);
+      }
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open || !isCaptchaEnabled) return;
@@ -191,6 +265,7 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     clearError();
 
     if (isCaptchaEnabled && !captchaToken) {
@@ -238,7 +313,17 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     clearError();
+    if (signupCooldown > 0) {
+      const msg = language === "es"
+        ? `Espera ${signupCooldown}s antes de enviar otro correo de registro.`
+        : language === "pt"
+        ? `Aguarde ${signupCooldown}s antes de enviar outro e-mail de registro.`
+        : `Wait ${signupCooldown}s before sending another registration email.`;
+      setErrorMsg(msg);
+      return;
+    }
     const cleanUsername = username.trim();
     if (!cleanUsername) { setErrorMsg("Ingresá un nombre de usuario."); return; }
     if (password !== confirmPassword) { setErrorMsg("Las contraseñas no coinciden. Verificalas e inténtalo de nuevo."); return; }
@@ -296,13 +381,30 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
       return;
     }
 
-    toast.success("¡Cuenta creada! Revisa tu correo para verificarla.");
+    const successMsg = language === "es"
+      ? "¡Cuenta creada! Revisa tu correo para verificarla."
+      : language === "pt"
+      ? "Conta criada! Verifique seu e-mail para confirmá-la."
+      : "Account created! Check your email to verify it.";
+    toast.success(successMsg);
+    localStorage.setItem("mangastoon_last_signup_sent", String(Date.now()));
+    setSignupCooldown(120);
     onClose();
   };
 
   const handleForgot = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     clearError();
+    if (forgotCooldown > 0) {
+      const msg = language === "es"
+        ? `Espera ${forgotCooldown}s antes de enviar otro correo de recuperación.`
+        : language === "pt"
+        ? `Aguarde ${forgotCooldown}s antes de enviar outro e-mail de recuperação.`
+        : `Wait ${forgotCooldown}s before sending another recovery email.`;
+      setErrorMsg(msg);
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
       redirectTo: typeof window !== "undefined"
@@ -311,6 +413,8 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
     });
     setLoading(false);
     if (error) { setErrorMsg(translateError(error.message)); return; }
+    localStorage.setItem("mangastoon_last_forgot_sent", String(Date.now()));
+    setForgotCooldown(120);
     setView("forgot-sent");
   };
 
@@ -466,7 +570,12 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
                             </div>
                           )}
 
-                          <PrimaryButton loading={loading}>Iniciar Sesión</PrimaryButton>
+                          <PrimaryButton 
+                            loading={loading} 
+                            loadingText={AUTH_COPY[language as keyof typeof AUTH_COPY]?.signInLoading || AUTH_COPY.es.signInLoading}
+                          >
+                            {AUTH_COPY[language as keyof typeof AUTH_COPY]?.signIn || AUTH_COPY.es.signIn}
+                          </PrimaryButton>
                           <Divider />
                           <DiscordButton onClick={handleDiscord} />
                         </form>
@@ -527,7 +636,15 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
                             </div>
                           )}
 
-                          <PrimaryButton loading={loading}>Crear Cuenta</PrimaryButton>
+                          <PrimaryButton 
+                            loading={loading} 
+                            disabled={signupCooldown > 0}
+                            loadingText={AUTH_COPY[language as keyof typeof AUTH_COPY]?.signUpLoading || AUTH_COPY.es.signUpLoading}
+                          >
+                            {signupCooldown > 0 
+                              ? `${AUTH_COPY[language as keyof typeof AUTH_COPY]?.wait || AUTH_COPY.es.wait} ${signupCooldown}${AUTH_COPY[language as keyof typeof AUTH_COPY]?.waitSuffix || AUTH_COPY.es.waitSuffix}`
+                              : (AUTH_COPY[language as keyof typeof AUTH_COPY]?.signUp || AUTH_COPY.es.signUp)}
+                          </PrimaryButton>
                           <Divider />
                           <DiscordButton onClick={handleDiscord} />
                         </form>
@@ -571,7 +688,15 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
                     onChange={setForgotEmail} 
                     placeholder="nombre@correo.com" 
                   />
-                  <PrimaryButton loading={loading}>Enviar enlace de recuperación</PrimaryButton>
+                  <PrimaryButton 
+                    loading={loading} 
+                    disabled={forgotCooldown > 0}
+                    loadingText={AUTH_COPY[language as keyof typeof AUTH_COPY]?.forgotLoading || AUTH_COPY.es.forgotLoading}
+                  >
+                    {forgotCooldown > 0
+                      ? `${AUTH_COPY[language as keyof typeof AUTH_COPY]?.wait || AUTH_COPY.es.wait} ${forgotCooldown}${AUTH_COPY[language as keyof typeof AUTH_COPY]?.waitSuffix || AUTH_COPY.es.waitSuffix}`
+                      : (AUTH_COPY[language as keyof typeof AUTH_COPY]?.forgotBtn || AUTH_COPY.es.forgotBtn)}
+                  </PrimaryButton>
                 </form>
               </div>
             )}
@@ -672,12 +797,12 @@ function Field({
   );
 }
 
-function PrimaryButton({ children, loading }: { children: React.ReactNode; loading: boolean }) {
+function PrimaryButton({ children, loading, disabled, loadingText = "Procesando..." }: { children: React.ReactNode; loading: boolean; disabled?: boolean; loadingText?: string }) {
   return (
     <button
       type="submit"
-      disabled={loading}
-      className="relative w-full overflow-hidden rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 disabled:opacity-50 shadow-md shadow-orange-500/10 cursor-pointer text-black hover:brightness-110 active:scale-[0.98]"
+      disabled={loading || disabled}
+      className="relative w-full overflow-hidden rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-orange-500/10 cursor-pointer text-black hover:brightness-110 active:scale-[0.98]"
       style={{
         background: `linear-gradient(135deg, ${C.accent}, ${C.accentStrong})`,
       }}
@@ -688,7 +813,7 @@ function PrimaryButton({ children, loading }: { children: React.ReactNode; loadi
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
           </svg>
-          <span>Procesando...</span>
+          <span>{loadingText}</span>
         </span>
       ) : children}
     </button>

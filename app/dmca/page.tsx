@@ -21,7 +21,7 @@ export default function DmcaPage() {
       title={{
         es: "DMCA / Reclamaciones de Copyright",
         en: "DMCA / Copyright Claims",
-        pt: "DMCA / Reclamacoes de Copyright",
+        pt: "DMCA / Reclamações de Copyright",
       }}
     />
   );

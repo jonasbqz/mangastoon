@@ -7,6 +7,7 @@ import { C } from "../lib/colors";
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "danger" | "ghost";
   loading?: boolean;
+  loadingText?: string;
   icon?: React.ReactNode;
 }
 
@@ -14,6 +15,7 @@ export default function Button({
   children,
   variant = "primary",
   loading = false,
+  loadingText,
   icon,
   className = "",
   style,
@@ -45,7 +47,7 @@ export default function Button({
       {loading ? (
         <span className="flex items-center justify-center gap-1.5">
           <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-          <span>Procesando...</span>
+          <span>{loadingText || "Procesando..."}</span>
         </span>
       ) : (
         <>

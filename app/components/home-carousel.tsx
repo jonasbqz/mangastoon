@@ -207,14 +207,29 @@ export function MangaCard({
 
         {/* TEXTOS INFERIORES - JERARQUÍA ARREGLADA */}
         <div className="mt-2 flex flex-col px-0.5">
-          {/* Título: Blanco y tamaño moderado */}
-          <h3 className="line-clamp-2 min-h-[2.5rem] text-[13px] font-semibold leading-5 text-gray-100 md:text-sm group-hover:text-orange-500 transition-colors duration-200" title={mangaTitle}>
-            {mangaTitle}
-          </h3>
-          {/* Género: Miniatura y gris oscuro */}
-          <p className="text-zinc-500 text-[10px] md:text-[11px] font-medium uppercase tracking-wider line-clamp-1 mt-0.5">
-            {mangaGenre}
-          </p>
+          {isInternal ? (
+            <Link href={cardHref} className="group/title flex flex-col">
+              {/* Título: Blanco y tamaño moderado */}
+              <h3 className="line-clamp-2 min-h-[2.5rem] text-[13px] font-semibold leading-5 text-gray-100 md:text-sm group-hover:text-[#ff6b00] group-hover/title:text-[#ff6b00] transition-colors duration-200" title={mangaTitle}>
+                {mangaTitle}
+              </h3>
+              {/* Género: Miniatura y gris oscuro */}
+              <p className="text-zinc-500 text-[10px] md:text-[11px] font-medium uppercase tracking-wider line-clamp-1 mt-0.5">
+                {mangaGenre}
+              </p>
+            </Link>
+          ) : (
+            <a href={cardHref} target="_blank" rel="noreferrer" className="group/title flex flex-col">
+              {/* Título: Blanco y tamaño moderado */}
+              <h3 className="line-clamp-2 min-h-[2.5rem] text-[13px] font-semibold leading-5 text-gray-100 md:text-sm group-hover:text-[#ff6b00] group-hover/title:text-[#ff6b00] transition-colors duration-200" title={mangaTitle}>
+                {mangaTitle}
+              </h3>
+              {/* Género: Miniatura y gris oscuro */}
+              <p className="text-zinc-500 text-[10px] md:text-[11px] font-medium uppercase tracking-wider line-clamp-1 mt-0.5">
+                {mangaGenre}
+              </p>
+            </a>
+          )}
           {showChapters && (visibleLatestChapters?.length ?? 0) > 0 ? (
             <div className="mt-2 space-y-1">
               {visibleLatestChapters?.slice(0, 2).map((chapter) => {

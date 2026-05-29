@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowLeft, ArrowRight, List, Download, Crown } from "lucide-react";
+import ShareButton from "../../../../../components/ShareButton";
 import type { ChapterFeedItem, ReaderDictionary, ReaderTheme } from "../reader-client";
 
 // Import mapping block colors
@@ -125,6 +126,12 @@ export default function ReaderHeader({
               >
                 <ArrowRight size={16} />
               </button>
+
+              <ShareButton
+                title={`${mangaTitle} - ${getChapterLabel(currentChapter)}`}
+                variant="icon"
+                label="Compartir"
+              />
 
               <div className="w-[1px] h-5 bg-white/10 mx-1" />
 

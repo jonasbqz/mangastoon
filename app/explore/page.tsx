@@ -40,11 +40,17 @@ export async function generateMetadata({
     ? `Busca y explora resultados de ${query} en MangaStoon. Encuentra manga, manhwa y manhua online con capítulos disponibles para leer.`
     : EXPLORE_DESCRIPTION;
 
+  const isSearch = Boolean(query);
+
   return {
     title,
     description,
     alternates: {
       canonical: absoluteUrl(canonicalPath),
+    },
+    robots: {
+      index: !isSearch,
+      follow: true,
     },
     openGraph: {
       title,

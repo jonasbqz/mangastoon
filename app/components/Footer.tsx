@@ -10,7 +10,7 @@ export default function Footer() {
             <BrandLogo />
           </div>
           <p className="mt-2 max-w-sm text-sm text-gray-500">
-            El mejor catalogo para explorar tus mangas favoritos. Actualizaciones diarias y la mejor calidad.
+            El mejor catálogo para explorar tus mangas favoritos. Actualizaciones diarias y la mejor calidad.
           </p>
         </div>
 
@@ -19,10 +19,10 @@ export default function Footer() {
             Comunidad
           </a>
           <Link href="/terminos" className="transition-colors hover:text-orange-500">
-            Terminos de Servicio
+            Términos de Servicio
           </Link>
           <Link href="/privacidad" className="transition-colors hover:text-orange-500">
-            Politica de Privacidad
+            Política de Privacidad
           </Link>
           <Link href="/dmca" className="transition-colors hover:text-orange-500">
             DMCA / Copyright

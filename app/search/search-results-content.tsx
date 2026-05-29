@@ -16,7 +16,6 @@ import {
 import { buildComicPath, slugify } from "../utils/slugify";
 
 const MONLINE_API_URL = "/api/monline";
-const MANGAVF_API_URL = process.env.NEXT_PUBLIC_MANGAVF_API_URL || "http://localhost:3001";
 const MONLINE_SEARCH_LOOKUP_LIMIT = 2000;
 
 type MonlineComic = Record<string, unknown>;
@@ -254,7 +253,7 @@ async function fetchMangaVfSearch(query: string, language: "es" | "en" | "pt", s
   if (language !== "es") return [];
 
   try {
-    const response = await fetch(`${MANGAVF_API_URL}/api/v1/manga/search?q=${encodeURIComponent(query)}`, { signal });
+    const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal });
     if (!response.ok) return [];
     const payload = (await response.json()) as MangaVfSearchResponse;
     return mapMangaVfComicsToShowcase(payload.results ?? [], language);

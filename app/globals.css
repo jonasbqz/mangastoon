@@ -225,3 +225,34 @@ h6 {
   font-size: 10px !important;
   line-height: 1.1 !important;
 }
+
+@keyframes premium-gold-shimmer {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.premium-username-shimmer {
+  background: linear-gradient(
+    90deg,
+    #d6a25e 0%,
+    #f4c27a 25%,
+    #ffffff 50%,
+    #f4c27a 75%,
+    #d6a25e 100%
+  );
+  background-size: 200% auto;
+  color: transparent !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  animation: premium-gold-shimmer 3s linear infinite;
+  display: inline-block;
+  font-weight: 800;
+  filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.25));
+}

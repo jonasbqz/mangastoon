@@ -19,9 +19,9 @@ export default function PrivacyPage() {
     <LegalPage
       pageKey="privacidad"
       title={{
-        es: "Politica de Privacidad",
+        es: "Política de Privacidad",
         en: "Privacy Policy",
-        pt: "Politica de Privacidade",
+        pt: "Política de Privacidade",
       }}
     />
   );

@@ -5,6 +5,7 @@ import Footer from "./components/Footer";
 import BottomNavbar from "./components/BottomNavbar";
 import { LanguageProvider } from "./components/language-provider";
 import PageTransitionLoader from "./components/PageTransitionLoader";
+import MangastoonProvider from "./components/MangastoonProvider";
 import { SITE_DESCRIPTION, SITE_IMAGE, SITE_NAME, SITE_URL, safeJsonLd } from "./utils/seo";
 import "./globals.css";
 
@@ -51,9 +52,6 @@ export const metadata: Metadata = {
   authors: [{ name: SITE_NAME, url: SITE_URL }],
   creator: SITE_NAME,
   publisher: SITE_NAME,
-  alternates: {
-    canonical: SITE_URL,
-  },
   openGraph: {
     title: {
       template: `%s | ${SITE_NAME}`,
@@ -130,10 +128,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className="dark" suppressHydrationWarning>
-      <body
-        suppressHydrationWarning
-        className={`${headingFont.variable} ${bodyFont.variable} antialiased`}
-      >
+      <head>
         <script
           id="suppress-extension-warnings"
           dangerouslySetInnerHTML={{
@@ -141,7 +136,13 @@ export default function RootLayout({
               (function() {
                 const originalError = console.error;
                 console.error = function(...args) {
-                  const msg = args[0] ? String(args[0]) : '';
+                  const msg = args.map(arg => {
+                    try {
+                      return arg ? String(arg) : '';
+                    } catch(e) {
+                      return '';
+                    }
+                  }).join(' ');
                   if (msg.includes('bis_skin_checked') || msg.includes('suppressHydrationWarning')) {
                     return;
                   }
@@ -151,6 +152,11 @@ export default function RootLayout({
             `
           }}
         />
+      </head>
+      <body
+        suppressHydrationWarning
+        className={`${headingFont.variable} ${bodyFont.variable} antialiased`}
+      >
         <LanguageProvider>
           <PageTransitionLoader />
           <script
@@ -165,7 +171,7 @@ export default function RootLayout({
             suppressHydrationWarning
             dangerouslySetInnerHTML={safeJsonLd(organizationJsonLd)}
           />
-          {/* Sistema de anuncios desactivado temporalmente. */}
+          <MangastoonProvider />
           {children}
           <Footer />
           <BottomNavbar />

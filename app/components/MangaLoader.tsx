@@ -63,24 +63,27 @@ export default function MangaLoader({
   language?: SupportedLanguage;
   message?: string; 
 }) {
-  const [language, setLanguage] = useState<SupportedLanguage>(() => {
-    if (propLang) return propLang;
+  const [language, setLanguage] = useState<SupportedLanguage>(propLang || "es");
+
+  useEffect(() => {
+    if (propLang) {
+      setLanguage(propLang);
+      return;
+    }
     if (typeof window !== "undefined") {
       const stored = window.localStorage.getItem("lang");
-      if (stored === "en" || stored === "pt") return stored;
+      if (stored === "en" || stored === "pt") {
+        setLanguage(stored as SupportedLanguage);
+        return;
+      }
       
       const cookieValue = document.cookie
         .split("; ")
         .find((row) => row.startsWith("lang="))
         ?.split("=")[1];
-      if (cookieValue === "en" || cookieValue === "pt") return cookieValue as SupportedLanguage;
-    }
-    return "es";
-  });
-
-  useEffect(() => {
-    if (propLang) {
-      setLanguage(propLang);
+      if (cookieValue === "en" || cookieValue === "pt") {
+        setLanguage(cookieValue as SupportedLanguage);
+      }
     }
   }, [propLang]);
 

@@ -5,13 +5,68 @@ import { useRouter } from "next/navigation";
 import { Lock, CheckCircle2, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { createClient } from "../../utils/supabase/client";
 import { toast } from "sonner";
-
+import { useLanguage } from "../components/language-provider";
 import { C } from "../lib/colors";
 
+const RESET_PASSWORD_COPY = {
+  es: {
+    verifyingLink: "Verificando el enlace de recuperación...",
+    title: "Nueva contraseña",
+    subtitle: "Ingresá tu nueva contraseña para continuar.",
+    newPasswordLabel: "Nueva contraseña",
+    newPasswordPlaceholder: "Mínimo 8 caracteres",
+    confirmPasswordLabel: "Confirmar contraseña",
+    confirmPasswordPlaceholder: "Repetí la contraseña",
+    saveButton: "Guardar contraseña",
+    savingButton: "Guardando...",
+    successTitle: "¡Contraseña actualizada!",
+    successSubtitle: "Redirigiendo al inicio...",
+    errorMinLength: "La contraseña debe tener al menos 8 caracteres.",
+    errorMismatch: "Las contraseñas no coinciden. Verificalas y volvé a intentarlo.",
+    successToast: "Contraseña restablecida correctamente.",
+    errorSamePassword: "La nueva contraseña debe ser diferente a la anterior.",
+  },
+  en: {
+    verifyingLink: "Verifying recovery link...",
+    title: "New Password",
+    subtitle: "Enter your new password to continue.",
+    newPasswordLabel: "New Password",
+    newPasswordPlaceholder: "Minimum 8 characters",
+    confirmPasswordLabel: "Confirm Password",
+    confirmPasswordPlaceholder: "Repeat password",
+    saveButton: "Save password",
+    savingButton: "Saving...",
+    successTitle: "Password updated!",
+    successSubtitle: "Redirecting to home...",
+    errorMinLength: "Password must be at least 8 characters long.",
+    errorMismatch: "Passwords do not match. Please verify and try again.",
+    successToast: "Password reset successfully.",
+    errorSamePassword: "New password should be different from the old password.",
+  },
+  pt: {
+    verifyingLink: "Verificando o link de recuperação...",
+    title: "Nova senha",
+    subtitle: "Digite sua nova senha para continuar.",
+    newPasswordLabel: "Nova senha",
+    newPasswordPlaceholder: "Mínimo de 8 caracteres",
+    confirmPasswordLabel: "Confirmar senha",
+    confirmPasswordPlaceholder: "Repita a senha",
+    saveButton: "Salvar senha",
+    savingButton: "Salvando...",
+    successTitle: "Senha atualizada!",
+    successSubtitle: "Redirecionando para o início...",
+    errorMinLength: "A senha deve ter pelo menos 8 caracteres.",
+    errorMismatch: "As senhas não coincidem. Verifique e tente novamente.",
+    successToast: "Senha redefinida com sucesso.",
+    errorSamePassword: "A nova senha deve ser diferente da senha antiga.",
+  }
+};
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
   const router = useRouter();
+  const { language } = useLanguage();
+  const copy = RESET_PASSWORD_COPY[language] || RESET_PASSWORD_COPY.es;
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -43,11 +98,11 @@ export default function ResetPasswordPage() {
     setErrorMsg(null);
 
     if (password.length < 8) {
-      setErrorMsg("La contraseña debe tener al menos 8 caracteres.");
+      setErrorMsg(copy.errorMinLength);
       return;
     }
     if (password !== confirm) {
-      setErrorMsg("Las contraseñas no coinciden. Verificalas e inténtalo de nuevo.");
+      setErrorMsg(copy.errorMismatch);
       return;
     }
 
@@ -56,12 +111,16 @@ export default function ResetPasswordPage() {
     setLoading(false);
 
     if (error) {
-      setErrorMsg(error.message);
+      let msg = error.message;
+      if (error.message.includes("different from the old")) {
+        msg = copy.errorSamePassword;
+      }
+      setErrorMsg(msg);
       return;
     }
 
     setDone(true);
-    toast.success("Contraseña restablecida correctamente.");
+    toast.success(copy.successToast);
     setTimeout(() => router.push("/"), 2500);
   };
 
@@ -71,7 +130,7 @@ export default function ResetPasswordPage() {
       <main className="flex min-h-screen items-center justify-center px-4 bg-transparent">
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-[#ff6b00]" />
-          <p className="text-sm" style={{ color: C.dim }}>Verificando enlace de recuperación...</p>
+          <p className="text-sm" style={{ color: C.dim }}>{copy.verifyingLink}</p>
         </div>
       </main>
     );
@@ -95,8 +154,8 @@ export default function ResetPasswordPage() {
             >
               <CheckCircle2 size={26} style={{ color: C.accent }} />
             </div>
-            <h1 className="text-lg font-bold" style={{ color: C.fg }}>¡Contraseña actualizada!</h1>
-            <p className="text-xs" style={{ color: C.dim }}>Redirigiendo al inicio...</p>
+            <h1 className="text-lg font-bold" style={{ color: C.fg }}>{copy.successTitle}</h1>
+            <p className="text-xs" style={{ color: C.dim }}>{copy.successSubtitle}</p>
           </div>
         ) : (
           <>
@@ -107,8 +166,8 @@ export default function ResetPasswordPage() {
               >
                 <Lock size={20} style={{ color: C.accent }} />
               </div>
-              <h1 className="text-base font-bold" style={{ color: C.fg }}>Nueva contraseña</h1>
-              <p className="text-xs" style={{ color: C.dim }}>Ingresá tu nueva contraseña para continuar.</p>
+              <h1 className="text-base font-bold" style={{ color: C.fg }}>{copy.title}</h1>
+              <p className="text-xs" style={{ color: C.dim }}>{copy.subtitle}</p>
             </div>
 
             {errorMsg && (
@@ -125,7 +184,7 @@ export default function ResetPasswordPage() {
               {/* Nueva contraseña */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: C.dim }}>
-                  Nueva contraseña
+                  {copy.newPasswordLabel}
                 </label>
                 <div
                   className="flex items-center gap-2.5 rounded-xl px-3.5 py-3 transition-all duration-200"
@@ -137,7 +196,7 @@ export default function ResetPasswordPage() {
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Mínimo 8 caracteres"
+                    placeholder={copy.newPasswordPlaceholder}
                     className="flex-1 bg-transparent text-sm outline-none"
                     style={{ color: C.fg }}
                   />
@@ -157,7 +216,7 @@ export default function ResetPasswordPage() {
               {/* Confirmar */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: C.dim }}>
-                  Confirmar contraseña
+                  {copy.confirmPasswordLabel}
                 </label>
                 <div
                   className="flex items-center gap-2.5 rounded-xl px-3.5 py-3 transition-all duration-200"
@@ -169,7 +228,7 @@ export default function ResetPasswordPage() {
                     required
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
-                    placeholder="Repetí la contraseña"
+                    placeholder={copy.confirmPasswordPlaceholder}
                     className="flex-1 bg-transparent text-sm outline-none"
                     style={{ color: C.fg }}
                   />
@@ -186,7 +245,7 @@ export default function ResetPasswordPage() {
                   boxShadow: "0 4px 24px rgba(255, 107, 0, 0.22)",
                 }}
               >
-                {loading ? "Guardando..." : "Guardar contraseña"}
+                {loading ? copy.savingButton : copy.saveButton}
               </button>
             </form>
           </>

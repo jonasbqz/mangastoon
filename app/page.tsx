@@ -1,6 +1,15 @@
 import { logger } from "./utils/logger";
 import { cookies } from "next/headers";
+import type { Metadata } from "next";
 import Link from "next/link";
+import { SITE_URL } from "./utils/seo";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: SITE_URL,
+  },
+};
+
 import HorizontalCarousel from "./components/horizontal-carousel";
 import ReadingHistoryList from "./components/ReadingHistoryList";
 import MangaCard, { type MangaShowcaseItem } from "./components/MangaCard";
@@ -683,14 +692,14 @@ export default async function HomePage() {
           </div>
           
           {/* Gran botón de Explorar al final */}
-          <div className="mt-12 flex justify-center">
+          <div className="mt-12 flex justify-center w-full px-1">
             <Link
               href="/explore"
-              className="group inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-orange-600 via-amber-500 to-orange-500 px-10 py-4.5 text-sm font-heading font-extrabold uppercase tracking-wider text-black hover:brightness-110 active:scale-95 transition-all shadow-[0_4px_24px_rgba(249,115,22,0.35)] hover:shadow-[0_4px_35px_rgba(249,115,22,0.55)] cursor-pointer"
+              className="group flex sm:inline-flex items-center justify-center gap-2.5 sm:gap-3 rounded-2xl bg-gradient-to-r from-orange-600 via-amber-500 to-orange-500 px-6 py-3.5 sm:px-10 sm:py-4.5 text-xs sm:text-sm font-heading font-extrabold uppercase tracking-wider text-black hover:brightness-110 active:scale-95 transition-all shadow-[0_4px_24px_rgba(249,115,22,0.35)] hover:shadow-[0_4px_35px_rgba(249,115,22,0.55)] cursor-pointer w-full sm:w-auto text-center"
             >
-              <Compass size={18} className="animate-spin-slow group-hover:rotate-45 transition-transform duration-500" />
-              <span>{currentLanguage === "es" ? "Explorar todo el catálogo" : currentLanguage === "pt" ? "Explorar todo o catálogo" : "Explore entire catalog"}</span>
-              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              <Compass size={18} className="animate-spin-slow group-hover:rotate-45 transition-transform duration-500 shrink-0" />
+              <span className="whitespace-nowrap">{currentLanguage === "es" ? "Explorar todo el catálogo" : currentLanguage === "pt" ? "Explorar todo o catálogo" : "Explore entire catalog"}</span>
+              <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform shrink-0" />
             </Link>
           </div>
         </div>

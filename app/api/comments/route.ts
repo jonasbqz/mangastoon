@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
         is_moderated,
         created_at,
         parent_id,
-        profiles (
+        profiles:profiles!user_id (
           username,
           avatar_url,
           is_premium
@@ -194,7 +194,7 @@ export async function POST(req: NextRequest) {
         is_moderated,
         created_at,
         parent_id,
-        profiles (
+        profiles:profiles!user_id (
           username,
           avatar_url,
           is_premium

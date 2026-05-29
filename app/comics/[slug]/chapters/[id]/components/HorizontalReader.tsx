@@ -62,20 +62,7 @@ export default function HorizontalReader({
   isReaderUiVisible,
   showControlsUI,
 }: HorizontalReaderProps) {
-  const [currentPage, setCurrentPage] = useState(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const saved = localStorage.getItem(`mangastoon_last_page:${mangaId}:${chapterId}`);
-        if (saved) {
-          const pageIndex = parseInt(saved, 10);
-          if (Number.isFinite(pageIndex) && pageIndex >= 0 && pageIndex < pages.length) {
-            return pageIndex;
-          }
-        }
-      } catch {}
-    }
-    return 0;
-  });
+  const [currentPage, setCurrentPage] = useState(0);
   const [direction, setDirection] = useState(0);
   const [showHint, setShowHint] = useState(true);
   const touchStartX = useRef(0);

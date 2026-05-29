@@ -81,6 +81,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     document.cookie = `${COOKIE_NAME}=${storedLanguage}; path=/; max-age=31536000; samesite=lax`;
     document.cookie = `${ADULT_COOKIE_NAME}=${storedAdult}; path=/; max-age=31536000; samesite=lax`;
 
+    console.log("[LanguageProvider useEffect] storedLanguage:", storedLanguage, "| currentLanguageCookie:", currentLanguageCookie, "| shouldRefresh:", shouldRefresh);
+
     if (shouldRefresh) {
       router.refresh();
     }
@@ -90,6 +92,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     () => ({
       language,
       setLanguage: (nextLanguage) => {
+        console.log("[LanguageProvider setLanguage] nextLanguage:", nextLanguage);
         setIsChangingLanguage(nextLanguage);
         setLanguageState(nextLanguage);
         window.localStorage.setItem(STORAGE_KEY, nextLanguage);

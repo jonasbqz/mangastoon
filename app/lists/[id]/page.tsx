@@ -1,6 +1,8 @@
-import React from "react";
+import React, { cache } from "react";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { ArrowLeft, User, FolderHeart, Calendar, Layers, Crown } from "lucide-react";
 import { getMangaListDetails } from "../../actions/lists";
 import SiteHeader, { type SupportedLanguage } from "../../components/site-header";
@@ -14,9 +16,37 @@ interface ListDetailsPageProps {
   params: Promise<{ id: string }>;
 }
 
+const cachedGetMangaListDetails = cache(getMangaListDetails);
+
 function normalizeLanguage(value: string | undefined): SupportedLanguage {
   if (value === "en" || value === "pt") return value;
   return "es";
+}
+
+export async function generateMetadata({
+  params,
+}: ListDetailsPageProps): Promise<Metadata> {
+  const { id } = await params;
+  const { list } = await cachedGetMangaListDetails(id);
+
+  if (!list) {
+    return {
+      title: "Lista no disponible | MangaStoon",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
+  return {
+    title: `${list.name} — MangaStoon`,
+    description: list.description || `Colección de cómics creada por @${list.profiles?.username || "usuario"}.`,
+    robots: {
+      index: list.is_public,
+      follow: list.is_public,
+    },
+  };
 }
 
 const COPY = {
@@ -55,44 +85,14 @@ export default async function ListDetailsPage({ params }: ListDetailsPageProps) 
   const currentLanguage = normalizeLanguage(cookieStore.get("lang")?.value);
   const t = COPY[currentLanguage] || COPY.es;
 
-  const { list, items, error } = await getMangaListDetails(id);
+  const { list, items, error } = await cachedGetMangaListDetails(id);
 
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const isOwner = user && list ? user.id === list.user_id : false;
 
   if (error || !list) {
-    return (
-      <main className="min-h-screen bg-[#141519] pb-16 text-white">
-        <SiteHeader language={currentLanguage} />
-        <div className="flex min-h-[70vh] items-center justify-center px-4">
-          <div
-            className="w-full max-w-md rounded-3xl border bg-[#1c1d22]/40 p-8 text-center shadow-2xl"
-            style={{ borderColor: C.border }}
-          >
-            <FolderHeart size={56} className="mx-auto mb-4 text-[#ff6b00] opacity-40 animate-pulse" />
-            <h1 className="text-2xl font-black text-white">{t.errorTitle}</h1>
-            <p className="mt-3 text-sm leading-relaxed text-gray-400">
-              {t.errorDesc}
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row justify-center">
-              <Link
-                href="/lists"
-                className="rounded-xl border border-white/5 bg-white/[0.03] px-5 py-2.5 text-xs font-bold text-gray-300 hover:bg-white/10 transition-all text-center"
-              >
-                {t.backToLists}
-              </Link>
-              <Link
-                href="/"
-                className="rounded-xl bg-orange-500 px-5 py-2.5 text-xs font-heading font-bold text-black hover:bg-orange-600 transition-all text-center"
-              >
-                {t.backHome}
-              </Link>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    notFound();
   }
 
   const username = list.profiles?.username || t.anonymous;
@@ -156,7 +156,7 @@ export default async function ListDetailsPage({ params }: ListDetailsPageProps) 
                       <User size={12} className={list.profiles?.is_premium ? "text-amber-400" : "text-gray-400"} />
                     </div>
                   )}
-                  <span className={`font-bold ${list.profiles?.is_premium ? "text-amber-400 drop-shadow-[0_0_6px_rgba(245,158,11,0.15)]" : "text-white"}`}>
+                  <span className={`font-bold ${list.profiles?.is_premium ? "premium-username-shimmer" : "text-white"}`}>
                     @{username}
                   </span>
                   {list.profiles?.is_premium && (

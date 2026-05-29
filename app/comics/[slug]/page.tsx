@@ -11,6 +11,7 @@ import ContinueReadingButton from "../../components/ContinueReadingButton";
 import FavoriteButton from "../../components/FavoriteButton";
 import AddToListButton from "../../components/AddToListButton";
 import LikeButton from "../../components/LikeButton";
+import ShareButton from "../../components/ShareButton";
 import { createClient } from "../../../utils/supabase/server";
 import { MangaCard, type MangaShowcaseItem } from "../../components/MangaCard";
 import SiteHeader, { type SupportedLanguage } from "../../components/site-header";
@@ -1127,46 +1128,6 @@ async function fetchSuggestedLocalMangas(currentMangaId: string) {
   }
 }
 
-
-function MangaMaintenance({ language }: { language: SupportedLanguage }) {
-  const copy = {
-    es: {
-      title: "Manga en mantenimiento",
-      body: "No pudimos cargar los datos de este manga ahora mismo. Puede que MangaDex o la fuente externa esté respondiendo vacío temporalmente.",
-      action: "Volver a explorar",
-    },
-    en: {
-      title: "Manga under maintenance",
-      body: "We could not load this manga data right now. MangaDex or the external source may be returning empty data temporarily.",
-      action: "Back to explore",
-    },
-    pt: {
-      title: "Mangá em manutenção",
-      body: "Não conseguimos carregar os dados deste mangá agora. MangaDex ou a fonte externa pode estar retornando dados vazios temporariamente.",
-      action: "Voltar para explorar",
-    },
-  }[language];
-
-  return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white">
-      <SiteHeader language={language} />
-      <div className="mx-auto flex min-h-[70vh] max-w-3xl flex-col items-center justify-center px-4 text-center">
-        <div className="rounded-3xl border border-white/10 bg-[#141519] p-8 shadow-2xl shadow-black/30">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-500">MangaStoon</p>
-          <h1 className="mt-4 text-2xl font-semibold text-white">{copy.title}</h1>
-          <p className="mt-3 text-base leading-7 text-gray-400">{copy.body}</p>
-          <Link
-            href="/explore"
-            className="mt-6 inline-flex rounded-full bg-amber-500 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400"
-          >
-            {copy.action}
-          </Link>
-        </div>
-      </div>
-    </main>
-  );
-}
-
 const cachedFetchMangaDetails = cache(fetchMangaDetails);
 const cachedGetLocalizedTitleAsync = cache(getLocalizedTitleAsync);
 const cachedFetchMangaChapters = cache(fetchMangaChapters);
@@ -1193,7 +1154,7 @@ export default async function MangaDetailsPage({
   const manga = await cachedFetchMangaDetails(id, cookieLang);
 
   if (!manga) {
-    return <MangaMaintenance language={cookieLang} />;
+    notFound();
   }
 
   // 2. Sincronizar el idioma real comparando el slug de la URL actual
@@ -1524,7 +1485,7 @@ export default async function MangaDetailsPage({
               </div>
 
               <div className="w-full rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#1b1c22]/60 to-[#101115]/80 p-4 text-center md:mt-4 md:p-5 md:text-left flex flex-col gap-2.5 shadow-xl">
-                <ContinueReadingButton mangaId={manga.id} />
+                <ContinueReadingButton mangaId={manga.id} mangaTitle={displayTitle} language={currentLanguage} />
                 <FavoriteButton manga={favoriteManga} label={copy.addToFavorites} variant="inline" />
                 <LikeButton
                   mangaId={manga.id}
@@ -1540,6 +1501,10 @@ export default async function MangaDetailsPage({
                   mangaTitle={displayTitle}
                   coverImage={primaryCoverUrl || fallbackCoverUrl || null}
                   language={currentLanguage}
+                />
+                <ShareButton
+                  title={displayTitle}
+                  label={currentLanguage === "es" ? "Compartir Manga" : currentLanguage === "pt" ? "Compartilhar Mangá" : "Share Manga"}
                 />
 
                 <div className="mt-4 border-t border-white/[0.06] pt-4 text-left">
@@ -1638,7 +1603,7 @@ export default async function MangaDetailsPage({
                 <ChapterList
                   mangaId={manga.id}
                   mangaTitle={displayTitle}
-                  language={slugLanguage}
+                  language={currentLanguage}
                   chapterRows={chapterRows}
                   showMoreLabel={copy.showMoreChapters}
                   totalLabel={`${chapters.length} ${copy.totalSuffix}`}

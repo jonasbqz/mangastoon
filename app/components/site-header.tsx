@@ -607,7 +607,7 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
                 className="hidden md:inline-flex items-center gap-2 text-sm font-medium text-gray-400 transition-colors hover:text-orange-500 shrink-0"
               >
                 <FolderHeart className="h-5 w-5" />
-                <span>{language === "es" ? "Listas de la Comunidad" : language === "pt" ? "Listas da Comunidade" : "Community Lists"}</span>
+                <span>{language === "es" ? "Listas" : language === "pt" ? "Listas" : "Lists"}</span>
               </Link>
               <Link
                 href="/premium"

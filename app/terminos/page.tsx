@@ -19,9 +19,9 @@ export default function TermsPage() {
     <LegalPage
       pageKey="terminos"
       title={{
-        es: "Terminos de Servicio",
+        es: "Términos de Servicio",
         en: "Terms of Service",
-        pt: "Termos de Servico",
+        pt: "Termos de Serviço",
       }}
     />
   );
