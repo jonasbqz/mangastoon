@@ -31,6 +31,7 @@ import {
   mapToShowcaseItems,
   fetchMangaDetails,
   fetchMangaChapters as fetchMangaChaptersExternal,
+  fetchLocalComicBySlug,
 } from "../../utils/mangadex";
 import { SITE_IMAGE, SITE_NAME, absoluteUrl } from "../../utils/seo";
 import { buildChapterPath, buildComicPath, extractComicIdFromSlugId } from "../../utils/slugify";
@@ -229,38 +230,7 @@ function cleanMangaSlug(slug: string): string {
   return cleaned;
 }
 
-async function fetchLocalComicBySlug(slug: string) {
-  try {
-    const cleanSlug = cleanMangaSlug(slug);
-    const listResponse = await fetch(`${LOCAL_API_URL}/api/comics?limit=${LOCAL_COMIC_LOOKUP_LIMIT}`, { next: { revalidate: 300 } });
-    if (!listResponse.ok) return null;
 
-    const comics = extractLocalComics(await listResponse.json());
-    const summary = comics.find((comic) => {
-      const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
-      const cleanComicSlug = cleanMangaSlug(comicSlug);
-      return cleanComicSlug === cleanSlug || cleanSlug.endsWith(`-${cleanComicSlug}`);
-    });
-    const numericId = getLocalStringValue(summary ?? {}, ["id"]);
-
-    if (!summary || !numericId) return null;
-
-    const detailResponse = await fetch(`${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`, { next: { revalidate: 300 } });
-    if (!detailResponse.ok) return summary;
-
-    const details = extractLocalComics(await detailResponse.json())[0];
-    if (details) {
-      return {
-        ...summary,
-        ...details,
-        recent_chapters: details.recent_chapters || summary.recent_chapters || (summary as any).recent_chapters
-      };
-    }
-    return summary;
-  } catch {
-    return null;
-  }
-}
 
 function mapLocalComicToMangaDetails(comic: LocalApiComic): MangaDetails | null {
   const slug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);

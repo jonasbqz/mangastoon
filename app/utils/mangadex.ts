@@ -972,10 +972,10 @@ function cleanMangaSlug(slug: string): string {
   return cleaned;
 }
 
-async function fetchLocalComicBySlug(slug: string) {
+export async function fetchLocalComicBySlug(slug: string) {
   const cleanSlug = cleanMangaSlug(slug);
   const cacheKey = `local-comic-slug:${cleanSlug}`;
-  return getOrSetCached(cacheKey, 300, async () => {
+  return getOrSetCached(cacheKey, 7200, async () => {
     try {
       const cleanTitle = cleanSlug.replace(/-/g, " ");
       const searchParams = new URLSearchParams();
@@ -984,7 +984,7 @@ async function fetchLocalComicBySlug(slug: string) {
 
       let listResponse = await fetch(
         `${LOCAL_API_URL}/api/comics?${searchParams.toString()}`,
-        { cache: "no-store" }
+        { next: { revalidate: 3600 } }
       );
       let comics: any[] = [];
 
@@ -1000,8 +1000,8 @@ async function fetchLocalComicBySlug(slug: string) {
 
       if (!summary) {
         const fallbackResponse = await fetch(
-          `${LOCAL_API_URL}/api/comics?limit=300`,
-          { cache: "no-store" }
+          `${LOCAL_API_URL}/api/comics?limit=150`,
+          { next: { revalidate: 3600 } }
         );
         if (fallbackResponse.ok) {
           const allComics = extractLocalApiComics(await fallbackResponse.json());
@@ -1019,7 +1019,7 @@ async function fetchLocalComicBySlug(slug: string) {
 
       const detailResponse = await fetch(
         `${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`,
-        { cache: "no-store" }
+        { next: { revalidate: 3600 } }
       );
       if (!detailResponse.ok) return summary;
 
