@@ -31,6 +31,9 @@ export const viewport: Viewport = {
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  alternates: {
+    canonical: "./",
+  },
   title: {
     template: `%s | ${SITE_NAME}`,
     default: `${SITE_NAME} - Lee tus mangas favoritos online`,
