@@ -70,7 +70,8 @@ export async function GET(request: NextRequest) {
         "cache-control": "s-maxage=3600, stale-while-revalidate=86400",
       },
     });
-  } catch {
-    return NextResponse.json({ data: [], total: 0 }, { status: 200 });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ data: [], total: 0, error: msg }, { status: 200 });
   }
 }
