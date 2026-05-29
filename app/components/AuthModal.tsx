@@ -37,6 +37,19 @@ function translateError(raw: string): string {
   return raw;
 }
 
+const getAuthCallbackURL = (nextPath?: string) => {
+  let url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mangastoon.com";
+
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  url = url.endsWith("/") ? url.slice(0, -1) : url;
+  const callbackURL = `${url}/auth/callback`;
+
+  return nextPath ? `${callbackURL}?next=${encodeURIComponent(nextPath)}` : callbackURL;
+};
+
 const AUTH_COPY = {
   es: {
     signIn: "Iniciar Sesión",
@@ -424,9 +437,7 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "discord",
       options: {
-        redirectTo: typeof window !== "undefined"
-          ? `${window.location.origin}/auth/callback?next=${encodeURIComponent(currentPath)}`
-          : undefined,
+        redirectTo: getAuthCallbackURL(currentPath),
       },
     });
     if (error) setErrorMsg(translateError(error.message));
