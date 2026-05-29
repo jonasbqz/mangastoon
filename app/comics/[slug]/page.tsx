@@ -1557,7 +1557,7 @@ export default async function MangaDetailsPage({
                   />
                 </div>
 
-                <div className="mt-4 border-t border-white/[0.06] pt-4 flex items-center justify-between gap-4">
+                <div className="mt-4 border-t border-white/[0.06] pt-4 flex flex-row items-center justify-between gap-4 md:flex-col md:items-stretch md:gap-3">
                   <div className="text-left min-w-0">
                     <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-neutral-500">
                       {copy.author}
@@ -1583,7 +1583,7 @@ export default async function MangaDetailsPage({
                       <span className="font-medium">{copy.supportOnX}</span>
                     </a>
                   </div>
-                  <div className="shrink-0 flex items-center gap-1.5 self-end mb-0.5">
+                  <div className="shrink-0 flex items-center gap-1.5 self-end md:self-start mb-0.5 md:mb-0">
                     <LikeButton
                       mangaId={manga.id}
                       initialLikesCount={dbLikesCount}
