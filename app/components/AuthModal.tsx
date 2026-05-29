@@ -38,7 +38,9 @@ function translateError(raw: string): string {
 }
 
 const getAuthCallbackURL = (nextPath?: string) => {
-  let url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mangastoon.com";
+  let url = typeof window !== "undefined"
+    ? window.location.origin
+    : (process.env.NEXT_PUBLIC_SITE_URL ?? "https://mangastoon.com");
 
   if (!/^https?:\/\//i.test(url)) {
     url = `https://${url}`;

@@ -39,7 +39,7 @@ export default function MangaDetailsLoading() {
       </div>
 
       {/* Centered Manga/Anime loader overlay */}
-      <div className="absolute inset-0 flex items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center">
         <MangaLoader />
       </div>
     </main>

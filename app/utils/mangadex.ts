@@ -651,7 +651,7 @@ export async function fetchLocalChapterPreviews(
 
   try {
     const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/api/comics/${comicId}`, {
-      cache: "no-store",
+      next: { revalidate: 120 },
       signal,
     });
 

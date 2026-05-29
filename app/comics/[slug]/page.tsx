@@ -232,7 +232,7 @@ function cleanMangaSlug(slug: string): string {
 async function fetchLocalComicBySlug(slug: string) {
   try {
     const cleanSlug = cleanMangaSlug(slug);
-    const listResponse = await fetch(`${LOCAL_API_URL}/api/comics?limit=${LOCAL_COMIC_LOOKUP_LIMIT}`, { cache: "no-store" });
+    const listResponse = await fetch(`${LOCAL_API_URL}/api/comics?limit=${LOCAL_COMIC_LOOKUP_LIMIT}`, { next: { revalidate: 300 } });
     if (!listResponse.ok) return null;
 
     const comics = extractLocalComics(await listResponse.json());
@@ -244,7 +244,7 @@ async function fetchLocalComicBySlug(slug: string) {
 
     if (!summary || !numericId) return null;
 
-    const detailResponse = await fetch(`${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`, { cache: "no-store" });
+    const detailResponse = await fetch(`${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`, { next: { revalidate: 300 } });
     if (!detailResponse.ok) return summary;
 
     return extractLocalComics(await detailResponse.json())[0] ?? summary;
@@ -575,7 +575,7 @@ const UI_COPY: Record<
     addToFavorites: "Agregar a Favoritos",
     author: "Autor",
     noAuthor: "No disponible",
-    noAuthorDb: "No disponible en DB",
+    noAuthorDb: "Autor desconocido",
     supportOnX: "Apoyar en X",
     authorFallbackSearchSuffix: "oficial",
     ratingVotes: "votos",
@@ -613,7 +613,7 @@ const UI_COPY: Record<
     addToFavorites: "Add to Favorites",
     author: "Author",
     noAuthor: "Unavailable",
-    noAuthorDb: "Unavailable in DB",
+    noAuthorDb: "Unknown Author",
     supportOnX: "Support on X",
     authorFallbackSearchSuffix: "official",
     ratingVotes: "votes",
@@ -651,7 +651,7 @@ const UI_COPY: Record<
     addToFavorites: "Adicionar aos Favoritos",
     author: "Autor",
     noAuthor: "Indisponível",
-    noAuthorDb: "Indisponível no DB",
+    noAuthorDb: "Autor desconhecido",
     supportOnX: "Apoiar no X",
     authorFallbackSearchSuffix: "oficial",
     ratingVotes: "votos",
@@ -1135,7 +1135,7 @@ async function fetchSimilarMangas(
 async function fetchSuggestedLocalMangas(currentMangaId: string) {
   try {
     const response = await fetch(`${LOCAL_API_URL}/api/comics?limit=15`, {
-      cache: "no-store",
+      next: { revalidate: 300 },
     });
 
     if (!response.ok) return [];

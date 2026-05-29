@@ -25,8 +25,8 @@ const getSafeNextPath = (next: string | null) => {
 };
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  const siteURL = getSiteURL();
+  const { searchParams, origin } = new URL(request.url);
+  const siteURL = origin && origin !== "null" ? origin : getSiteURL();
   const code = searchParams.get("code");
   const next = getSafeNextPath(searchParams.get("next"));
 
