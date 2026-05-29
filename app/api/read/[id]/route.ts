@@ -293,9 +293,29 @@ function getLocalChapters(comic: LocalComic): ChapterFeedItem[] {
 
 // LeerCapitulo/MangaVf helpers are imported from mangadex utils
 
+function cleanMangaSlug(slug: string): string {
+  let cleaned = slug.replace(/-\d{8}-[a-zA-Z0-9]+$/, "");
+  while (true) {
+    if (cleaned.length % 2 === 1) {
+      const mid = Math.floor(cleaned.length / 2);
+      if (cleaned[mid] === '-') {
+        const firstHalf = cleaned.substring(0, mid);
+        const secondHalf = cleaned.substring(mid + 1);
+        if (firstHalf === secondHalf) {
+          cleaned = firstHalf;
+          continue;
+        }
+      }
+    }
+    break;
+  }
+  return cleaned;
+}
+
 async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) {
   try {
-    const cleanTitle = slug.replace(/-/g, " ");
+    const cleanSlug = cleanMangaSlug(slug);
+    const cleanTitle = cleanSlug.replace(/-/g, " ");
     const searchParams = new URLSearchParams();
     searchParams.set("title", cleanTitle);
     searchParams.set("limit", "15");
@@ -312,7 +332,7 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
 
     let comic = comics.find((item) => {
       const comicSlug = getStringValue(item, ["slug", "manga_slug", "comic_slug"]);
-      return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+      return comicSlug === cleanSlug || cleanSlug.endsWith(`-${comicSlug}`);
     });
 
     if (!comic) {
@@ -324,7 +344,7 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
         const allComics = extractLocalComics(payload);
         comic = allComics.find((item) => {
           const comicSlug = getStringValue(item, ["slug", "manga_slug", "comic_slug"]);
-          return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+          return comicSlug === cleanSlug || cleanSlug.endsWith(`-${comicSlug}`);
         });
       }
     }
@@ -337,8 +357,8 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
     const detailResponse = numericId
       ? await fetch(`${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`, { cache: "no-store" })
       : null;
-    const fullComic = detailResponse?.ok ? ((await detailResponse.json()) as LocalComic) : comic;
-    const comicSlug = getStringValue(fullComic, ["slug", "manga_slug", "comic_slug"]) || slug;
+    const fullComic = detailResponse?.ok ? (extractLocalComics(await detailResponse.json())[0] ?? comic) : comic;
+    const comicSlug = getStringValue(fullComic, ["slug", "manga_slug", "comic_slug"]) || cleanSlug;
     const rawTitle = getStringValue(fullComic, ["title", "name", "comic_title", "original_title"]);
     const title = await getLocalizedTitleAsync({ titleMap: getLocalTitleMap(fullComic), title: rawTitle }, lang) || "Mangastoon";
     const coverImage = normalizeLocalImageUrl(

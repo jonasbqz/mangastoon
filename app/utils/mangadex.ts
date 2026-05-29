@@ -953,11 +953,31 @@ async function fetchMangaDex(url: string, retries = 1): Promise<Response> {
   return response;
 }
 
+function cleanMangaSlug(slug: string): string {
+  let cleaned = slug.replace(/-\d{8}-[a-zA-Z0-9]+$/, "");
+  while (true) {
+    if (cleaned.length % 2 === 1) {
+      const mid = Math.floor(cleaned.length / 2);
+      if (cleaned[mid] === '-') {
+        const firstHalf = cleaned.substring(0, mid);
+        const secondHalf = cleaned.substring(mid + 1);
+        if (firstHalf === secondHalf) {
+          cleaned = firstHalf;
+          continue;
+        }
+      }
+    }
+    break;
+  }
+  return cleaned;
+}
+
 async function fetchLocalComicBySlug(slug: string) {
-  const cacheKey = `local-comic-slug:${slug}`;
+  const cleanSlug = cleanMangaSlug(slug);
+  const cacheKey = `local-comic-slug:${cleanSlug}`;
   return getOrSetCached(cacheKey, 300, async () => {
     try {
-      const cleanTitle = slug.replace(/-/g, " ");
+      const cleanTitle = cleanSlug.replace(/-/g, " ");
       const searchParams = new URLSearchParams();
       searchParams.set("title", cleanTitle);
       searchParams.set("limit", "15");
@@ -974,7 +994,7 @@ async function fetchLocalComicBySlug(slug: string) {
 
       let summary = comics.find((comic) => {
         const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
-        return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+        return comicSlug === cleanSlug || cleanSlug.endsWith(`-${comicSlug}`);
       });
 
       if (!summary) {
@@ -986,7 +1006,7 @@ async function fetchLocalComicBySlug(slug: string) {
           const allComics = extractLocalApiComics(await fallbackResponse.json());
           summary = allComics.find((comic) => {
             const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
-            return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+            return comicSlug === cleanSlug || cleanSlug.endsWith(`-${comicSlug}`);
           });
         }
       }

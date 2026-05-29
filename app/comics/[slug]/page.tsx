@@ -210,15 +210,35 @@ function getLocalGenres(source: LocalApiComic) {
     .slice(0, 8);
 }
 
+function cleanMangaSlug(slug: string): string {
+  let cleaned = slug.replace(/-\d{8}-[a-zA-Z0-9]+$/, "");
+  while (true) {
+    if (cleaned.length % 2 === 1) {
+      const mid = Math.floor(cleaned.length / 2);
+      if (cleaned[mid] === '-') {
+        const firstHalf = cleaned.substring(0, mid);
+        const secondHalf = cleaned.substring(mid + 1);
+        if (firstHalf === secondHalf) {
+          cleaned = firstHalf;
+          continue;
+        }
+      }
+    }
+    break;
+  }
+  return cleaned;
+}
+
 async function fetchLocalComicBySlug(slug: string) {
   try {
+    const cleanSlug = cleanMangaSlug(slug);
     const listResponse = await fetch(`${LOCAL_API_URL}/api/comics?limit=${LOCAL_COMIC_LOOKUP_LIMIT}`, { cache: "no-store" });
     if (!listResponse.ok) return null;
 
     const comics = extractLocalComics(await listResponse.json());
     const summary = comics.find((comic) => {
       const comicSlug = getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug"]);
-      return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+      return comicSlug === cleanSlug || cleanSlug.endsWith(`-${comicSlug}`);
     });
     const numericId = getLocalStringValue(summary ?? {}, ["id"]);
 

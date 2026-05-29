@@ -94,8 +94,28 @@ function normalizeLocalImageUrl(value: string) {
   return imageUrl;
 }
 
+function cleanMangaSlug(slug: string): string {
+  let cleaned = slug.replace(/-\d{8}-[a-zA-Z0-9]+$/, "");
+  while (true) {
+    if (cleaned.length % 2 === 1) {
+      const mid = Math.floor(cleaned.length / 2);
+      if (cleaned[mid] === '-') {
+        const firstHalf = cleaned.substring(0, mid);
+        const secondHalf = cleaned.substring(mid + 1);
+        if (firstHalf === secondHalf) {
+          cleaned = firstHalf;
+          continue;
+        }
+      }
+    }
+    break;
+  }
+  return cleaned;
+}
+
 async function getLocalReadMetadata(slug: string) {
   try {
+    const cleanSlug = cleanMangaSlug(slug);
     const cacheKey = `local-read-metadata-comics-list`;
     const comics = await getOrSetCached(cacheKey, 300, async () => {
       const response = await fetch(`${MONLINE_API_URL}/api/comics?limit=100`, { cache: "no-store" });
@@ -106,7 +126,7 @@ async function getLocalReadMetadata(slug: string) {
 
     const comic = comics.find((item) => {
       const comicSlug = getStringValue(item as Record<string, unknown>, ["slug", "manga_slug", "comic_slug"]);
-      return comicSlug === slug || slug.endsWith(`-${comicSlug}`);
+      return comicSlug === cleanSlug || cleanSlug.endsWith(`-${comicSlug}`);
     });
 
     if (!comic) return null;
