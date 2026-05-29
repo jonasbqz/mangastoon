@@ -129,7 +129,8 @@ export default function MangastoonProvider() {
     document.head.appendChild(externalScript);
 
     return () => {
-      // Cleanup
+      inlineScript.remove();
+      externalScript.remove();
     };
   }, [shouldLoad]);
 

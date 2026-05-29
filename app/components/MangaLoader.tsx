@@ -103,7 +103,7 @@ export default function MangaLoader({
     <div
       className={`flex flex-col items-center justify-center p-6 text-center transition-opacity duration-300 ${
         fullScreen
-          ? "fixed inset-0 z-[9999] h-[100dvh] w-[100dvw] bg-[#0a0908]/95 backdrop-blur-md pb-20 md:pb-28"
+          ? "fixed inset-0 z-[9999] h-[100dvh] w-[100dvw] bg-[#0a0908]/95 backdrop-blur-md pt-0 pb-[25vh] md:pb-28"
           : "min-h-[400px] w-full pb-8"
       }`}
     >

@@ -312,6 +312,14 @@ function cleanMangaSlug(slug: string): string {
   return cleaned;
 }
 
+function slugToReadableTitle(slug: string): string {
+  const clean = cleanMangaSlug(slug);
+  return clean
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase())
+    .trim() || "Mangastoon";
+}
+
 async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) {
   try {
     const cleanSlug = cleanMangaSlug(slug);
@@ -883,7 +891,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         return cachedReadResponse(
           responseCacheKey,
           {
-            mangaTitle: "Mangastoon",
+            mangaTitle: slugToReadableTitle(id),
             coverImage: "",
             chapters: chapterId
               ? [{ id: chapterId, attributes: { chapter: null, title: null, translatedLanguage: "es" } }]
@@ -912,7 +920,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return cachedReadResponse(
         responseCacheKey,
         {
-          mangaTitle: "Mangastoon",
+          mangaTitle: slugToReadableTitle(id),
           coverImage: "",
           chapters: chapterId
             ? [{ id: chapterId, attributes: { chapter: null, title: null, translatedLanguage: "es" } }]

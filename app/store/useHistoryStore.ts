@@ -29,6 +29,12 @@ export const useHistoryStore = create<HistoryState>()(
             return state;
           }
 
+          // Reject phantom entries with the site-name fallback title
+          const normalizedTitle = item.mangaTitle?.trim().toLowerCase();
+          if (!normalizedTitle || normalizedTitle === "mangastoon") {
+            return state;
+          }
+
           const withoutCurrentManga = state.history.filter(
             (historyItem) =>
               historyItem.mangaId !== item.mangaId &&

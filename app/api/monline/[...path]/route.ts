@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getCached, setCached, stableCacheKey } from "../../../utils/server-cache";
 
 export const runtime = "nodejs";
@@ -37,7 +37,7 @@ function getProxyTtl(path: string[], upstreamUrl: URL) {
   if (/api\/comics\/[^/]+$/.test(cleanPath)) return 60 * 10;
   if (cleanPath === "api/comics") {
     const hasSearch = Boolean(upstreamUrl.searchParams.get("title"));
-    return hasSearch ? 60 : 60 * 3;
+    return hasSearch ? 60 : 60;
   }
 
   return 60 * 2;

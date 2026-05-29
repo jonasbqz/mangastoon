@@ -647,6 +647,11 @@ export default function ReaderClient({
   const routeSlug = Array.isArray(params.slug) ? params.slug[0] : params.slug;
   const routeChapterId = Array.isArray(params.id) ? params.id[0] : params.id;
   const mangaId = initialMangaId ?? extractComicIdFromSlugId(routeSlug);
+  const slugFallbackTitle = routeSlug
+    ?.replace(/-\d{8}-[a-zA-Z0-9]+$/, "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c: string) => c.toUpperCase())
+    .trim() || "";
   const currentChapterParam = initialChapterParam ?? searchParams.get("chapter") ?? routeChapterId;
   const readerLanguage = initialReaderLanguage ?? normalizeReaderLanguage(searchParams.get("lang"), language);
   
@@ -663,7 +668,7 @@ export default function ReaderClient({
 
   const initialSelectedChapter = initialData?.currentChapter ?? null;
   const initialPages = initialData?.pages ?? [];
-  const [mangaTitle, setMangaTitle] = useState(initialData?.mangaTitle ?? "Mangastoon");
+  const [mangaTitle, setMangaTitle] = useState(initialData?.mangaTitle || slugFallbackTitle || "");
   const [coverImage, setCoverImage] = useState(initialData?.coverImage ?? "");
   const [chapters, setChapters] = useState<ChapterFeedItem[]>(initialData?.chapters ?? []);
   const [currentChapter, setCurrentChapter] = useState<ChapterFeedItem | null>(initialSelectedChapter);
@@ -1034,7 +1039,7 @@ export default function ReaderClient({
         const selectedChapter = payload.currentChapter ?? null;
         const chapterPages = payload.pages ?? [];
 
-        setMangaTitle(payload.mangaTitle ?? "Mangastoon");
+        setMangaTitle(payload.mangaTitle || slugFallbackTitle || "");
         setCoverImage(payload.coverImage ?? "");
         
         if (feed && feed.length > 0) {

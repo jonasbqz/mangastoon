@@ -76,7 +76,7 @@ function TransitionLoaderEvents() {
         const currentPath = window.location.pathname;
 
         if (targetPath !== currentPath) {
-          setIsLoading(true);
+          queueMicrotask(() => setIsLoading(true));
         }
       } catch (err) {
         console.warn("[PageTransitionLoader] Error parsing History URL:", err);
@@ -98,7 +98,7 @@ function TransitionLoaderEvents() {
 
     const handlePopState = () => {
       // Show loader on browser back/forward navigation
-      setIsLoading(true);
+      queueMicrotask(() => setIsLoading(true));
     };
 
     document.addEventListener("click", handleAnchorClick);
