@@ -447,7 +447,7 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.22 }}
             className="absolute inset-0"
-            style={{ background: "rgba(5, 4, 3, 0.82)", backdropFilter: "blur(12px)" }}
+            style={{ background: "rgba(5, 4, 3, 0.82)", backdropFilter: "blur(4px)" }}
             onClick={onClose}
           />
 
@@ -467,7 +467,7 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 16 }}
             transition={{ type: "spring", stiffness: 350, damping: 28 }}
-            className="relative z-10 w-full max-w-[390px] overflow-hidden rounded-3xl border border-white/[0.07] bg-[#121110]/95 shadow-[0_30px_70px_rgba(0,0,0,0.85),_0_0_0_1px_rgba(255,107,0,0.06)] backdrop-blur-md"
+            className="relative z-10 w-full max-w-[390px] overflow-hidden rounded-3xl border border-white/[0.07] bg-[#121110]/98 shadow-[0_30px_70px_rgba(0,0,0,0.85),_0_0_0_1px_rgba(255,107,0,0.06)]"
           >
             {/* Botón de Cerrar Flotante */}
             <button

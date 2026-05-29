@@ -1,16 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { createClient } from "../../utils/supabase/client";
 
 const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutos
 const LAST_SHOW_KEY = "mangastoon_last_ad_time";
 
 export default function MangastoonProvider() {
+  const pathname = usePathname();
   const [shouldLoad, setShouldLoad] = useState(false);
 
   useEffect(() => {
     async function checkMonetizationState() {
+      // Don't load ads on premium, profile, reset-password, callback, etc.
+      const excludedPaths = ["/profile", "/premium", "/reset-password", "/auth"];
+      if (excludedPaths.some(p => pathname.startsWith(p))) {
+        setShouldLoad(false);
+        return;
+      }
+
       try {
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
@@ -53,7 +62,7 @@ export default function MangastoonProvider() {
     }
 
     checkMonetizationState();
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     if (!shouldLoad) return;
