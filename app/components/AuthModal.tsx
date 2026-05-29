@@ -37,6 +37,23 @@ function translateError(raw: string): string {
   return raw;
 }
 
+function isAllowedEmailDomain(email: string): boolean {
+  const parts = email.trim().toLowerCase().split("@");
+  if (parts.length !== 2) return false;
+  const domain = parts[1];
+
+  if (domain === "gmail.com") return true;
+  if (domain === "msn.com" || domain === "icloud.com" || domain === "me.com") return true;
+  if (domain === "proton.me" || domain === "protonmail.com" || domain === "protonmail.ch") return true;
+
+  // matches outlook.com, outlook.es, hotmail.com, hotmail.es, live.com, live.fr, yahoo.com, yahoo.es, etc.
+  if (/^(outlook|hotmail|live|yahoo)\.[a-z]{2,3}(\.[a-z]{2})?$/.test(domain)) {
+    return true;
+  }
+
+  return false;
+}
+
 const getAuthCallbackURL = (nextPath?: string) => {
   let url = typeof window !== "undefined"
     ? window.location.origin
@@ -354,6 +371,18 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
       setErrorMsg(msg);
       return;
     }
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (!isAllowedEmailDomain(cleanEmail)) {
+      const msg = language === "es"
+        ? "Por seguridad, solo permitimos registros con correos de Gmail, Outlook/Hotmail, Yahoo, Proton o iCloud."
+        : language === "pt"
+        ? "Por segurança, só permitimos registros com e-mails do Gmail, Outlook/Hotmail, Yahoo, Proton ou iCloud."
+        : "For security, we only allow registration with Gmail, Outlook/Hotmail, Yahoo, Proton, or iCloud emails.";
+      setErrorMsg(msg);
+      return;
+    }
+
     const cleanUsername = username.trim();
     if (!cleanUsername) { setErrorMsg("Ingresá un nombre de usuario."); return; }
     if (password !== confirmPassword) { setErrorMsg("Las contraseñas no coinciden. Verificalas e inténtalo de nuevo."); return; }
