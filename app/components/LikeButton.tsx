@@ -7,6 +7,16 @@ import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import AuthModal from "./AuthModal";
 
+function formatCountCompact(num: number) {
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1).replace(/\.0$/, "") + "M";
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, "") + "K";
+  }
+  return num.toString();
+}
+
 type LikeButtonProps = {
   mangaId: string;
   initialLikesCount: number;
@@ -107,15 +117,20 @@ export default function LikeButton({
         type="button"
         onClick={handleLikeToggle}
         disabled={isPending}
-        className={`flex w-full items-center justify-center gap-2.5 rounded-xl border py-3 text-sm font-bold transition-all duration-300 active:scale-95
+        className={`flex items-center justify-center transition-all duration-300 active:scale-95 w-full
+          md:flex-row md:gap-2.5 md:rounded-xl md:border md:py-3 md:text-sm md:font-bold
+          flex-col gap-1 py-2.5 text-[10px] font-bold border-transparent bg-transparent
           ${
             optimisticState.liked
-              ? "border-[#00e700]/30 bg-[#00e700] text-black shadow-[0_0_15px_rgba(0,231,0,0.25)] hover:bg-[#00d000]"
-              : "border-white/5 bg-white/[0.03] text-gray-300 hover:border-white/10 hover:bg-white/[0.06] hover:text-white"
+              ? "md:border-[#00e700]/30 md:bg-[#00e700] text-[#00e700] md:text-black md:shadow-[0_0_15px_rgba(0,231,0,0.25)] md:hover:bg-[#00d000]"
+              : "md:border-white/5 md:bg-white/[0.03] text-gray-400 hover:text-white md:hover:border-white/10 md:hover:bg-white/[0.06]"
           }`}
       >
-        <ThumbsUp className={`h-4.5 w-4.5 ${optimisticState.liked ? "fill-black" : ""}`} />
-        <span>
+        <ThumbsUp className={`h-5 w-5 md:h-4.5 md:w-4.5 ${optimisticState.liked ? "fill-current" : ""}`} />
+        <span className="md:hidden block truncate w-full text-center">
+          {formatCountCompact(displayedCount)} Likes
+        </span>
+        <span className="hidden md:inline">
           {optimisticState.liked ? likedLabel : label} ({displayedCount.toLocaleString()})
         </span>
       </button>

@@ -71,14 +71,22 @@ export default function FavoriteButton(props: FavoriteButtonProps) {
       <button
         type="button"
         onClick={toggleFavorite}
-        className={`flex w-full items-center justify-center gap-2.5 rounded-xl border py-3 text-sm font-heading font-semibold transition-all duration-300 ${
-          isFav
-            ? "border-[#ff6b00]/30 bg-[#ff6b00]/10 text-[#ff6b00] shadow-[0_0_15px_rgba(255,107,0,0.08)] hover:bg-[#ff6b00]/15"
-            : "border-white/10 bg-white/5 text-gray-300 hover:border-white/20 hover:bg-white/10 hover:text-white"
-        }`}
+        className={`flex items-center justify-center transition-all duration-300 active:scale-95 w-full
+          md:flex-row md:gap-2.5 md:rounded-xl md:border md:py-3 md:text-sm md:font-heading md:font-semibold
+          flex-col gap-1 py-2.5 text-[10px] font-bold border-transparent bg-transparent
+          ${
+            isFav
+              ? "md:border-[#ff6b00]/30 md:bg-[#ff6b00]/10 text-[#ff6b00] md:shadow-[0_0_15px_rgba(255,107,0,0.08)] md:hover:bg-[#ff6b00]/15"
+              : "md:border-white/10 md:bg-white/5 text-gray-400 hover:text-white md:hover:border-white/20 md:hover:bg-white/10"
+          }`}
       >
-        <Heart className={`h-4.5 w-4.5 ${isFav ? "fill-current" : ""}`} />
-        <span>{props.label ?? "Agregar a favoritos"}</span>
+        <Heart className={`h-5 w-5 md:h-4.5 md:w-4.5 ${isFav ? "fill-current" : ""}`} />
+        <span className="md:hidden block truncate w-full text-center">
+          Favorito
+        </span>
+        <span className="hidden md:inline">
+          {props.label ?? "Agregar a favoritos"}
+        </span>
       </button>
     );
   }
