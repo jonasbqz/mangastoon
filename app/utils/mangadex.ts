@@ -758,9 +758,10 @@ export async function fetchLocalTop(limit = 10, language: SupportedLanguage = "e
     const params = new URLSearchParams();
     params.set("limit", String(limit));
     params.set("order", "views");
+    params.set("v", "2");
 
     const response = await fetch(`${apiBaseUrl}/api/comics?${params.toString()}`, {
-      next: { revalidate: 86_400 },
+      next: { revalidate: 300 },
     });
 
     if (!response.ok) {

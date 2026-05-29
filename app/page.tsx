@@ -512,7 +512,7 @@ async function fetchMonlineComics(path: string, language: SupportedLanguage, enr
 
   try {
     const response = await fetch(`${MONLINE_API_URL}${path}`, {
-      next: { revalidate: isTopRow ? 86_400 : 60 },
+      next: { revalidate: isTopRow ? 300 : 60 },
       signal: controller.signal,
     });
     if (!response.ok) return [];
@@ -598,9 +598,9 @@ export default async function HomePage() {
   if (useLocalCatalog) {
     [monlineWorldTop, monlineTopManhwas, monlineNewManhwas, monlineLatest, leerCapituloLatest] = await Promise.all([
       fetchLocalTop(10, currentLanguage),
-      fetchMonlineComics("/api/comics?limit=10&type=manhua&order=views", currentLanguage),
-      fetchMonlineComics("/api/comics?limit=10&type=manhua&order=created_at", currentLanguage),
-      fetchMonlineComics("/api/comics?limit=15&order=updated_at&sort=desc", currentLanguage, true),
+      fetchMonlineComics("/api/comics?limit=10&type=manhua&order=views&v=2", currentLanguage),
+      fetchMonlineComics("/api/comics?limit=10&type=manhua&order=created_at&v=2", currentLanguage),
+      fetchMonlineComics("/api/comics?limit=15&order=updated_at&sort=desc&v=2", currentLanguage, true),
       fetchLeerCapituloLatest(currentLanguage).catch(() => []),
     ]);
   }
