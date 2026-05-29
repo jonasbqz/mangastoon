@@ -5,57 +5,62 @@ import { revalidatePath } from "next/cache";
 
 // ─── Obtener perfil del usuario autenticado ────────────────────────────────
 export async function getProfile() {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return null;
+  try {
+    const supabase = await createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return null;
 
-  let { data: profile } = await supabase
-    .from("profiles")
-    .select("id, username, avatar_url, username_updated_at, updated_at, reading_direction, is_premium, created_at")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  // Si no tiene fila en la tabla profiles (por ejemplo, porque se registró antes del trigger)
-  // la creamos automáticamente con sus metadatos de auth
-  if (!profile) {
-    const fallbackUsername = user.user_metadata?.username || user.email?.split("@")[0] || "Usuario";
-    const fallbackAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
-
-    const { data: newProfile, error: insertError } = await supabase
+    let { data: profile } = await supabase
       .from("profiles")
-      .insert({
-        id: user.id,
-        username: fallbackUsername,
-        avatar_url: fallbackAvatar,
-        updated_at: new Date().toISOString(),
-      })
       .select("id, username, avatar_url, username_updated_at, updated_at, reading_direction, is_premium, created_at")
+      .eq("id", user.id)
       .maybeSingle();
 
-    if (!insertError && newProfile) {
-      profile = newProfile;
-    } else {
-      console.error("[getProfile] failed to auto-create profile:", insertError);
-    }
-  }
+    // Si no tiene fila en la tabla profiles (por ejemplo, porque se registró antes del trigger)
+    // la creamos automáticamente con sus metadatos de auth
+    if (!profile) {
+      const fallbackUsername = user.user_metadata?.username || user.email?.split("@")[0] || "Usuario";
+      const fallbackAvatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
 
-  // Restaurar premium_since en metadatos de auth si es premium pero Discord/OAuth lo borró
-  if (profile && profile.is_premium && !user.user_metadata?.premium_since) {
-    const defaultPremiumSince = profile.created_at || user.created_at || new Date().toISOString();
-    try {
-      await supabase.auth.updateUser({
-        data: {
-          premium_since: defaultPremiumSince
-        }
-      });
-      if (!user.user_metadata) user.user_metadata = {};
-      user.user_metadata.premium_since = defaultPremiumSince;
-    } catch (e) {
-      console.warn("[getProfile] failed to restore premium_since metadata:", e);
-    }
-  }
+      const { data: newProfile, error: insertError } = await supabase
+        .from("profiles")
+        .insert({
+          id: user.id,
+          username: fallbackUsername,
+          avatar_url: fallbackAvatar,
+          updated_at: new Date().toISOString(),
+        })
+        .select("id, username, avatar_url, username_updated_at, updated_at, reading_direction, is_premium, created_at")
+        .maybeSingle();
 
-  return { user, profile: profile ?? null };
+      if (!insertError && newProfile) {
+        profile = newProfile;
+      } else {
+        console.error("[getProfile] failed to auto-create profile:", insertError);
+      }
+    }
+
+    // Restaurar premium_since en metadatos de auth si es premium pero Discord/OAuth lo borró
+    if (profile && profile.is_premium && !user.user_metadata?.premium_since) {
+      const defaultPremiumSince = profile.created_at || user.created_at || new Date().toISOString();
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            premium_since: defaultPremiumSince
+          }
+        });
+        if (!user.user_metadata) user.user_metadata = {};
+        user.user_metadata.premium_since = defaultPremiumSince;
+      } catch (e) {
+        console.warn("[getProfile] failed to restore premium_since metadata:", e);
+      }
+    }
+
+    return { user, profile: profile ?? null };
+  } catch (err) {
+    console.error("[getProfile] Error loading profile:", err);
+    return null;
+  }
 }
 
 // ─── Actualizar nombre de usuario (con bloqueo de 7 días) ─────────────────

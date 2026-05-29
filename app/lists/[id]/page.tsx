@@ -87,9 +87,15 @@ export default async function ListDetailsPage({ params }: ListDetailsPageProps) 
 
   const { list, items, error } = await cachedGetMangaListDetails(id);
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const isOwner = user && list ? user.id === list.user_id : false;
+  let user: any = null;
+  try {
+    const supabase = await createClient();
+    const res = await supabase.auth.getUser();
+    user = res.data?.user ?? null;
+  } catch (err) {
+    console.error("[ListDetailsPage] Auth/Supabase error:", err);
+  }
+  const isOwner = (user && list) ? user.id === list.user_id : false;
 
   if (error || !list) {
     notFound();

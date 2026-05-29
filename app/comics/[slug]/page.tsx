@@ -1185,13 +1185,15 @@ export default async function MangaDetailsPage({
   ]);
 
   // Obtener cliente Supabase Server y chequear valoración de likes
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  const userId = user?.id ?? null;
-
+  let userId: string | null = null;
   let dbLikesCount = 0;
   let userHasLiked = false;
+
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    userId = user?.id ?? null;
+
     const { count } = await supabase
       .from("likes")
       .select("*", { count: "exact", head: true })
@@ -1208,7 +1210,7 @@ export default async function MangaDetailsPage({
       userHasLiked = !!likeRecord;
     }
   } catch (err) {
-    logger.error(`[MangaStoon] Error al cargar likes para ${manga.id}:`, err);
+    logger.error(`[MangaStoon] Error al cargar likes/usuario para ${manga.id}:`, err);
   }
 
   let chapters = initialChapters;
