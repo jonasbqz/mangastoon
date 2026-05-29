@@ -2,16 +2,35 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
-  const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/profile";
+const getSiteURL = () => {
+  let url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mangastoon.com";
 
-  if (!code) {
-    return NextResponse.redirect(`${origin}/?error=missing_code`);
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
   }
 
-  const response = NextResponse.redirect(`${origin}${next}`);
+  return url.endsWith("/") ? url.slice(0, -1) : url;
+};
+
+const getSafeNextPath = (next: string | null) => {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return "/profile";
+  }
+
+  return next;
+};
+
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const siteURL = getSiteURL();
+  const code = searchParams.get("code");
+  const next = getSafeNextPath(searchParams.get("next"));
+
+  if (!code) {
+    return NextResponse.redirect(new URL("/?error=missing_code", siteURL));
+  }
+
+  const response = NextResponse.redirect(new URL(next, siteURL));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -34,7 +53,7 @@ export async function GET(request: NextRequest) {
 
   if (error || !data.session) {
     console.error("[auth/callback] error:", error?.message);
-    return NextResponse.redirect(`${origin}/?error=auth_failed`);
+    return NextResponse.redirect(new URL("/?error=auth_failed", siteURL));
   }
 
   const user = data.session.user;
