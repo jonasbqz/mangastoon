@@ -149,7 +149,7 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
   const turnstileWidgetId = useRef<string | null>(null);
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
-  const isCaptchaEnabled = false;
+  const isCaptchaEnabled = !!siteKey;
 
   const [forgotCooldown, setForgotCooldown] = useState(0);
   const [signupCooldown, setSignupCooldown] = useState(0);
