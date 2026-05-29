@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xlcsqqwelopzpslxgdni.supabase.co";
+const SUPABASE_ANON_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_HXlaIRq65K65Yx9djOtK8Q_NKOFfPvN";
+
 const getSiteURL = () => {
   let url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://mangastoon.com";
 
@@ -33,8 +37,8 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(new URL(next, siteURL));
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     {
       cookies: {
         getAll() {
