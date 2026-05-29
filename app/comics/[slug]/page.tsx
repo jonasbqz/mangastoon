@@ -904,61 +904,7 @@ function getManualCoverOverride(mangaId: string, title: string) {
   return "";
 }
 
-async function shouldUseFallbackCover(coverUrl: string) {
-  if (!coverUrl.startsWith("/api/proxy-image?")) {
-    return false;
-  }
 
-  const rawUrl = new URLSearchParams(coverUrl.split("?")[1] ?? "").get("url");
-
-  if (!rawUrl || !rawUrl.includes("dashboard.olympusbiblioteca.com")) {
-    return false;
-  }
-
-  try {
-    const response = await fetch(rawUrl, {
-      method: "HEAD",
-      cache: "no-store",
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        Referer: "https://olympusbiblioteca.com/",
-      },
-    });
-
-    return response.status === 404;
-  } catch {
-    return false;
-  }
-}
-
-async function fetchAuthorName(mangaTitle: string) {
-  const title = mangaTitle.trim();
-  if (!title) return null;
-
-  try {
-    const response = await fetch(
-      `https://api.jikan.moe/v4/manga?q=${encodeURIComponent(title)}&limit=1`,
-      { next: { revalidate: 86_400 } }
-    );
-
-    if (!response.ok) return null;
-
-    const payload = (await response.json()) as {
-      data?: Array<{
-        authors?: Array<{ name?: string | null }>;
-      }>;
-    };
-
-    const authors = payload.data?.[0]?.authors ?? [];
-    const author = authors.find((item) => item.name?.trim())?.name?.trim();
-
-    return author || null;
-  } catch {
-    return null;
-  }
-}
 
 function getScanGroupName(chapter: ChapterFeedItem | null) {
   const group = chapter?.relationships?.find((relationship) => relationship.type === "scanlation_group");
@@ -1160,8 +1106,6 @@ const cachedFetchMangaRatingSummary = cache(fetchMangaRatingSummary);
 const cachedGetOriginalContent = cache(getOriginalContent);
 const cachedFetchSimilarMangas = cache(fetchSimilarMangas);
 const cachedFetchSuggestedLocalMangas = cache(fetchSuggestedLocalMangas);
-const cachedShouldUseFallbackCover = cache(shouldUseFallbackCover);
-const cachedFetchAuthorName = cache(fetchAuthorName);
 
 export default async function MangaDetailsPage({
   params,
@@ -1281,19 +1225,18 @@ export default async function MangaDetailsPage({
       ? manga.author.trim()
       : null;
 
-  // Ejecutar todas las solicitudes asíncronas restantes en paralelo para eliminar waterfalls
+  const relationshipAuthor = manga.relationships?.find((rel) => rel.type === "author")?.attributes?.name || null;
+  const realAuthorResolved = databaseAuthor || relationshipAuthor || null;
+
+  // Ejecutar las solicitudes asíncronas restantes en paralelo
   const [
     description,
     similarMangas,
-    fallbackSuggestedMangas,
-    shouldUseFallback,
-    realAuthorResolved
+    fallbackSuggestedMangas
   ] = await Promise.all([
     cachedGetOriginalContent(manga, currentLanguage, copy),
     cachedFetchSimilarMangas(manga.id, tags.map((tag) => tag.id), currentLanguage, isAdult),
-    cachedFetchSuggestedLocalMangas(manga.id),
-    (manualCoverUrl || !fallbackCoverUrl) ? Promise.resolve(false) : cachedShouldUseFallbackCover(coverUrl),
-    databaseAuthor ? Promise.resolve(databaseAuthor) : cachedFetchAuthorName(displayTitle)
+    cachedFetchSuggestedLocalMangas(manga.id)
   ]);
 
   const suggestedMangas = similarMangas.length > 0 ? similarMangas.slice(0, 12) : fallbackSuggestedMangas.slice(0, 12);
@@ -1302,8 +1245,7 @@ export default async function MangaDetailsPage({
     manga.attributes?.contentRating === "pornographic" ||
     hasSensitiveAdultTag(manga.attributes?.tags);
 
-  const primaryCoverUrl =
-    manualCoverUrl || (fallbackCoverUrl && shouldUseFallback ? fallbackCoverUrl : coverUrl);
+  const primaryCoverUrl = manualCoverUrl || coverUrl;
 
   const favoriteManga = {
     id: manga.id,
