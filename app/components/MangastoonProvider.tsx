@@ -64,6 +64,10 @@ export default function MangastoonProvider() {
     checkMonetizationState();
   }, [pathname]);
 
+  // ─── ANUNCIOS DESACTIVADOS TEMPORALMENTE ──────────────────────────────────
+  // Para volver a activar la publicidad dinámica con evasión de AdBlockers:
+  // Descomentar todo el bloque de useEffect a continuación.
+  /*
   useEffect(() => {
     if (!shouldLoad) return;
 
@@ -110,6 +114,7 @@ export default function MangastoonProvider() {
       scriptsToClean.forEach((script) => script.remove());
     };
   }, [shouldLoad]);
+  */
 
   return null;
 }
