@@ -1,4 +1,4 @@
-﻿export function slugify(value: string | null | undefined) {
+export function slugify(value: string | null | undefined) {
   return (value ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -9,11 +9,31 @@
     .replace(/-{2,}/g, "-") || "comic";
 }
 
+function cleanMangaSlug(slug: string): string {
+  let cleaned = slug.replace(/-\d{8}-[a-zA-Z0-9]+$/, "");
+  while (true) {
+    if (cleaned.length % 2 === 1) {
+      const mid = Math.floor(cleaned.length / 2);
+      if (cleaned[mid] === '-') {
+        const firstHalf = cleaned.substring(0, mid);
+        const secondHalf = cleaned.substring(mid + 1);
+        if (firstHalf === secondHalf) {
+          cleaned = firstHalf;
+          continue;
+        }
+      }
+    }
+    break;
+  }
+  return cleaned;
+}
+
 export function extractComicIdFromSlugId(slugId: string) {
   const decoded = decodeURIComponent(slugId);
   const uuid = decoded.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)?.[0];
 
-  return uuid ?? decoded;
+  if (uuid) return uuid;
+  return cleanMangaSlug(decoded);
 }
 
 function isMangaDexUuid(value: string) {
