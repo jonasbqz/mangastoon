@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import AuthModal from "./AuthModal";
 import { useFavoritesStore } from "../store/useFavoritesStore";
+import { useHistoryStore } from "../store/useHistoryStore";
 import Button from "./Button";
 
 export type SupportedLanguage = "es" | "en" | "pt";
@@ -211,11 +212,13 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
         if (fallbackData && active) {
           setProfile({ ...fallbackData, is_premium: false });
           useFavoritesStore.getState().syncWithServer();
+          useHistoryStore.getState().syncWithServer();
         }
       } else {
         setProfile(data || null);
         if (data && active) {
           useFavoritesStore.getState().syncWithServer();
+          useHistoryStore.getState().syncWithServer();
         }
       }
       setLoadingProfile(false);

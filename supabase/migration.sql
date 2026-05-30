@@ -59,3 +59,46 @@ ALTER TABLE public.profiles ALTER COLUMN is_premium SET DEFAULT false;
 
 -- Cambiar valor por defecto de lectura a horizontal tradicional para nuevos usuarios
 ALTER TABLE public.profiles ALTER COLUMN reading_direction SET DEFAULT 'horizontal';
+
+-- Crear tabla de favoritos si no existe
+CREATE TABLE IF NOT EXISTS public.favorites (
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  manga_id text NOT NULL,
+  manga_data jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now() NOT NULL,
+  PRIMARY KEY (user_id, manga_id)
+);
+ALTER TABLE public.favorites ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'favorites' AND policyname = 'Users can manage their own favorites'
+    ) THEN
+        CREATE POLICY "Users can manage their own favorites" ON public.favorites FOR ALL USING (auth.uid() = user_id);
+    END IF;
+END
+$$;
+
+-- Crear tabla de historial de lectura si no existe
+CREATE TABLE IF NOT EXISTS public.reading_history (
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  manga_id text NOT NULL,
+  manga_title text NOT NULL,
+  chapter_id text NOT NULL,
+  chapter_number text NOT NULL,
+  cover_image text,
+  updated_at timestamp with time zone DEFAULT now() NOT NULL,
+  PRIMARY KEY (user_id, manga_id)
+);
+ALTER TABLE public.reading_history ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies WHERE tablename = 'reading_history' AND policyname = 'Users can manage their own reading history'
+    ) THEN
+        CREATE POLICY "Users can manage their own reading history" ON public.reading_history FOR ALL USING (auth.uid() = user_id);
+    END IF;
+END
+$$;
