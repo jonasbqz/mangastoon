@@ -1126,15 +1126,19 @@ export async function fetchMangaVfDetailsBySlug(id: string) {
   const sourceUrl = source?.url?.trim();
   if (!sourceUrl) return null;
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
   try {
     const response = await fetch(
       `${MANGAVF_API_URL}/api/v1/manga/chapters?url=${encodeURIComponent(sourceUrl)}`,
-      { cache: "no-store" }
+      { cache: "no-store", signal: controller.signal }
     );
     if (!response.ok) return null;
     return (await response.json()) as MangaVfDetails;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -1258,10 +1262,12 @@ async function searchMangaDexByTitle(title: string): Promise<string | null> {
 }
 
 async function searchLeerCapituloByTitle(title: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
   try {
     const response = await fetch(
       `${MANGAVF_API_URL}/api/v1/manga/search?q=${encodeURIComponent(title)}`,
-      { cache: "no-store" }
+      { cache: "no-store", signal: controller.signal }
     );
     if (!response.ok) return null;
     const payload = await response.json() as MangaVfSearchResponse;
@@ -1279,6 +1285,8 @@ async function searchLeerCapituloByTitle(title: string): Promise<string | null> 
     return null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -1524,10 +1532,12 @@ export async function fetchMangaVfPages(details: MangaVfDetails, chapterId: stri
   const chapterUrl = (details.chapters ?? []).find((chapter) => getMangaVfChapterId(chapter) === chapterId)?.url?.trim();
   if (!chapterUrl) return [];
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
   try {
     const response = await fetch(
       `${MANGAVF_API_URL}/api/v1/manga/extract?url=${encodeURIComponent(chapterUrl)}`,
-      { cache: "no-store" }
+      { cache: "no-store", signal: controller.signal }
     );
     if (!response.ok) return [];
     const payload = (await response.json()) as any;
@@ -1535,6 +1545,8 @@ export async function fetchMangaVfPages(details: MangaVfDetails, chapterId: stri
     return pages.filter(Boolean) as string[];
   } catch {
     return [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
