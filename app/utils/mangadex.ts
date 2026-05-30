@@ -1184,8 +1184,8 @@ export async function fetchMangaDetails(id: string, language?: string): Promise<
       return localManga;
     }
 
-    // If the language is NOT Spanish, we bypass LeerCapitulo entirely
-    if (language && language !== "es") {
+    // If the language is NOT Spanish and this is NOT a LeerCapitulo manga, we bypass LeerCapitulo entirely
+    if (language && language !== "es" && !id.startsWith("lc-")) {
       if (!isMangaDexUuid(id)) return null;
       try {
         const response = await fetchMangaDex(
@@ -1480,8 +1480,8 @@ export async function fetchMangaChapters(id: string, language: string): Promise<
   return getOrSetCached(cacheKey, 900, async () => {
     const resolution = await resolveBestSource(id);
 
-    // If the language is NOT Spanish, we ONLY fetch from MangaDex (no merging)
-    if (language !== "es") {
+    // If the language is NOT Spanish and this is NOT a LeerCapitulo manga, we ONLY fetch from MangaDex (no merging)
+    if (language !== "es" && !id.startsWith("lc-")) {
       const mangaId = resolution.mangadexId || id;
       if (!isMangaDexUuid(mangaId)) return [];
       return fetchMangaDexChaptersOnly(mangaId, language);

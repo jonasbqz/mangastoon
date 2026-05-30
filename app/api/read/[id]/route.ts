@@ -822,13 +822,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             const bNum = parseFloat(b.attributes?.chapter || "0");
             return bNum - aNum;
           });
-          paginatedChapters = mergedChapters.slice(offset, offset + limit);
+          paginatedChapters = mergedChapters;
         } catch (err) {
           logger.error("Error merging external chapters for local manga", err);
-          paginatedChapters = mergedChapters.slice(offset, offset + limit);
+          paginatedChapters = mergedChapters;
         }
       } else {
-        paginatedChapters = excludeChapters ? [] : mergedChapters.slice(offset, offset + limit);
+        paginatedChapters = excludeChapters ? [] : mergedChapters;
       }
 
       const currentChapter =
