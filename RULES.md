@@ -80,3 +80,34 @@ Este archivo es la fuente de verdad absoluta para la orquestación del desarroll
 
 ## 11. TRADUCCIONES E IDIOMAS (UI_COPY)
 *   No hardcodees textos en la interfaz del usuario. Todo debe pasar por los diccionarios locales (`UI_COPY` o traducción de tags) que den soporte a español (`es`), inglés (`en`) y portugués (`pt`).
+
+---
+
+## 12. ESTRUCTURA DEL PROYECTO Y GUÍA DE UBICACIÓN (ONBOARDING)
+*   **`app/actions/`:** Server Actions de Next.js para base de datos Supabase (favoritos, historial de lectura, likes, listas de comunidad, perfil). Usan el cliente de servidor.
+*   **`app/api/`:** Endpoint stand-alone de lectura (`/api/read/chapter/[chapterId]`), proxy de imágenes `/api/proxy-image` y sitemaps.
+*   **`app/auth/`:** Manejo de callbacks y lógica del flujo de inicio de sesión/registro.
+*   **`app/comics/[slug]/`:** Detalle del manga. Su subcarpeta `chapters/[id]/` contiene la visualización y el cliente interactivo de lectura `reader-client.tsx`.
+*   **`app/components/`:** Componentes globales reutilizables (modales de auth, navbar inferior móvil, componentes publicitarios).
+*   **`app/store/`:** Zustand client stores (`useFavoritesStore.ts`, `useHistoryStore.ts`) con sincronización híbrida (localStorage + base de datos).
+*   **`app/utils/`:** Clientes de API externa (`mangadex.ts`, `monline.ts`), utilidades SEO (`seo.ts`) y utilidades de traducción (`translation.ts`).
+*   **`utils/supabase/`:** Configuraciones del cliente Supabase SSR para cliente (`client.ts`) y servidor (`server.ts`).
+
+---
+
+## 13. PREVENCIÓN DE ERRORES FATALES Y OPTIMIZACIONES CRÍTICAS
+1.  **Prevención de Pantalla Blanca (Manga en Mantenimiento):**
+    *   Si MangaDex u otra API externa fallan o no devuelven capítulos, **NUNCA** rompas la ejecución con un `throw` no capturado o un `404` inmediato en SSR. 
+    *   Implementá siempre la pantalla de "Manga en Mantenimiento" renderizando fallbacks de títulos/sinopsis precalculados y listando capítulos desde Consumet como fuente de respaldo secundaria.
+2.  **Duplicados y Orden en Lista de Capítulos (Extra/Special Chapters):**
+    *   El parser de números de capítulos `parseChapterNumber` debe validar rigurosamente strings vacíos o nulos. En JS/TS, `Number("") === 0`.
+    *   Para evitar que capítulos especiales sin número se ordenen en el número `0` (confundiendo a los usuarios con el capítulo inicial), el helper debe mapear strings vacíos a `null` de manera explícita y ordenarlos al final de la lista.
+3.  **Prevención de Race Conditions en Auth y Merge de Datos:**
+    *   Al iniciar sesión, el flujo debe realizar un merge asincrónico del historial y favoritos temporales del "Invitado" (Guest/Cache) hacia la base de datos de Supabase.
+    *   No borres ni sobrescribas los datos del usuario en Supabase con un store vacío antes de que el merge finalice.
+4.  **Optimización del Lector (Carga de Imágenes Progresiva):**
+    *   En `reader-client.tsx`, pre-cargá las siguientes 2 a 3 páginas del capítulo en background usando elementos `<img>` ocultos.
+    *   No cargues todo el capítulo de golpe si contiene más de 50 imágenes pesadas para optimizar el consumo de datos y ancho de banda en dispositivos móviles sobre Hetzner VPS.
+5.  **Optimización de Búsqueda y Filtros:**
+    *   El componente de búsqueda debe implementar un `debounce` de al menos 400ms para evitar disparar múltiples llamadas innecesarias a la API externa de MangaDex por cada tecla que presione el usuario.
+
