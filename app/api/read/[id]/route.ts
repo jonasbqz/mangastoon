@@ -144,7 +144,7 @@ function readResponseCacheKey(id: string, lang: SupportedLanguage, chapterId: st
 
 function readCacheHeaders(cacheStatus: "HIT" | "MISS" | "BYPASS" = "MISS", ttl = READ_RESPONSE_TTL_SECONDS) {
   return {
-    "Cache-Control": `public, max-age=60, s-maxage=${ttl}, stale-while-revalidate=${ttl * 12}`,
+    "Cache-Control": `public, max-age=${ttl}, s-maxage=${ttl}, stale-while-revalidate=${ttl * 12}`,
     "X-Mangastoon-Cache": cacheStatus,
   };
 }

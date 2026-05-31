@@ -131,8 +131,8 @@ export async function GET(req: Request) {
       });
     }
 
-    // Para todos los demás hosts, redireccionar a images.weserv.nl para cache global y conversión a WebP automática
-    const weservUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}&default=${encodeURIComponent(imageUrl)}`;
+    // Para todos los demás hosts, redireccionar a images.weserv.nl para cache global y conversión a WebP automática con compresión (calidad 75)
+    const weservUrl = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}&default=${encodeURIComponent(imageUrl)}&output=webp&q=75`;
     return new Response(null, {
       status: 307,
       headers: {
