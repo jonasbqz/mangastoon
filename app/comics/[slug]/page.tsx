@@ -1,5 +1,5 @@
 import { logger } from "../../utils/logger";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import type { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
@@ -1149,7 +1149,20 @@ export default async function MangaDetailsPage({
   else if (pageSlug === slugPt) slugLanguage = "pt";
   else if (pageSlug === slugEs) slugLanguage = "es";
 
-  const currentLanguage: SupportedLanguage = rawCookieLang ? cookieLang : slugLanguage;
+  const currentLanguage: SupportedLanguage = slugLanguage;
+
+  let preferredLanguage = cookieLang;
+  if (!rawCookieLang) {
+    const headersList = await headers();
+    const acceptLanguage = headersList.get("accept-language") || "";
+    if (acceptLanguage.startsWith("en") || acceptLanguage.includes("en-")) {
+      preferredLanguage = "en";
+    } else if (acceptLanguage.startsWith("pt") || acceptLanguage.includes("pt-")) {
+      preferredLanguage = "pt";
+    } else {
+      preferredLanguage = "es";
+    }
+  }
 
   const copy = UI_COPY[currentLanguage];
 
@@ -1418,6 +1431,37 @@ export default async function MangaDetailsPage({
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       <SiteHeader language={currentLanguage} />
+
+      {preferredLanguage !== currentLanguage && (
+        <div className="bg-gradient-to-r from-amber-500/20 to-yellow-500/20 border-b border-amber-500/30 text-amber-300 px-4 py-3 text-center text-sm font-semibold shadow-inner">
+          <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-center gap-2">
+            <span>
+              {preferredLanguage === "es"
+                ? "Parece que preferís leer en Español."
+                : preferredLanguage === "pt"
+                  ? "Parece que você prefere ler em Português."
+                  : "It looks like you prefer reading in English."}
+            </span>
+            <Link
+              href={
+                preferredLanguage === "pt"
+                  ? `/comics/${slugPt}`
+                  : preferredLanguage === "en"
+                    ? `/comics/${slugEn}`
+                    : `/comics/${slugEs}`
+              }
+              className="underline hover:text-amber-200 transition-colors font-bold flex items-center gap-1"
+            >
+              {preferredLanguage === "es"
+                ? "Hacé clic acá para ver la versión en Español."
+                : preferredLanguage === "pt"
+                  ? "Clique aqui para ver a versão em Português."
+                  : "Click here to view the English version."}
+              <span className="no-underline">→</span>
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-5 md:px-6 md:py-8 lg:px-8">
         <div className="flex items-center justify-between mb-4 w-full">

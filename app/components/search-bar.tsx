@@ -4,7 +4,7 @@ import { Loader2, Search } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { MangaShowcaseItem } from "./home-carousel";
 import { useLanguage } from "./language-provider";
 import { getLocalizedTitle, getLocalizedTitleAsync } from "../utils/get-localized-title";
@@ -352,6 +352,20 @@ export default function SearchBar() {
   const [results, setResults] = useState<MangaShowcaseItem[]>([]);
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   useEffect(() => {
     if (pathname !== "/explore") {
@@ -461,7 +475,7 @@ export default function SearchBar() {
   }
 
   return (
-    <div className="relative w-full">
+    <div ref={containerRef} className="relative w-full">
       <div className="relative flex items-center rounded-full border border-white/10 bg-[#23252b] px-4 py-3 text-gray-300 transition focus-within:border-orange-500">
         <input
           type="text"

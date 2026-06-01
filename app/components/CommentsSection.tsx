@@ -664,7 +664,7 @@ export default function CommentsSection({
                                     initial={{ opacity: 0, height: 0 }}
                                     animate={{ opacity: 1, height: "auto" }}
                                     exit={{ opacity: 0, height: 0 }}
-                                    className="mt-3 ml-6 flex flex-col gap-4 border-l border-white/5 pl-4"
+                                    className="mt-3 ml-3 sm:ml-6 flex flex-col gap-4 border-l border-white/5 pl-4"
                                   >
                                     {replies.map((reply) => {
                                       const isReplyUserLiked = currentUser && reply.likes?.includes(currentUser.id);

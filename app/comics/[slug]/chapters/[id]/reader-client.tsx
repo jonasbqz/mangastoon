@@ -1479,6 +1479,7 @@ export default function ReaderClient({
         isPremium={isPremium}
         pageSize={pageSize}
         setPageSize={setPageSize}
+        onOpenPremiumModal={() => setShowPremiumModal(true)}
       />
 
       {loading ? (

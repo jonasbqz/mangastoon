@@ -61,6 +61,7 @@ interface ReaderSettingsPanelProps {
   isPremium: boolean;
   pageSize: PageSize;
   setPageSize: (size: PageSize) => void;
+  onOpenPremiumModal?: () => void;
 }
 
 export default function ReaderSettingsPanel({
@@ -82,6 +83,7 @@ export default function ReaderSettingsPanel({
   isPremium,
   pageSize,
   setPageSize,
+  onOpenPremiumModal,
 }: ReaderSettingsPanelProps) {
   const [showThemes, setShowThemes] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -298,6 +300,22 @@ export default function ReaderSettingsPanel({
                 </svg>
               </ToolButton>
             </>
+          )}
+
+          {!isPremium && onOpenPremiumModal && (
+            <motion.button
+              type="button"
+              title="Activar Premium Gratis 💎"
+              onClick={onOpenPremiumModal}
+              whileHover={{ scale: 1.06, y: -2 }}
+              whileTap={{ scale: 0.94 }}
+              className="relative flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-lg sm:rounded-xl border border-amber-500/40 bg-gradient-to-tr from-amber-500/20 to-yellow-500/25 text-amber-400 hover:text-amber-300 hover:border-amber-400/50 shadow-[0_0_15px_rgba(245,158,11,0.25)] backdrop-blur-md shrink-0"
+            >
+              <Crown className="h-5 w-5 animate-pulse text-amber-400" />
+              <span className="absolute -bottom-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-[8px] font-black text-black">
+                +
+              </span>
+            </motion.button>
           )}
         </motion.div>
       ) : (

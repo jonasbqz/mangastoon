@@ -4,27 +4,7 @@ import { BookOpen } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { buildChapterPath } from "../utils/slugify";
-
-type ReadingProgress = {
-  mangaId: string;
-  mangaTitle: string;
-  chapterId: string;
-  chapterLabel: string;
-  updatedAt: string;
-};
-
-const READING_PROGRESS_KEY = "mangastoon_reading_progress";
-
-function readProgressMap() {
-  try {
-    return JSON.parse(localStorage.getItem(READING_PROGRESS_KEY) ?? "{}") as Record<
-      string,
-      ReadingProgress
-    >;
-  } catch {
-    return {};
-  }
-}
+import { useHistoryStore } from "../store/useHistoryStore";
 
 export default function ContinueReadingButton({
   mangaId,
@@ -37,24 +17,27 @@ export default function ContinueReadingButton({
   language?: string;
   firstChapterId?: string;
 }) {
-  const [progress, setProgress] = useState<ReadingProgress | null>(null);
+  const history = useHistoryStore((state) => state.history);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setProgress(readProgressMap()[mangaId] ?? null);
-  }, [mangaId]);
+    setMounted(true);
+  }, []);
 
+  const progress = mounted ? (history.find((item) => item.mangaId === mangaId) ?? null) : null;
   const chId = progress?.chapterId ?? firstChapterId;
 
   if (!chId) {
     return null;
   }
 
+  const chapterWord = language === "pt" ? "Cap. " : language === "en" ? "Ch. " : "Cap. ";
   const labelText = progress
     ? (language === "pt"
-        ? `Continuar lendo - ${progress.chapterLabel}`
+        ? `Continuar lendo - ${chapterWord}${progress.chapterNumber}`
         : language === "en"
-          ? `Continue reading - ${progress.chapterLabel}`
-          : `Continuar leyendo - ${progress.chapterLabel}`)
+          ? `Continue reading - ${chapterWord}${progress.chapterNumber}`
+          : `Continuar leyendo - ${chapterWord}${progress.chapterNumber}`)
     : (language === "pt"
         ? "Começar a ler"
         : language === "en"

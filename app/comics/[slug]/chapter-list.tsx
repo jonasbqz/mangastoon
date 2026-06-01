@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { ArrowDown, BookOpen, CalendarDays } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { buildChapterPath } from "../../utils/slugify";
+import { useHistoryStore } from "../../store/useHistoryStore";
 
 type ChapterRow = {
   chapter: {
@@ -63,6 +64,31 @@ export default function ChapterList({
   scanGroups,
   activeScanGroup,
 }: ChapterListProps) {
+  const history = useHistoryStore((state) => state.history);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const mangaHistory = mounted ? history.find((h) => h.mangaId === mangaId) : null;
+
+  const getIsRead = (chapterId: string, chapterLabel: string) => {
+    if (!mangaHistory) return false;
+    if (mangaHistory.chapterId === chapterId) return true;
+
+    const readNum = parseFloat(mangaHistory.chapterNumber);
+    if (isNaN(readNum)) return false;
+
+    const match = chapterLabel.match(/\d+(?:\.\d+)?/);
+    if (match) {
+      const currentNum = parseFloat(match[0]);
+      return !isNaN(currentNum) && currentNum <= readNum;
+    }
+
+    return false;
+  };
+
   const [visibleCount, setVisibleCount] = useState(INITIAL_CHAPTER_COUNT);
   const [descending, setDescending] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -147,23 +173,26 @@ export default function ChapterList({
       </div>
 
       <div className="grid grid-cols-1 gap-2 sm:block">
-        {visibleRows.map(({ chapter, chapterLabel, publishedLabel }) => (
-          <Link
-            key={chapter.id}
-            href={buildChapterPath(mangaTitle, mangaId, chapter.id, language)}
-            className="animate-soft-enter flex items-center justify-between gap-2 rounded-xl border border-white/5 bg-white/5 p-3 transition-colors hover:bg-white/10 sm:mb-2 sm:gap-3 sm:p-4"
-          >
-            <div className="flex min-w-0 items-center gap-3">
-              <BookOpen className="h-4 w-4 shrink-0 text-amber-500 sm:h-5 sm:w-5" />
-              <p className="text-sm font-semibold text-white sm:text-base">{chapterLabel}</p>
-            </div>
+        {visibleRows.map(({ chapter, chapterLabel, publishedLabel }) => {
+          const isRead = getIsRead(chapter.id, chapterLabel);
+          return (
+            <Link
+              key={chapter.id}
+              href={buildChapterPath(mangaTitle, mangaId, chapter.id, language)}
+              className="animate-soft-enter flex items-center justify-between gap-2 rounded-xl border border-white/5 bg-white/5 p-3 transition-colors hover:bg-white/10 sm:mb-2 sm:gap-3 sm:p-4"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <BookOpen className={`h-4 w-4 shrink-0 sm:h-5 sm:w-5 ${isRead ? "text-neutral-500/70" : "text-amber-500"}`} />
+                <p className={`text-sm font-semibold sm:text-base ${isRead ? "text-neutral-500" : "text-white"}`}>{chapterLabel}</p>
+              </div>
 
-            <div className="ml-2 flex shrink-0 items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm">
-              <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span>{publishedLabel}</span>
-            </div>
-          </Link>
-        ))}
+              <div className="ml-2 flex shrink-0 items-center gap-1.5 text-xs text-gray-400 sm:gap-2 sm:text-sm">
+                <CalendarDays className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span>{publishedLabel}</span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
       {hasMore ? (
