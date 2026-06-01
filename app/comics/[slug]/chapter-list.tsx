@@ -74,6 +74,14 @@ export default function ChapterList({
   const cleanId = (id: string) => id.startsWith("lc-") ? id.substring(3) : id;
   const mangaHistory = mounted ? history.find((h) => cleanId(h.mangaId) === cleanId(mangaId)) : null;
 
+  useEffect(() => {
+    if (mounted && history.length > 0) {
+      console.log("[ChapterList DEBUG] mangaId prop:", mangaId, "| cleanId:", cleanId(mangaId));
+      console.log("[ChapterList DEBUG] history items:", history.map(h => ({ mangaId: h.mangaId, cleanId: cleanId(h.mangaId), chapterNumber: h.chapterNumber, title: h.mangaTitle })));
+      console.log("[ChapterList DEBUG] mangaHistory found:", mangaHistory ? { mangaId: mangaHistory.mangaId, chapterNumber: mangaHistory.chapterNumber } : null);
+    }
+  }, [mounted, history, mangaId, mangaHistory]);
+
   const getIsRead = (chapterId: string, chapterLabel: string) => {
     if (!mangaHistory) return false;
     if (mangaHistory.chapterId === chapterId) return true;

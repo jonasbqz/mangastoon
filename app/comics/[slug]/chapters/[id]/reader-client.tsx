@@ -1169,6 +1169,8 @@ export default function ReaderClient({
 
     const chapterNumber = getChapterNumber(currentChapter);
 
+    console.log("[DEBUG addHistory] mangaId:", mangaId, "| mangaTitle:", mangaTitle, "| chapterId:", currentChapter.id, "| chapterNumber:", chapterNumber, "| coverImage:", coverImage?.substring(0, 50));
+
     addHistory({
       mangaId,
       mangaTitle,
