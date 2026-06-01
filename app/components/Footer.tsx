@@ -15,6 +15,9 @@ export default function Footer() {
         </div>
 
         <div suppressHydrationWarning={true} className="flex flex-wrap justify-center gap-6 text-sm font-medium text-gray-400">
+          <Link href="/directorio" className="transition-colors hover:text-orange-500">
+            Directorio
+          </Link>
           <a href="https://t.me/+dtPKjcBfiDUyOWQx" target="_blank" rel="noopener noreferrer" className="transition-colors hover:text-orange-500">
             Comunidad
           </a>

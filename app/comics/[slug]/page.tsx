@@ -400,14 +400,20 @@ async function getOriginalContent(
     .slice(0, 5);
 
   if (genres.length > 0) {
-    return lang === "pt"
-      ? `Sinopse não disponível. Gêneros: ${genres.join(", ")}.`
+    const genresLabel = lang === "pt" ? "Gêneros" : lang === "en" ? "Genres" : "Géneros";
+    const baseFallback = lang === "pt"
+      ? `Leia ${title} online grátis no MangaStoon. Acesse todos os capítulos em português, inglês e espanhol.`
       : lang === "en"
-        ? `Synopsis unavailable. Genres: ${genres.join(", ")}.`
-        : `Sinopsis no disponible. Géneros: ${genres.join(", ")}.`;
+        ? `Read ${title} online for free on MangaStoon. Access all chapters in English, Spanish, and Portuguese.`
+        : `Leé ${title} online gratis en MangaStoon. Accedé a todos los capítulos en español, inglés y portugués.`;
+    return `${baseFallback} ${genresLabel}: ${genres.join(", ")}.`;
   }
 
-  return dict.noSynopsis;
+  return lang === "pt"
+    ? `Leia ${title} online grátis no MangaStoon. Acesse todos os capítulos em português, inglês e espanhol.`
+    : lang === "en"
+      ? `Read ${title} online for free on MangaStoon. Access all chapters in English, Spanish, and Portuguese.`
+      : `Leé ${title} online gratis en MangaStoon. Accedé a todos los capítulos en español, inglés y portugués.`;
 }
 
 export async function generateMetadata({
