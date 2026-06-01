@@ -891,7 +891,6 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
               logger.error(`[Fallback] Error al intentar resolver páginas externas para el capítulo local ${currentChapter.id}:`, fallbackErr);
             }
           }
-        }
         } else {
           // External chapter pages resolution
           const isMangaDexChapterId = isMangaDexUuid(currentChapter.id);
