@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowDown, BookOpen, CalendarDays } from "lucide-react";
 import { useState, useEffect } from "react";
-import { buildChapterPath } from "../../utils/slugify";
+import { buildChapterPath, extractComicIdFromSlugId } from "../../utils/slugify";
 import { useHistoryStore } from "../../store/useHistoryStore";
 
 type ChapterRow = {
@@ -73,7 +73,10 @@ export default function ChapterList({
     setMounted(true);
   }, []);
 
-  const cleanId = (id: string) => id.startsWith("lc-") ? id.substring(3) : id;
+  const cleanId = (id: string) => {
+    const cleaned = id.startsWith("lc-") ? id.substring(3) : id;
+    return extractComicIdFromSlugId(cleaned);
+  };
   const mangaHistory = mounted ? history.find((h) => cleanId(h.mangaId) === cleanId(mangaId)) : null;
 
   const getIsRead = (chapterId: string, chapterLabel: string) => {

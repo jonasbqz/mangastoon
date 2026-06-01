@@ -58,6 +58,37 @@ function formatDistanceToNow(dateString: string): string {
   }
 }
 
+function AvatarImage({
+  src,
+  alt,
+  fallback,
+  className,
+}: {
+  src: string | null | undefined;
+  alt: string;
+  fallback: React.ReactNode;
+  className?: string;
+}) {
+  const [error, setError] = useState(false);
+
+  // If the image fails to load (404, bad URL format, etc.) or doesn't exist, use the initials fallback.
+  useEffect(() => {
+    setError(false);
+  }, [src]);
+
+  if (error || !src) return <>{fallback}</>;
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className={className}
+      onError={() => setError(true)}
+      referrerPolicy="no-referrer"
+    />
+  );
+}
+
 export default function CommentsSection({
   chapterId,
   mangaId,
@@ -313,15 +344,18 @@ export default function CommentsSection({
                 ? "rounded-full border-amber-500/60 shadow-[0_0_8px_rgba(245,158,11,0.3)] bg-amber-500/5" 
                 : "rounded-xl border-white/10 bg-white/5"
             }`}>
-              {currentProfile?.avatar_url ? (
-                <img src={currentProfile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
-              ) : (
-                <div className={`flex h-full w-full items-center justify-center text-xs font-bold ${
-                  currentProfile?.is_premium ? "bg-amber-500/10 text-amber-400" : "bg-[#ff6b00]/10 text-[#ff6b00]"
-                }`}>
-                  {getInitials(currentProfile?.username || currentUser.email || "U")}
-                </div>
-              )}
+              <AvatarImage
+                src={currentProfile?.avatar_url}
+                alt="Avatar"
+                className="h-full w-full object-cover"
+                fallback={
+                  <div className={`flex h-full w-full items-center justify-center text-xs font-bold ${
+                    currentProfile?.is_premium ? "bg-amber-500/10 text-amber-400" : "bg-[#ff6b00]/10 text-[#ff6b00]"
+                  }`}>
+                    {getInitials(currentProfile?.username || currentUser.email || "U")}
+                  </div>
+                }
+              />
             </div>
 
             <div className="flex-1">
@@ -426,15 +460,18 @@ export default function CommentsSection({
                         ? "rounded-full border-amber-500/60 shadow-[0_0_8px_rgba(245,158,11,0.3)] bg-amber-500/5" 
                         : "rounded-xl border-white/5 bg-white/5"
                     }`}>
-                      {comment.userAvatar ? (
-                        <img src={comment.userAvatar} alt={comment.userName} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className={`flex h-full w-full items-center justify-center text-xs font-bold ${
-                          isPremium ? "bg-amber-500/10 text-amber-400" : "bg-[#ff6b00]/10 text-[#ff6b00]"
-                        }`}>
-                          {getInitials(comment.userName)}
-                        </div>
-                      )}
+                      <AvatarImage
+                        src={comment.userAvatar}
+                        alt={comment.userName}
+                        className="h-full w-full object-cover"
+                        fallback={
+                          <div className={`flex h-full w-full items-center justify-center text-xs font-bold ${
+                            isPremium ? "bg-amber-500/10 text-amber-400" : "bg-[#ff6b00]/10 text-[#ff6b00]"
+                          }`}>
+                            {getInitials(comment.userName)}
+                          </div>
+                        }
+                      />
                     </div>
                   </div>
 
@@ -598,15 +635,18 @@ export default function CommentsSection({
                                   ? "rounded-full border-amber-500/60 bg-amber-500/5" 
                                   : "rounded-lg border-white/10 bg-white/5"
                               }`}>
-                                {currentProfile?.avatar_url ? (
-                                  <img src={currentProfile.avatar_url} alt="Avatar" className="h-full w-full object-cover" />
-                                ) : (
-                                  <div className={`flex h-full w-full items-center justify-center text-[10px] font-bold ${
-                                    currentProfile?.is_premium ? "bg-amber-500/10 text-amber-400" : "bg-[#ff6b00]/10 text-[#ff6b00]"
-                                  }`}>
-                                    {getInitials(currentProfile?.username || currentUser.email || "U")}
-                                  </div>
-                                )}
+                                <AvatarImage
+                                  src={currentProfile?.avatar_url}
+                                  alt="Avatar"
+                                  className="h-full w-full object-cover"
+                                  fallback={
+                                    <div className={`flex h-full w-full items-center justify-center text-[10px] font-bold ${
+                                      currentProfile?.is_premium ? "bg-amber-500/10 text-amber-400" : "bg-[#ff6b00]/10 text-[#ff6b00]"
+                                    }`}>
+                                      {getInitials(currentProfile?.username || currentUser.email || "U")}
+                                    </div>
+                                  }
+                                />
                               </div>
                               <div className="flex-1 relative">
                                 <input
@@ -686,15 +726,18 @@ export default function CommentsSection({
                                                 ? "rounded-full border-amber-500/50 shadow-[0_0_6px_rgba(245,158,11,0.2)] bg-amber-500/5" 
                                                 : "rounded-lg border-white/5 bg-white/5"
                                             }`}>
-                                              {reply.userAvatar ? (
-                                                <img src={reply.userAvatar} alt={reply.userName} className="h-full w-full object-cover" />
-                                              ) : (
-                                                <div className={`flex h-full w-full items-center justify-center text-[10px] font-bold ${
-                                                  isReplyPremium ? "bg-amber-500/10 text-amber-400" : "bg-[#ff6b00]/10 text-[#ff6b00]"
-                                                }`}>
-                                                  {getInitials(reply.userName)}
-                                                </div>
-                                              )}
+                                              <AvatarImage
+                                                src={reply.userAvatar}
+                                                alt={reply.userName}
+                                                className="h-full w-full object-cover"
+                                                fallback={
+                                                  <div className={`flex h-full w-full items-center justify-center text-[10px] font-bold ${
+                                                    isReplyPremium ? "bg-amber-500/10 text-amber-400" : "bg-[#ff6b00]/10 text-[#ff6b00]"
+                                                  }`}>
+                                                    {getInitials(reply.userName)}
+                                                  </div>
+                                                }
+                                              />
                                             </div>
                                           </div>
 

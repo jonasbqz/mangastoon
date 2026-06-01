@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { addHistoryAction, removeHistoryAction, clearHistoryAction, getHistoryAction } from "../actions/history";
+import { extractComicIdFromSlugId } from "../utils/slugify";
 
 export type ReadingHistoryItem = {
   mangaId: string;
@@ -22,8 +23,11 @@ type HistoryState = {
 
 const MAX_HISTORY_ITEMS = 20;
 
-/** Strip the "lc-" prefix so local IDs match DB IDs regardless of format. */
-const cleanId = (id: string) => (id.startsWith("lc-") ? id.substring(3) : id);
+/** Strip the "lc-" prefix and date-hash suffix so IDs match DB IDs regardless of format. */
+const cleanId = (id: string) => {
+  const cleaned = id.startsWith("lc-") ? id.substring(3) : id;
+  return extractComicIdFromSlugId(cleaned);
+};
 
 export const useHistoryStore = create<HistoryState>()(
   persist(
