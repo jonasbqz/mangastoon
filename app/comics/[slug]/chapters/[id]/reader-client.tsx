@@ -722,7 +722,6 @@ export default function ReaderClient({
   const [pendingChapterNavId, setPendingChapterNavId] = useState<string | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);
   const [dismissedRegBanner, setDismissedRegBanner] = useState(false);
-  const chaptersNavigatedRef = useRef(0);
   const nextChapterRef = useRef<any>(null);
 
   // Protect readingMode: only allow "horizontal" if the user is confirmed premium.
@@ -1309,8 +1308,20 @@ export default function ReaderClient({
     setAutoScroll(false);
 
     if (authLoaded && !currentUser) {
-      chaptersNavigatedRef.current += 1;
-      const count = chaptersNavigatedRef.current;
+      let count = 0;
+      if (typeof window !== "undefined") {
+        try {
+          count = Number(sessionStorage.getItem("mangastoon_chapters_navigated") ?? "0");
+          count += 1;
+          sessionStorage.setItem("mangastoon_chapters_navigated", String(count));
+        } catch {
+          // Fallback if sessionStorage is blocked/disabled
+          count = 1;
+        }
+      } else {
+        count = 1;
+      }
+
       if (count === 1 || (count > 1 && (count - 1) % 10 === 0)) {
         setPendingChapterNavId(chapterId);
         setIsSuggestModalOpen(true);
