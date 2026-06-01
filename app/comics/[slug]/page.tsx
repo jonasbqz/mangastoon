@@ -1165,9 +1165,15 @@ export default async function MangaDetailsPage({
   }
 
   let slugLanguage: SupportedLanguage = "es";
-  if (pageSlug === slugEn) slugLanguage = "en";
-  else if (pageSlug === slugPt) slugLanguage = "pt";
-  else if (pageSlug === slugEs) slugLanguage = "es";
+  if (slugEs === slugEn && slugEs === slugPt) {
+    // Si todos los slugs son idénticos (cómics locales), no hay distinción en la URL,
+    // por lo que resolvemos el idioma basándonos en la preferencia del usuario.
+    slugLanguage = preferredLanguage;
+  } else {
+    if (pageSlug === slugEn) slugLanguage = "en";
+    else if (pageSlug === slugPt) slugLanguage = "pt";
+    else if (pageSlug === slugEs) slugLanguage = "es";
+  }
 
   // Si el usuario real tiene una cookie de idioma configurada y es distinta a la del slug actual de la URL,
   // lo redireccionamos automáticamente a la versión de su idioma.
