@@ -177,6 +177,54 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
   const [forgotCooldown, setForgotCooldown] = useState(0);
   const [signupCooldown, setSignupCooldown] = useState(0);
 
+  const [showUnconfirmedError, setShowUnconfirmedError] = useState(false);
+  const [unconfirmedEmail, setUnconfirmedEmail] = useState("");
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Resend verification email cooldown timer
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  // Recover resend cooldown from localStorage
+  useEffect(() => {
+    if (!open) return;
+    const lastResend = localStorage.getItem("mangastoon_last_resend_sent");
+    if (lastResend) {
+      const elapsed = Math.floor((Date.now() - parseInt(lastResend, 10)) / 1000);
+      if (elapsed < 120) {
+        setResendCooldown(120 - elapsed);
+      }
+    }
+  }, [open]);
+
+  const handleResendVerification = async (targetEmail: string) => {
+    if (loading) return;
+    if (resendCooldown > 0) return;
+
+    setLoading(true);
+    const currentPath = typeof window !== "undefined" ? window.location.pathname : "/profile";
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: targetEmail,
+      options: {
+        emailRedirectTo: getAuthCallbackURL(currentPath),
+      },
+    });
+    setLoading(false);
+
+    if (error) {
+      toast.error(translateError(error.message));
+      return;
+    }
+
+    toast.success("¡Correo de verificación reenviado! Revisa tu bandeja de entrada.");
+    localStorage.setItem("mangastoon_last_resend_sent", String(Date.now()));
+    setResendCooldown(120);
+  };
+
   // Forgot password cooldown timer
   useEffect(() => {
     if (forgotCooldown <= 0) return;
@@ -308,13 +356,16 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
       const t = setTimeout(() => {
         setTab("signin"); setView("main");
         setEmail(""); setPassword(""); setConfirmPassword(""); setUsername(""); setForgotEmail("");
-        setLoading(false); setErrorMsg(null);
+        setLoading(false); setErrorMsg(null); setShowUnconfirmedError(false); setUnconfirmedEmail("");
       }, 300);
       return () => clearTimeout(t);
     }
   }, [open]);
 
-  const clearError = () => setErrorMsg(null);
+  const clearError = () => {
+    setErrorMsg(null);
+    setShowUnconfirmedError(false);
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -354,7 +405,9 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
 
     if (!data.user?.email_confirmed_at) {
       await supabase.auth.signOut();
-      setErrorMsg("Primero verifica tu correo electrónico para poder acceder.");
+      setUnconfirmedEmail(email);
+      setShowUnconfirmedError(true);
+      setErrorMsg(null);
       if (window.turnstile && turnstileWidgetId.current !== null) {
         try {
           window.turnstile.reset(turnstileWidgetId.current);
@@ -633,7 +686,34 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
                       className="flex flex-col gap-4"
                     >
                       {/* Banner de Errores */}
-                      <ErrorBanner message={errorMsg} />
+                      {showUnconfirmedError ? (
+                        <ErrorBanner message={
+                          <div className="flex flex-col gap-1.5 text-left text-xs leading-relaxed">
+                            <div className="flex items-center gap-1.5 font-semibold text-red-300">
+                              <AlertCircle size={14} className="shrink-0" />
+                              <span>Primero verifica tu correo electrónico para poder acceder.</span>
+                            </div>
+                            {resendCooldown > 0 ? (
+                              <span className="text-gray-400 text-[11px]">
+                                Ya enviamos un correo de verificación recientemente. Buscá el mensaje en tu bandeja de entrada o spam. Podrás solicitar un reenvío en <span className="font-bold text-amber-500">{resendCooldown}s</span>.
+                              </span>
+                            ) : (
+                              <div className="text-[11px] text-gray-400 flex flex-col sm:flex-row sm:items-center gap-1 mt-0.5">
+                                <span>¿No te llegó el correo o expiró el enlace?</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendVerification(unconfirmedEmail)}
+                                  className="font-bold underline text-[#ff6b00] hover:text-[#ff8833] cursor-pointer w-fit"
+                                >
+                                  Reenviar correo de verificación
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        } />
+                      ) : (
+                        <ErrorBanner message={errorMsg} />
+                      )}
 
                       {tab === "signin" && (
                         <form onSubmit={handleSignIn} className="flex flex-col gap-3">
