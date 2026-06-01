@@ -181,24 +181,55 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
   const [unconfirmedEmail, setUnconfirmedEmail] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Resend verification email cooldown timer
-  useEffect(() => {
-    if (resendCooldown <= 0) return;
-    const t = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
-    return () => clearTimeout(t);
-  }, [resendCooldown]);
+  const getRemainingCooldown = () => {
+    if (typeof window === "undefined") return 0;
+    const lastResend = localStorage.getItem("mangastoon_last_resend_sent");
+    const lastSignup = localStorage.getItem("mangastoon_last_signup_sent");
 
-  // Recover resend cooldown from localStorage
+    const resendTs = lastResend ? parseInt(lastResend, 10) : 0;
+    const signupTs = lastSignup ? parseInt(lastSignup, 10) : 0;
+    const baseTs = Math.max(resendTs, signupTs);
+
+    if (baseTs <= 0) return 0;
+
+    // Cooldown de 24 horas (24 * 60 * 60 * 1000 ms)
+    const cooldownDuration = 24 * 60 * 60 * 1000;
+    const elapsed = Date.now() - baseTs;
+    const remaining = cooldownDuration - elapsed;
+
+    return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
+  };
+
+  // Cooldown timer en tiempo real de 24 horas para el reenvío de verificación
   useEffect(() => {
     if (!open) return;
-    const lastResend = localStorage.getItem("mangastoon_last_resend_sent");
-    if (lastResend) {
-      const elapsed = Math.floor((Date.now() - parseInt(lastResend, 10)) / 1000);
-      if (elapsed < 120) {
-        setResendCooldown(120 - elapsed);
+
+    setResendCooldown(getRemainingCooldown());
+
+    const interval = setInterval(() => {
+      const remaining = getRemainingCooldown();
+      setResendCooldown(remaining);
+      if (remaining <= 0) {
+        clearInterval(interval);
       }
-    }
+    }, 1000);
+
+    return () => clearInterval(interval);
   }, [open]);
+
+  const formatCooldownTime = (seconds: number): string => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    if (minutes > 0) {
+      return `${minutes}m ${secs}s`;
+    }
+    return `${secs}s`;
+  };
 
   const handleResendVerification = async (targetEmail: string) => {
     if (loading) return;
@@ -222,7 +253,7 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
 
     toast.success("¡Correo de verificación reenviado! Revisa tu bandeja de entrada.");
     localStorage.setItem("mangastoon_last_resend_sent", String(Date.now()));
-    setResendCooldown(120);
+    setResendCooldown(24 * 60 * 60); // 24 horas
   };
 
   // Forgot password cooldown timer
@@ -695,11 +726,11 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
                             </div>
                             {resendCooldown > 0 ? (
                               <span className="text-gray-400 text-[11px]">
-                                Ya enviamos un correo de verificación recientemente. Buscá el mensaje en tu bandeja de entrada o spam. Podrás solicitar un reenvío en <span className="font-bold text-amber-500">{resendCooldown}s</span>.
+                                Te enviamos un correo de verificación. El enlace sigue activo. Por favor, buscalo en tu bandeja de entrada o spam. Podrás solicitar un nuevo correo en <span className="font-bold text-amber-500">{formatCooldownTime(resendCooldown)}</span>.
                               </span>
                             ) : (
                               <div className="text-[11px] text-gray-400 flex flex-col sm:flex-row sm:items-center gap-1 mt-0.5">
-                                <span>¿No te llegó el correo o expiró el enlace?</span>
+                                <span>¿No te llegó el correo o expiró el enlace de 24 horas?</span>
                                 <button
                                   type="button"
                                   onClick={() => handleResendVerification(unconfirmedEmail)}
