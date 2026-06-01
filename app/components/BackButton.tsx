@@ -46,6 +46,9 @@ export default function BackButton({
       const storedReferrer = sessionStorage.getItem("mangastoon_manga_referrer");
       const referrer = document.referrer;
       const isFromReader = referrer && (referrer.includes("/chapters/") || referrer.includes("/read/"));
+      const isMangaPage = window.location.pathname.startsWith("/comics/") && 
+                          !window.location.pathname.includes("/chapters/") && 
+                          !window.location.pathname.includes("/read/");
 
       let safeReferrer = storedReferrer;
       if (storedReferrer) {
@@ -59,7 +62,15 @@ export default function BackButton({
         }
       }
 
-      if (isFromReader && safeReferrer && !safeReferrer.includes("/chapters/") && !safeReferrer.includes("/read/")) {
+      // Si estamos en la página principal del manga (ficha técnica), siempre volvemos a la lista origen (Home, Buscar, etc.)
+      // Evitamos usar router.back() porque si el usuario leyó capítulos, el historial de navegación nos meterá de vuelta en el lector.
+      if (isMangaPage) {
+        if (safeReferrer) {
+          window.location.href = safeReferrer;
+        } else {
+          router.push(fallbackHref);
+        }
+      } else if (isFromReader && safeReferrer && !safeReferrer.includes("/chapters/") && !safeReferrer.includes("/read/")) {
         window.location.href = safeReferrer;
       } else if (window.history.length > 1 && !isFromReader) {
         router.back();
