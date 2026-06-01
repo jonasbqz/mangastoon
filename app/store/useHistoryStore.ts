@@ -22,6 +22,9 @@ type HistoryState = {
 
 const MAX_HISTORY_ITEMS = 20;
 
+/** Strip the "lc-" prefix so local IDs match DB IDs regardless of format. */
+const cleanId = (id: string) => (id.startsWith("lc-") ? id.substring(3) : id);
+
 export const useHistoryStore = create<HistoryState>()(
   persist(
     (set, get) => ({
@@ -37,11 +40,16 @@ export const useHistoryStore = create<HistoryState>()(
           return;
         }
 
-        // 1. Local updates
+        // Save locally only — DB persistence is handled by syncWithServer()
+        // which runs on every page load when the user is authenticated.
+        // Calling addHistoryAction here fails with 'unauthenticated' during
+        // client-side chapter navigation because Next.js doesn't forward
+        // auth cookies properly in Server Action POSTs after router.push().
         set((state) => {
+          const itemCleanId = cleanId(item.mangaId);
           const withoutCurrentManga = state.history.filter(
             (historyItem) =>
-              historyItem.mangaId !== item.mangaId &&
+              cleanId(historyItem.mangaId) !== itemCleanId &&
               historyItem.mangaTitle.toLowerCase().trim() !== item.mangaTitle.toLowerCase().trim()
           );
 
@@ -49,26 +57,18 @@ export const useHistoryStore = create<HistoryState>()(
             history: [item, ...withoutCurrentManga].slice(0, MAX_HISTORY_ITEMS),
           };
         });
-
-        // 2. Sync to Supabase
-        try {
-          const res = await addHistoryAction(item);
-          console.log("[useHistoryStore] addHistory server response:", res);
-        } catch (err) {
-          console.error("[useHistoryStore] Failed to add reading history to Supabase:", err);
-        }
       },
 
       removeHistory: async (mangaId) => {
+        const targetCleanId = cleanId(mangaId);
         // 1. Local update
         set((state) => ({
-          history: state.history.filter((historyItem) => historyItem.mangaId !== mangaId),
+          history: state.history.filter((historyItem) => cleanId(historyItem.mangaId) !== targetCleanId),
         }));
 
         // 2. Sync to Supabase
         try {
-          const res = await removeHistoryAction(mangaId);
-          console.log("[useHistoryStore] removeHistory server response:", res);
+          await removeHistoryAction(mangaId);
         } catch (err) {
           console.error("[useHistoryStore] Failed to remove reading history from Supabase:", err);
         }
@@ -89,43 +89,48 @@ export const useHistoryStore = create<HistoryState>()(
       syncWithServer: async () => {
         try {
           const res = await getHistoryAction();
-          console.log("[useHistoryStore] syncWithServer response from server:", res);
           if (!res || res.error) {
             // Keep local history if unauthenticated/errors
             return;
           }
 
-          const dbHistory = res.history || [];
+          const dbHistory: ReadingHistoryItem[] = res.history || [];
           const localHistory = get().history;
 
-          console.log("[useHistoryStore] syncWithServer - dbHistory:", dbHistory.length, "localHistory:", localHistory.length);
+          // Merge local and server history, normalizing lc- prefix:
+          const mergedMap = new Map<string, ReadingHistoryItem>();
 
-          // Merge local and server history:
-          const mergedList = [...dbHistory];
+          // Seed with DB entries
+          for (const dbItem of dbHistory) {
+            mergedMap.set(cleanId(dbItem.mangaId), dbItem);
+          }
 
+          // Merge local entries — upload missing or newer items to DB
           for (const localItem of localHistory) {
-            const existsInDb = dbHistory.find((dbItem) => dbItem.mangaId === localItem.mangaId);
-            if (!existsInDb) {
-              console.log("[useHistoryStore] Uploading local item missing in DB:", localItem.mangaId);
-              const addRes = await addHistoryAction(localItem);
-              console.log("[useHistoryStore] Upload response:", addRes);
-              mergedList.push(localItem);
-            } else if (localItem.timestamp > existsInDb.timestamp) {
-              console.log("[useHistoryStore] Updating DB with newer local item:", localItem.mangaId);
-              const addRes = await addHistoryAction(localItem);
-              console.log("[useHistoryStore] Update response:", addRes);
-              const idx = mergedList.findIndex((item) => item.mangaId === localItem.mangaId);
-              if (idx !== -1) {
-                mergedList[idx] = localItem;
-              }
+            const key = cleanId(localItem.mangaId);
+            const existing = mergedMap.get(key);
+
+            if (!existing) {
+              // Local item not in DB → upload it
+              try {
+                await addHistoryAction(localItem);
+              } catch { /* non-critical */ }
+              mergedMap.set(key, localItem);
+            } else if (localItem.timestamp > existing.timestamp) {
+              // Local is newer → update DB
+              try {
+                await addHistoryAction(localItem);
+              } catch { /* non-critical */ }
+              mergedMap.set(key, localItem);
             }
           }
 
           // Sort descending by timestamp and slice to MAX_HISTORY_ITEMS
-          mergedList.sort((a, b) => b.timestamp - a.timestamp);
-          
-          set({ history: mergedList.slice(0, MAX_HISTORY_ITEMS) });
-          console.log("[useHistoryStore] syncWithServer completed. final history items:", get().history.length);
+          const mergedList = Array.from(mergedMap.values())
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, MAX_HISTORY_ITEMS);
+
+          set({ history: mergedList });
         } catch (err) {
           console.error("[useHistoryStore] syncWithServer error:", err);
         }
@@ -138,3 +143,4 @@ export const useHistoryStore = create<HistoryState>()(
     { name: "mangastoon-reading-history" }
   )
 );
+

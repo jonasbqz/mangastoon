@@ -647,10 +647,8 @@ export default function ReaderClient({
     .trim() || "";
   const currentChapterParam = initialChapterParam ?? searchParams.get("chapter") ?? routeChapterId;
   const readerLanguage = initialReaderLanguage ?? normalizeReaderLanguage(searchParams.get("lang"), language);
-  
-  if (typeof window !== "undefined") {
-    console.log("[Reader Client] readerLanguage:", readerLanguage, "| initialReaderLanguage:", initialReaderLanguage, "| languageState:", language, "| urlLangParam:", searchParams.get("lang"));
-  }
+
+
 
   const dictionary = UI_COPY[readerLanguage];
   const addHistory = useHistoryStore((state) => state.addHistory);
