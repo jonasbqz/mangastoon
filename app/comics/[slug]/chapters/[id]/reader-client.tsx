@@ -731,6 +731,7 @@ export default function ReaderClient({
   const [authLoaded, setAuthLoaded] = useState(false);
   const [dismissedRegBanner, setDismissedRegBanner] = useState(false);
   const chaptersNavigatedRef = useRef(0);
+  const nextChapterRef = useRef<any>(null);
 
   // Protect readingMode: only allow "horizontal" if the user is confirmed premium.
   // While auth is still loading, default to "vertical" to prevent flash of horizontal mode.
