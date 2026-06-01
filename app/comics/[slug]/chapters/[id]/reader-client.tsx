@@ -1310,7 +1310,8 @@ export default function ReaderClient({
 
     if (authLoaded && !currentUser) {
       chaptersNavigatedRef.current += 1;
-      if (chaptersNavigatedRef.current === 1) {
+      const count = chaptersNavigatedRef.current;
+      if (count === 1 || (count > 1 && (count - 1) % 10 === 0)) {
         setPendingChapterNavId(chapterId);
         setIsSuggestModalOpen(true);
         return;
