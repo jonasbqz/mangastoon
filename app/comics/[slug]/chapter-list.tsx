@@ -71,7 +71,8 @@ export default function ChapterList({
     setMounted(true);
   }, []);
 
-  const mangaHistory = mounted ? history.find((h) => h.mangaId === mangaId) : null;
+  const cleanId = (id: string) => id.startsWith("lc-") ? id.substring(3) : id;
+  const mangaHistory = mounted ? history.find((h) => cleanId(h.mangaId) === cleanId(mangaId)) : null;
 
   const getIsRead = (chapterId: string, chapterLabel: string) => {
     if (!mangaHistory) return false;
@@ -178,7 +179,7 @@ export default function ChapterList({
           return (
             <Link
               key={chapter.id}
-              href={buildChapterPath(mangaTitle, mangaId, chapter.id, language)}
+              href={buildChapterPath(mangaTitle, mangaId.startsWith("lc-") ? mangaId.substring(3) : mangaId, chapter.id, language)}
               className="animate-soft-enter flex items-center justify-between gap-2 rounded-xl border border-white/5 bg-white/5 p-3 transition-colors hover:bg-white/10 sm:mb-2 sm:gap-3 sm:p-4"
             >
               <div className="flex min-w-0 items-center gap-3">

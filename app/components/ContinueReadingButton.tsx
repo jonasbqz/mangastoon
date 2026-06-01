@@ -24,7 +24,8 @@ export default function ContinueReadingButton({
     setMounted(true);
   }, []);
 
-  const progress = mounted ? (history.find((item) => item.mangaId === mangaId) ?? null) : null;
+  const cleanId = (id: string) => id.startsWith("lc-") ? id.substring(3) : id;
+  const progress = mounted ? (history.find((item) => cleanId(item.mangaId) === cleanId(mangaId)) ?? null) : null;
   const chId = progress?.chapterId ?? firstChapterId;
 
   if (!chId) {
@@ -46,7 +47,7 @@ export default function ContinueReadingButton({
 
   return (
     <Link
-      href={buildChapterPath(mangaTitle || progress?.mangaTitle, mangaId, chId, language)}
+      href={buildChapterPath(mangaTitle || progress?.mangaTitle, mangaId.startsWith("lc-") ? mangaId.substring(3) : mangaId, chId, language)}
       className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#ff8833] px-4 py-3.5 text-sm font-heading font-bold text-black transition-all duration-300 hover:scale-[1.02] active:scale-95 shadow-[0_4px_20px_rgba(255,107,0,0.25)] hover:shadow-[0_4px_25px_rgba(255,107,0,0.4)]"
     >
       <BookOpen className="h-4 w-4" />
