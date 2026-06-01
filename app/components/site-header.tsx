@@ -376,7 +376,7 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
                   initial={{ opacity: 0, y: 6, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 6, scale: 0.95 }}
-                  className="absolute right-0 top-12 z-[100] w-80 rounded-2xl border border-white/5 bg-[#141519] p-3 shadow-2xl"
+                  className="absolute right-0 top-12 z-[100] w-[calc(100vw-2rem)] max-w-[320px] sm:w-80 rounded-2xl border border-white/5 bg-[#141519] p-3 shadow-2xl"
                 >
                   <div className="flex items-center justify-between border-b border-white/[0.06] pb-2 mb-2">
                     <span className="text-xs font-bold text-gray-200">Notificaciones</span>
@@ -476,7 +476,7 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 6, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 mt-2 w-64 rounded-2xl border border-white/[0.08] bg-[#0f0e0d] p-3.5 shadow-2xl"
+                className="absolute right-0 mt-2 w-[calc(100vw-2rem)] max-w-[256px] sm:w-64 rounded-2xl border border-white/[0.08] bg-[#0f0e0d] p-3.5 shadow-2xl"
                 style={{ zIndex: 200 }}
               >
                 {/* 1. Cabecera: Avatar redondo y Username en grande */}
