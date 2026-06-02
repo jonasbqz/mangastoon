@@ -1,3 +1,5 @@
+import { cache } from "react";
+import type { Metadata } from "next";
 import Script from "next/script";
 import { headers, cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -79,6 +81,72 @@ async function fetchReaderData({
   }
 }
 
+const cachedFetchReaderData = cache(fetchReaderData);
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string; id: string }>;
+  searchParams: Promise<{ chapter?: string; lang?: string }>;
+}): Promise<Metadata> {
+  const [{ slug, id }, resolvedSearchParams] = await Promise.all([params, searchParams]);
+  const cookieStore = await cookies();
+  const cookieLang = cookieStore.get("lang")?.value;
+  const lang = normalizeLanguage(resolvedSearchParams.lang || cookieLang);
+  const mangaId = extractComicIdFromSlugId(slug);
+  const chapterId = resolvedSearchParams.chapter ?? id;
+
+  const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang });
+  if (!data) {
+    return {
+      title: `Capítulo no encontrado | ${SITE_NAME}`,
+      description: "Explora y lee mangas online gratis en MangaStoon.",
+    };
+  }
+
+  const mangaTitle = data.mangaTitle || SITE_NAME;
+  const currentChapter = data.currentChapter ?? null;
+  const currentLabel = getChapterLabel(currentChapter, "Capítulo");
+
+  let title = "";
+  let description = "";
+  if (lang === "pt") {
+    title = `Ler ${mangaTitle} - ${currentLabel} Online Grátis - MangaStoon`;
+    description = `Leia o ${currentLabel} de ${mangaTitle} online gratuitamente em português, inglês e espanhol no MangaStoon.`;
+  } else if (lang === "en") {
+    title = `Read ${mangaTitle} - ${currentLabel} Online Free - MangaStoon`;
+    description = `Read ${mangaTitle} - ${currentLabel} online for free in English, Spanish, and Portuguese on MangaStoon.`;
+  } else {
+    title = `Leer ${mangaTitle} - ${currentLabel} Online Gratis - MangaStoon`;
+    description = `Leé el ${currentLabel} de ${mangaTitle} online gratis en español, inglés y portugués en MangaStoon.`;
+  }
+
+  const query = lang !== "es" ? `?lang=${encodeURIComponent(lang)}` : "";
+  const canonical = absoluteUrl(`/comics/${slug}/chapters/${chapterId}${query}`);
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: "book",
+      images: data.coverImage ? [{ url: data.coverImage }] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: data.coverImage ? [data.coverImage] : undefined,
+    },
+  };
+}
+
 export default async function ReadPage({
   params,
   searchParams,
@@ -107,7 +175,7 @@ export default async function ReadPage({
     }
   }
   const chapterId = resolvedSearchParams.chapter ?? id;
-  const data = await fetchReaderData({ id: mangaId, chapter: chapterId, lang });
+  const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang });
   const canonicalSlug = data?.comicSlug;
 
   if (canonicalSlug && canonicalSlug !== slug) {
