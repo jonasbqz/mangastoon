@@ -933,7 +933,7 @@ export default function ReaderClient({
     restoreVerticalScroll();
   }, [activeReadingMode, pages, mangaId, currentChapter?.id, loading]);
 
-  const showControlsUI = isAtTop || scrollDirection === "up";
+  const showControlsUI = activeReadingMode === "horizontal" ? true : (isAtTop || scrollDirection === "up");
 
   const autoScrollIntervalRef = useRef<number | null>(null);
   const initialRequestKeyRef = useRef(

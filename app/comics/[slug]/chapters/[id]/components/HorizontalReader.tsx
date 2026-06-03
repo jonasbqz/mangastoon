@@ -208,9 +208,9 @@ export default function HorizontalReader({
   const pageUrl = pages[currentPage] ?? "";
 
   const slideVariants = {
-    enter: (dir: number) => ({ x: dir > 0 ? "60%" : "-60%", opacity: 0 }),
+    enter: (dir: number) => ({ x: dir > 0 ? 80 : -80, opacity: 0 }),
     center: { x: 0, opacity: 1 },
-    exit: (dir: number) => ({ x: dir > 0 ? "-60%" : "60%", opacity: 0 }),
+    exit: (dir: number) => ({ x: dir > 0 ? -80 : 80, opacity: 0 }),
   };
 
   return (
@@ -232,7 +232,7 @@ export default function HorizontalReader({
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{ duration: 0.25, ease: "easeOut" }}
+            transition={{ duration: 0.2, ease: [0.25, 1, 0.5, 1] }}
             src={pageUrl}
             alt={`${dictionary.page} ${currentPage + 1} - ${chapterLabel}`}
             onLoad={(e) => {
