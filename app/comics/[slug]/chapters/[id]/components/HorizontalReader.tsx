@@ -187,8 +187,6 @@ export default function HorizontalReader({
   const [currentPage, setCurrentPage] = useState(0);
   const [direction, setDirection] = useState(0);
   const [showHint, setShowHint] = useState(true);
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isTall, setIsTall] = useState(false);
 
@@ -294,25 +292,7 @@ export default function HorizontalReader({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [currentPage, goToPage]);
 
-  // Touch/swipe handlers
-  function handleTouchStart(e: React.TouchEvent) {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  }
 
-  // Swipe logic
-  function handleTouchEnd(e: React.TouchEvent) {
-    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
-    const deltaY = Math.abs(e.changedTouches[0].clientY - touchStartY.current);
-
-    if (Math.abs(deltaX) > SWIPE_THRESHOLD && deltaY < Math.abs(deltaX) * 0.7) {
-      if (deltaX < 0) {
-        goToPage(currentPage + 1);
-      } else {
-        goToPage(currentPage - 1);
-      }
-    }
-  }
 
   // Tap zone handler
   function handleTapZone(e: React.MouseEvent) {
@@ -331,12 +311,10 @@ export default function HorizontalReader({
 
   return (
     <div className="relative mx-auto w-full max-w-5xl select-none overflow-hidden" ref={containerRef}>
-      {/* Page container with tap zones and swipe */}
+      {/* Page container with tap zones (swipe disabled for zoom capability) */}
       <div
         className="relative w-full min-h-[50vh] sm:min-h-[70vh] cursor-pointer rounded-2xl bg-black/5"
         onClick={handleTapZone}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
         role="img"
         aria-label={`${dictionary.page} ${currentPage + 1} - ${chapterLabel}`}
       >
