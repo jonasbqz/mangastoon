@@ -29,7 +29,7 @@ export default function ShareButton({ title, text, url, variant = "inline", labe
 
     const shareUrl = url || window.location.href;
     const shareTitle = title || "MangaStoon";
-    const shareText = text || `¡Leé ${shareTitle} en MangaStoon!`;
+    const shareText = text || `¡Lee ${shareTitle} en MangaStoon!`;
 
     if (navigator.share) {
       try {
@@ -53,7 +53,7 @@ export default function ShareButton({ title, text, url, variant = "inline", labe
     navigator.clipboard.writeText(shareUrl).then(
       () => {
         toast.success("¡Enlace copiado al portapapeles!", {
-          description: "Ya podés compartirlo con tus amigos.",
+          description: "Ya puedes compartirlo con tus amigos.",
         });
       },
       (err) => {

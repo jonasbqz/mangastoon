@@ -132,7 +132,7 @@ export async function POST(req: Request) {
           // Borrar el mensaje infractor
           await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${GROUP_CHAT_ID}&message_id=${message.message_id}`);
           
-          await sendTelegramMessage(token, chatId, `🔇 *@${message.from.username || message.from.first_name}* fue silenciado/a por *30 minutos* por mandar mensajes demasiado rápido (Anti-Flood).`, undefined, undefined, 30000);
+          await sendTelegramMessage(token, chatId, `🔇 *@${message.from.username || message.from.first_name}* ha sido silenciado/a por *30 minutos* por enviar mensajes demasiado rápido (Anti-Flood).`, undefined, undefined, 30000);
           return NextResponse.json({ ok: true });
         }
 
@@ -142,7 +142,7 @@ export async function POST(req: Request) {
           const isAllowed = mimeType.startsWith("image/") || mimeType === "application/pdf";
           if (!isAllowed) {
             await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${GROUP_CHAT_ID}&message_id=${message.message_id}`);
-            await sendTelegramMessage(token, chatId, `⚠️ *@${message.from.username || message.from.first_name}*, por seguridad de todos no se permite compartir archivos potencialmente peligrosos (.zip, .exe, etc.).`, undefined, undefined, 30000);
+            await sendTelegramMessage(token, chatId, `⚠️ *@${message.from.username || message.from.first_name}*, por seguridad de todos, no se permite compartir archivos potencialmente peligrosos (.zip, .exe, etc.).`, undefined, undefined, 30000);
             return NextResponse.json({ ok: true });
           }
         }
@@ -167,7 +167,7 @@ export async function POST(req: Request) {
 
         const welcomeText = `👋 *¡Hola ${member.first_name || "MangaLector"}!*\n` +
           `Bienvenido/a a la comunidad oficial de *MangaStoon*.\n\n` +
-          `🔑 Si estás acá por tu *Pase Premium Gratis*, podés pedir tu código diario de hoy hablando por privado con nuestro bot.`;
+          `🔑 Si estás aquí por tu *Pase Premium Gratis*, puedes solicitar tu código diario de hoy hablando por privado con nuestro bot.`;
 
         const replyMarkup = {
           inline_keyboard: [
@@ -204,7 +204,7 @@ export async function POST(req: Request) {
 
         const replyTo = message.reply_to_message;
         if (!replyTo) {
-          await sendTelegramMessage(token, chatId, "⚠️ Respondé al mensaje del usuario que querés moderar con este comando.", message.message_id, undefined, 30000);
+          await sendTelegramMessage(token, chatId, "⚠️ Responde al mensaje del usuario que deseas moderar con este comando.", message.message_id, undefined, 30000);
           return NextResponse.json({ ok: true });
         }
 
@@ -214,7 +214,7 @@ export async function POST(req: Request) {
         if (command === "/kick") {
           await fetch(`https://api.telegram.org/bot${token}/banChatMember?chat_id=${GROUP_CHAT_ID}&user_id=${targetUserId}`);
           await fetch(`https://api.telegram.org/bot${token}/unbanChatMember?chat_id=${GROUP_CHAT_ID}&user_id=${targetUserId}`);
-          await sendTelegramMessage(token, chatId, `🚨 *${targetUserTag}* fue expulsado/a del grupo.`, message.message_id);
+          await sendTelegramMessage(token, chatId, `🚨 *${targetUserTag}* ha sido expulsado/a del grupo.`, message.message_id);
         } else if (command === "/mute") {
           await fetch(`https://api.telegram.org/bot${token}/restrictChatMember`, {
             method: "POST",
@@ -226,7 +226,7 @@ export async function POST(req: Request) {
               until_date: Math.floor(Date.now() / 1000) + 24 * 60 * 60
             })
           });
-          await sendTelegramMessage(token, chatId, `🔇 *${targetUserTag}* fue silenciado/a por 24 horas.`, message.message_id);
+          await sendTelegramMessage(token, chatId, `🔇 *${targetUserTag}* ha sido silenciado/a por 24 horas.`, message.message_id);
         }
         return NextResponse.json({ ok: true });
       }
@@ -238,6 +238,15 @@ export async function POST(req: Request) {
           await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${GROUP_CHAT_ID}&message_id=${message.message_id}`);
         } catch {}
 
+        // Interceptar si el remitente es el GroupAnonymousBot
+        if (senderId === 1087968824 || message.from?.username === "GroupAnonymousBot") {
+          const publicError = `⚠️ *Estimado Administrador Anónimo*:\n\n` +
+            `No es posible enviar mensajes privados a cuentas anónimas o al sistema del grupo.\n\n` +
+            `Por favor, realiza la solicitud desde tu cuenta personal de Telegram.`;
+          await sendTelegramMessage(token, chatId, publicError, undefined, undefined, 30000);
+          return NextResponse.json({ ok: true });
+        }
+
         // Intentar enviar el código por privado
         const codeToday = await getDailyTelegramCode(arg || "tu_usuario", 0);
         const privateText = `🔑 *MangaStoon Pase Premium Gratis* 🔑\n\n` +
@@ -245,18 +254,18 @@ export async function POST(req: Request) {
           `🔑 Código único de hoy:\n` +
           `👉 \`${codeToday}\` 👈\n\n` +
           `*¿Cómo usarlo?*\n` +
-          `1. Entrá a tu perfil en MangaStoon.\n` +
-          `2. Hacé clic en *Reclamar Pase Gratis*.\n` +
-          `3. Pegá este código y ¡listo!`;
+          `1. Ingresa a tu perfil en MangaStoon.\n` +
+          `2. Haz clic en *Reclamar Pase Gratis*.\n` +
+          `3. Pega este código y ¡listo!`;
 
         const sentPrivate = await sendTelegramMessage(token, senderId, privateText);
 
         if (sentPrivate) {
-          const publicNotice = `🔒 *@${message.from.username || message.from.first_name}*, por seguridad te mandé tu código diario por chat privado. ¡Revisá tus mensajes directos!`;
+          const publicNotice = `🔒 *@${message.from.username || message.from.first_name}*, por seguridad te he enviado tu código diario por chat privado. ¡Revisa tus mensajes directos!`;
           await sendTelegramMessage(token, chatId, publicNotice, undefined, undefined, 30000);
         } else {
-          const publicError = `⚠️ *@${message.from.username || message.from.first_name}*, no te pude mandar el código por privado.\n\n` +
-            `Hacé clic acá 👉 [Iniciar Chat Privado con el Bot](https://t.me/RaphaelPremiumBot?start=codigo) para activarlo y escribí el comando ahí.`;
+          const publicError = `⚠️ *@${message.from.username || message.from.first_name}*, no he podido enviarte el código por privado.\n\n` +
+            `Haz clic aquí 👉 [Iniciar Chat Privado con el Bot](https://t.me/RaphaelPremiumBot?start=codigo) para activarlo y escribe el comando allí.`;
           await sendTelegramMessage(token, chatId, publicError, undefined, undefined, 60000);
         }
         return NextResponse.json({ ok: true });
@@ -266,9 +275,9 @@ export async function POST(req: Request) {
       if (message.chat.type === "private" && senderId) {
         if (command === "/start") {
           const startText = `👑 *¡Hola ${message.from.first_name || "MangaLector"}!* Soy el bot oficial de MangaStoon.\n\n` +
-            `Para conseguir tu código diario único de premium gratis, usá el comando:\n` +
+            `Para conseguir tu código diario único de premium gratis, usa el comando:\n` +
             `👉 \`/codigo TU_USUARIO\`\n\n` +
-            `_(Ejemplo: \`/codigo Juan123\`. Podés ver tu nombre de usuario en tu perfil de MangaStoon)_`;
+            `_(Ejemplo: \`/codigo Juan123\`. Puedes ver tu nombre de usuario en tu perfil de MangaStoon)_`;
 
           await sendTelegramMessage(token, chatId, startText, message.message_id);
           return NextResponse.json({ ok: true });
@@ -277,9 +286,9 @@ export async function POST(req: Request) {
         if (command === "/codigo") {
           if (!arg) {
             const missingArgText = `⚠️ *Falta tu nombre de usuario.*\n\n` +
-              `Por favor, ingresá el comando de esta forma:\n` +
+              `Por favor, ingresa el comando de esta forma:\n` +
               `👉 \`/codigo TU_USUARIO\`\n\n` +
-              `_(Reemplazá \`TU_USUARIO\` con tu usuario real de MangaStoon)_`;
+              `_(Reemplaza \`TU_USUARIO\` con tu usuario real de MangaStoon)_`;
 
             await sendTelegramMessage(token, chatId, missingArgText, message.message_id);
             return NextResponse.json({ ok: true });
@@ -289,9 +298,9 @@ export async function POST(req: Request) {
           const isMember = await checkGroupMembership(token, senderId);
           if (!isMember) {
             const notMemberText = `⚠️ *Acceso Denegado.*\n\n` +
-              `Para poder obtener tu Pase Premium Gratis, tenés que formar parte de nuestro grupo oficial.\n\n` +
-              `👉 [Unite al Grupo de Telegram](https://t.me/+dtPKjcBfiDUyOWQx)\n\n` +
-              `¡Una vez que te unas, volvé acá y escribí de nuevo \`/codigo ${arg}\`!`;
+              `Para poder obtener tu Pase Premium Gratis, debes formar parte de nuestro grupo oficial.\n\n` +
+              `👉 [Únete al Grupo de Telegram](https://t.me/+dtPKjcBfiDUyOWQx)\n\n` +
+              `¡Una vez que te unas, regresa aquí y escribe de nuevo \`/codigo ${arg}\`!`;
 
             await sendTelegramMessage(token, chatId, notMemberText, message.message_id);
             return NextResponse.json({ ok: true });
@@ -301,7 +310,7 @@ export async function POST(req: Request) {
           const todayStr = new Date().toISOString().split("T")[0];
           const limitInfo = telegramRequestLimitMap.get(senderId);
           if (limitInfo && limitInfo.date === todayStr && limitInfo.count >= 3) {
-            await sendTelegramMessage(token, chatId, `🚫 *Límite diario alcanzado.*\n\nYa solicitaste tus códigos de regalo por hoy. Volvé mañana para pedir uno nuevo.`);
+            await sendTelegramMessage(token, chatId, `🚫 *Límite diario alcanzado.*\n\nYa has solicitado tus códigos de regalo por hoy. Regresa mañana para pedir uno nuevo.`);
             return NextResponse.json({ ok: true });
           }
 
@@ -315,10 +324,10 @@ export async function POST(req: Request) {
             `🔑 Código único de hoy:\n` +
             `👉 \`${codeToday}\` 👈\n\n` +
             `*¿Cómo usarlo?*\n` +
-            `1. Entrá a tu perfil en MangaStoon.\n` +
-            `2. Hacé clic en *Reclamar Pase Gratis*.\n` +
-            `3. Pegá este código y ¡listo! Disfrutá de todos los beneficios premium por 24 horas.\n\n` +
-            `_(Este código es exclusivo para la cuenta *${arg}*. Si ponés otro usuario en la web, el código no va a funcionar)_`;
+            `1. Ingresa a tu perfil en MangaStoon.\n` +
+            `2. Haz clic en *Reclamar Pase Gratis*.\n` +
+            `3. Pega este código y ¡listo! Disfruta de todos los beneficios premium por 24 horas.\n\n` +
+            `_(Este código es exclusivo para la cuenta *${arg}*. Si colocas otro usuario en la web, el código no funcionará)_`;
 
           await sendTelegramMessage(token, chatId, codeText, message.message_id);
           return NextResponse.json({ ok: true });
@@ -332,3 +341,4 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Internal Server Error", details: error.message }, { status: 500 });
   }
 }
+

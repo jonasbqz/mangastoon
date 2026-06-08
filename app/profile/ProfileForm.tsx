@@ -120,11 +120,11 @@ const PROFILE_FORM_COPY = {
     giftSuccessMsg: "¡Tu Pase Premium de Regalo ha sido activado con éxito! 👑",
     giftErrorFallback: "Ocurrió un error al procesar tu solicitud.",
     resetPasswordErr: "Error al enviar el correo de restablecimiento: ",
-    resetPasswordSuccess: "Correo de restablecimiento enviado. ¡Revisa tu casilla!",
+    resetPasswordSuccess: "Correo de restablecimiento de contraseña enviado. ¡Revisa tu bandeja de entrada!",
     resetPasswordErrFallback: "Ocurrió un error inesperado al intentar cambiar la contraseña.",
     deleteAccountErrFallback: "Ocurrió un error inesperado al intentar borrar la cuenta.",
     support: "Soporte de la Plataforma",
-    supportDesc: "Si encontrás algún problema técnico, bug o tenés dudas, repórtalo directamente para que podamos ayudarte.",
+    supportDesc: "Si encuentras algún problema técnico, bug o tienes dudas, repórtalo directamente para que podamos ayudarte.",
     reportBug: "Reportar un Error",
     editEmail: "Editar Correo",
     changeEmailTitle: "Cambiar Correo Electrónico",
@@ -1677,7 +1677,7 @@ export default function ProfileForm({ profile, user }: Props) {
                             />
                             <div className="flex items-center gap-1.5">
                               <Lock size={13} className="text-gray-500" />
-                              <span>Privada (solo vos podés verla)</span>
+                              <span>Privada (solo tú puedes verla)</span>
                             </div>
                           </label>
                         </div>

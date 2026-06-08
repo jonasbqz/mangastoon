@@ -401,7 +401,7 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
                   <div className="flex flex-col gap-1 max-h-[320px] overflow-y-auto pr-0.5">
                     {notifications.length === 0 ? (
                       <div className="py-8 text-center text-xs text-gray-500">
-                        No tenés notificaciones aún.
+                        No tienes notificaciones aún.
                       </div>
                     ) : (
                       notifications.map((n) => (

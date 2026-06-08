@@ -302,11 +302,11 @@ export async function upgradeToPremiumAction(type: "gifted" | "paid" = "paid", c
     const attemptInfo = failedAttemptsMap.get(userId);
     if (attemptInfo && attemptInfo.blockedUntil > Date.now()) {
       const minutesLeft = Math.ceil((attemptInfo.blockedUntil - Date.now()) / 60000);
-      return { error: `Demasiados intentos fallidos. Reintentá en ${minutesLeft} minutos.` };
+      return { error: `Demasiados intentos fallidos. Reintenta en ${minutesLeft} minutos.` };
     }
 
     if (!code) {
-      return { error: "Código de activación requerido. Pedile tu código al bot de Telegram usando tu nombre de usuario." };
+      return { error: "Código de activación requerido. Pídele tu código al bot de Telegram usando tu nombre de usuario." };
     }
 
     // Obtener perfil para sacar el username
@@ -317,7 +317,7 @@ export async function upgradeToPremiumAction(type: "gifted" | "paid" = "paid", c
       .single();
 
     if (profileErr || !profile || !profile.username) {
-      return { error: "Configurá un nombre de usuario en tu perfil antes de reclamar el Pase Premium Gratis." };
+      return { error: "Configura un nombre de usuario en tu perfil antes de reclamar el Pase Premium Gratis." };
     }
 
     const username = profile.username;

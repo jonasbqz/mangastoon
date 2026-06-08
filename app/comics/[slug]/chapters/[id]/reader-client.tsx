@@ -1940,8 +1940,8 @@ export default function ReaderClient({
                             </div>
                             <p className="text-[11px] text-gray-400 leading-normal">
                               {isPremium
-                                ? (readerLanguage === "es" ? "Tenés el beneficio Premium activo: podés compilar hasta 50 capítulos en un solo archivo PDF." : readerLanguage === "pt" ? "Você tem o benefício Premium ativo: pode compilar até 50 capítulos em um único PDF." : "You have active Premium benefits: compile up to 50 chapters in a single PDF file.")
-                                : (readerLanguage === "es" ? "Como usuario gratuito, el límite es de 10 capítulos. Subí a Premium para ampliar el límite y descargar hasta 50." : readerLanguage === "pt" ? "Como usuário gratuito, o limite é de 10 capítulos. Faça upgrade para Premium para aumentar o limite para 50." : "As a free user, the limit is 10 chapters. Upgrade to Premium to extend the limit and download up to 50.")
+                                ? (readerLanguage === "es" ? "Tienes el beneficio Premium activo: puedes compilar hasta 50 capítulos en un solo archivo PDF." : readerLanguage === "pt" ? "Você tem o benefício Premium ativo: pode compilar até 50 capítulos em um único PDF." : "You have active Premium benefits: compile up to 50 chapters in a single PDF file.")
+                                : (readerLanguage === "es" ? "Como usuario gratuito, el límite es de 10 capítulos. Mejora a Premium para ampliar el límite y descargar hasta 50." : readerLanguage === "pt" ? "Como usuário gratuito, o limite é de 10 capítulos. Faça upgrade para Premium para aumentar o limite para 50." : "As a free user, the limit is 10 chapters. Upgrade to Premium to extend the limit and download up to 50.")
                               }
                             </p>
                           </div>

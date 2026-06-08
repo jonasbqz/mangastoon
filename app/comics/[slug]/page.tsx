@@ -612,11 +612,11 @@ const UI_COPY: Record<
     suggestedEyebrow: "MangaStoon recomienda",
     suggestedTitle: "Más contenido similar",
     faqWhereQuestion: (title) => `¿Dónde leer ${title} online gratis?`,
-    faqWhereAnswer: (title) => `Podés leer ${title} online gratis en MangaStoon, con capítulos disponibles desde la página de la serie.`,
+    faqWhereAnswer: (title) => `Puedes leer ${title} online gratis en MangaStoon, con capítulos disponibles desde la página de la serie.`,
     faqLanguagesQuestion: (title) => `¿En qué idiomas está disponible ${title}?`,
     faqLanguagesAnswer: (title) => `${title} puede estar disponible en Español, Inglés y Portugués según los capítulos publicados para cada idioma.`,
     faqContinueQuestion: (title) => `¿Dónde continuar leyendo ${title}?`,
-    faqContinueAnswer: (title) => `En MangaStoon podés abrir ${title}, elegir un capítulo y continuar la lectura desde el historial del navegador.`,
+    faqContinueAnswer: (title) => `En MangaStoon puedes abrir ${title}, elegir un capítulo y continuar la lectura desde el historial del navegador.`,
   },
   en: {
     addToFavorites: "Add to Favorites",
@@ -1457,7 +1457,7 @@ export default async function MangaDetailsPage({
           <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-center gap-2">
             <span>
               {preferredLanguage === "es"
-                ? "Parece que preferís leer en Español."
+                ? "Parece que prefieres leer en Español."
                 : preferredLanguage === "pt"
                   ? "Parece que você prefere ler em Português."
                   : "It looks like you prefer reading in English."}
@@ -1473,7 +1473,7 @@ export default async function MangaDetailsPage({
               className="underline hover:text-amber-200 transition-colors font-bold flex items-center gap-1"
             >
               {preferredLanguage === "es"
-                ? "Hacé clic acá para ver la versión en Español."
+                ? "Haz clic aquí para ver la versión en Español."
                 : preferredLanguage === "pt"
                   ? "Clique aqui para ver a versão em Português."
                   : "Click here to view the English version."}
