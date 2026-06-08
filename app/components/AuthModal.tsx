@@ -410,8 +410,25 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
 
     setLoading(true);
 
+    let loginEmail = email.trim();
+
+    // Si no parece un correo electrónico, intentamos resolver el email a partir del username
+    if (!loginEmail.includes("@")) {
+      const { data: resolvedEmail, error: rpcError } = await supabase.rpc(
+        "get_email_by_username",
+        { p_username: loginEmail }
+      );
+
+      if (rpcError || !resolvedEmail) {
+        setLoading(false);
+        setErrorMsg("No se encontró ningún usuario con ese nombre de usuario.");
+        return;
+      }
+      loginEmail = resolvedEmail;
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
-      email,
+      email: loginEmail,
       password,
       ...(isCaptchaEnabled && captchaToken ? {
         options: {
@@ -436,7 +453,7 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
 
     if (!data.user?.email_confirmed_at) {
       await supabase.auth.signOut();
-      setUnconfirmedEmail(email);
+      setUnconfirmedEmail(loginEmail);
       setShowUnconfirmedError(true);
       setErrorMsg(null);
       if (window.turnstile && turnstileWidgetId.current !== null) {
@@ -490,8 +507,9 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
     }
 
     const cleanUsername = username.trim();
-    if (!cleanUsername) { setErrorMsg("Ingresá un nombre de usuario."); return; }
-    if (password !== confirmPassword) { setErrorMsg("Las contraseñas no coinciden. Verificalas e inténtalo de nuevo."); return; }
+    if (!cleanUsername) { setErrorMsg("Ingresa un nombre de usuario."); return; }
+    if (password.length < 6) { setErrorMsg("La contraseña debe tener al menos 6 caracteres."); return; }
+    if (password !== confirmPassword) { setErrorMsg("Las contraseñas no coinciden. Verifícalas e inténtalo de nuevo."); return; }
 
     if (isCaptchaEnabled && !captchaToken) {
       setErrorMsg("Por favor completá la verificación de seguridad (Captcha).");
@@ -750,11 +768,11 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
                         <form onSubmit={handleSignIn} className="flex flex-col gap-3">
                           <Field 
                             icon={<Mail size={13} />} 
-                            label="Correo electrónico" 
-                            type="email"
+                            label="Correo electrónico o usuario" 
+                            type="text"
                             value={email} 
                             onChange={setEmail} 
-                            placeholder="nombre@correo.com" 
+                            placeholder="nombre@correo.com o tu_usuario" 
                           />
                           <div className="flex flex-col gap-1.5">
                             <Field 
@@ -827,21 +845,33 @@ export default function AuthModal({ open, onClose, defaultTab }: Props) {
                             placeholder="nombre@correo.com" 
                           />
                           <Field 
-                            icon={<Lock size={13} />} 
-                            label="Contraseña" 
-                            type="password"
-                            value={password} 
-                            onChange={setPassword} 
-                            placeholder="Mínimo 8 caracteres" 
-                          />
-                          <Field 
-                            icon={<Lock size={13} />} 
-                            label="Confirmar contraseña" 
-                            type="password"
-                            value={confirmPassword} 
-                            onChange={setConfirmPassword} 
-                            placeholder="Repite tu contraseña" 
-                          />
+                             icon={<Lock size={13} />} 
+                             label="Contraseña" 
+                             type="password"
+                             value={password} 
+                             onChange={setPassword} 
+                             placeholder="Mínimo 8 caracteres" 
+                             error={password !== "" && password.length < 6}
+                           />
+                           {password !== "" && password.length < 6 && (
+                             <p className="text-[10px] text-red-400 -mt-1 leading-none select-none">
+                               Debe tener al menos 6 caracteres
+                             </p>
+                           )}
+                           <Field 
+                             icon={<Lock size={13} />} 
+                             label="Confirmar contraseña" 
+                             type="password"
+                             value={confirmPassword} 
+                             onChange={setConfirmPassword} 
+                             placeholder="Repite tu contraseña" 
+                             error={confirmPassword !== "" && password !== confirmPassword}
+                           />
+                           {confirmPassword !== "" && password !== confirmPassword && (
+                             <p className="text-[10px] text-red-400 -mt-1 leading-none select-none">
+                               Las contraseñas no coinciden
+                             </p>
+                           )}
 
                           {isCaptchaEnabled && (
                             <div className="flex flex-col items-center justify-center my-1 min-h-[65px] w-full">
@@ -970,7 +1000,7 @@ function ErrorBanner({ message }: { message: React.ReactNode | null }) {
 }
 
 function Field({
-  icon, label, type, value, onChange, placeholder, suffixAction,
+  icon, label, type, value, onChange, placeholder, suffixAction, error,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -979,6 +1009,7 @@ function Field({
   onChange: (v: string) => void;
   placeholder: string;
   suffixAction?: React.ReactNode;
+  error?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   return (
@@ -989,8 +1020,18 @@ function Field({
       <div
         className="flex items-center gap-2.5 rounded-xl px-3.5 py-3 transition-all duration-200 bg-neutral-900/60"
         style={{
-          border: `1px solid ${focused ? "rgba(255, 107, 0, 0.45)" : "rgba(247,242,232,0.10)"}`,
-          boxShadow: focused ? "0 0 12px rgba(255, 107, 0, 0.15)" : "none",
+          border: `1px solid ${
+            error 
+              ? "rgba(239, 68, 68, 0.5)" 
+              : focused 
+                ? "rgba(255, 107, 0, 0.45)" 
+                : "rgba(247,242,232,0.10)"
+          }`,
+          boxShadow: error 
+            ? "0 0 12px rgba(239, 68, 68, 0.15)" 
+            : focused 
+              ? "0 0 12px rgba(255, 107, 0, 0.15)" 
+              : "none",
         }}
       >
         <span className="shrink-0 transition-colors" style={{ color: focused ? "#ff6b00" : "rgba(194,184,166,0.4)" }}>
