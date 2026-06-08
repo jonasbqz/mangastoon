@@ -205,16 +205,35 @@ export default async function ReadPage({
   const realMangaId = canonicalSlug ? extractComicIdFromSlugId(canonicalSlug) : mangaId;
 
   let isPremium = false;
+  let serverProfile: {
+    id: string;
+    username: string | null;
+    avatar_url: string | null;
+    is_premium: boolean;
+    telegram_grace_started: string | null;
+    premium_until: string | null;
+  } | null = null;
+
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("is_premium")
+        .select("id, username, avatar_url, is_premium, telegram_grace_started, premium_until")
         .eq("id", user.id)
         .maybeSingle();
-      isPremium = !!profile?.is_premium;
+      if (profile) {
+        isPremium = !!profile.is_premium;
+        serverProfile = {
+          id: profile.id ?? user.id,
+          username: profile.username ?? null,
+          avatar_url: profile.avatar_url ?? null,
+          is_premium: !!profile.is_premium,
+          telegram_grace_started: profile.telegram_grace_started ?? null,
+          premium_until: profile.premium_until ?? null,
+        };
+      }
     }
   } catch (err) {
     console.error("[ReadPage Server] error fetching profile:", err);
@@ -231,6 +250,7 @@ export default async function ReadPage({
         initialMangaId={realMangaId}
         initialChapterParam={chapterId}
         initialReaderLanguage={lang}
+        initialProfile={serverProfile}
       />
     </>
   );

@@ -626,6 +626,14 @@ type ReaderClientProps = {
   initialMangaId?: string;
   initialChapterParam?: string | null;
   initialReaderLanguage?: SupportedLanguage;
+  initialProfile?: {
+    id: string;
+    username: string | null;
+    avatar_url: string | null;
+    is_premium: boolean;
+    telegram_grace_started: string | null;
+    premium_until: string | null;
+  } | null;
 };
 
 export default function ReaderClient({
@@ -633,6 +641,7 @@ export default function ReaderClient({
   initialMangaId,
   initialChapterParam,
   initialReaderLanguage,
+  initialProfile = null,
 }: ReaderClientProps) {
   const params = useParams<{ slug: string; id: string }>();
   const router = useRouter();
@@ -692,8 +701,9 @@ export default function ReaderClient({
   const [scrollDirection, setScrollDirection] = useState<"up" | "down">("up");
   const [isAtTop, setIsAtTop] = useState(true);
 
-  const [isPremium, setIsPremium] = useState(false);
-  const [telegramGraceStarted, setTelegramGraceStarted] = useState<string | null>(null);
+  // Inicializar estado premium directamente desde el prop del servidor (sin fetch client-side)
+  const [isPremium, setIsPremium] = useState(!!initialProfile?.is_premium);
+  const [telegramGraceStarted, setTelegramGraceStarted] = useState<string | null>(initialProfile?.telegram_grace_started ?? null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>("dark");
   const [hasScrolledPastHalf, setHasScrolledPastHalf] = useState(false);
@@ -753,7 +763,7 @@ export default function ReaderClient({
     async function loadPremiumAndTheme() {
       try {
         const storedTheme = localStorage.getItem(READER_THEME_KEY) as ReaderTheme;
-        
+
         // Default to "dark" (free/classic) theme initially to prevent flash of premium theme
         setReaderTheme("dark");
 
@@ -762,6 +772,24 @@ export default function ReaderClient({
           setDismissedRegBanner(true);
         }
 
+        // Si ya tenemos el perfil desde el servidor, no necesitamos un fetch extra
+        if (initialProfile !== null) {
+          const isUserPremium = !!initialProfile?.is_premium;
+          setCurrentUser({ id: initialProfile?.id });
+          setCurrentProfile(initialProfile);
+          if (storedTheme && isUserPremium) {
+            setReaderTheme(storedTheme);
+          } else {
+            setReaderTheme("dark");
+            if (storedTheme && storedTheme !== "dark") {
+              localStorage.setItem(READER_THEME_KEY, "dark");
+            }
+          }
+          setAuthLoaded(true);
+          return;
+        }
+
+        // Fallback: fetch client-side si no llegó el prop del servidor (ej. navegación SPA)
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {

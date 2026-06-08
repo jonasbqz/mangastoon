@@ -841,7 +841,7 @@ export async function fetchMangaDexChapterPreviews(
 
     if (total > chapters.length) {
       const additionalRequests: Promise<Response>[] = [];
-      let offset = LIMIT;
+      let offset = 100;
 
       while (offset < total) {
         const pageParams = new URLSearchParams(params);
@@ -849,7 +849,7 @@ export async function fetchMangaDexChapterPreviews(
         additionalRequests.push(
           fetch(`/api/mangadex/feed/${mangaId}?${pageParams.toString()}`, { signal })
         );
-        offset += LIMIT;
+        offset += 100;
       }
 
       const responses = await Promise.all(additionalRequests);
