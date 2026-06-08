@@ -6,8 +6,9 @@ import Link from "next/link";
 import { 
   Crown, Sparkles, Check, FileText, Shield, 
   Palette, Zap, HelpCircle, ArrowLeft, ArrowRight, CreditCard, 
-  User, Calendar, Lock, Loader2, CheckCircle2, AlertCircle 
+  User, Calendar, Lock, Loader2, CheckCircle2, AlertCircle, Copy
 } from "lucide-react";
+import { toast } from "sonner";
 import SiteHeader from "../components/site-header";
 import { createClient } from "../../utils/supabase/client";
 import { upgradeToPremiumAction } from "../actions/profile";
@@ -77,7 +78,7 @@ const PREMIUM_COPY = {
     gateway: {
       title: "Activación de Período de Prueba Premium",
       subtitle: "MangaStoon Trial Activation",
-      testMode: "Para reclamar tu prueba gratuita Premium, ingresá el código de activación diario que publicamos en nuestra comunidad oficial de Telegram.",
+      testMode: "Para reclamar tu prueba gratuita Premium, debes solicitar tu código diario único hablando en privado con nuestro bot de Telegram usando tu nombre de usuario. Luego, pega el código que recibas en el campo de abajo.",
       confirmButton: "Comenzar Prueba Gratis",
       cancelButton: "Cancelar",
       telegramLinkText: "💬 Conseguir Código en Telegram",
@@ -308,6 +309,21 @@ export default function PremiumPage() {
   // Estados del Formulario de Pago
   const [formError, setFormError] = useState<string | null>(null);
   const [giftCode, setGiftCode] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyCommand = () => {
+    const textToCopy = `/codigo ${profile?.username || "tu_usuario"}`;
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      setCopied(true);
+      toast.success("¡Comando copiado al portapapeles!", {
+        description: "Pégalo en el chat privado con el bot de Telegram."
+      });
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(err => {
+      console.error("Error al copiar:", err);
+      toast.error("No se pudo copiar el comando.");
+    });
+  };
 
   // Obtener sesión y escuchar cambios de auth
   useEffect(() => {
@@ -839,21 +855,35 @@ export default function PremiumPage() {
                       <div className="bg-neutral-900/40 p-3.5 rounded-xl border border-white/5 text-xs text-neutral-300 leading-relaxed">
                         <p className="mb-2">
                           {language === "es" 
-                            ? "Para conseguir tu código diario único, unite a la comunidad y escribí el comando:" 
+                            ? "Para conseguir tu código diario único, debes iniciar un chat privado con nuestro bot y enviarle el comando exacto de abajo:" 
                             : language === "pt"
-                            ? "Para obter o seu código diário exclusivo, junte-se à comunidade e escreva o comando:"
-                            : "To get your unique daily code, join the community and type the command:"}
+                            ? "Para obter o seu código diário exclusivo, inicie uma conversa privada com o nosso bot e envie o comando exato abaixo:"
+                            : "To get your unique daily code, start a private chat with our bot and send the exact command below:"}
                         </p>
-                        <div className="flex items-center justify-between bg-black/40 p-2.5 rounded-lg border border-white/5 font-mono text-[11px] text-yellow-500 select-all mb-2">
+                        <button
+                          type="button"
+                          onClick={handleCopyCommand}
+                          className="w-full flex items-center justify-between bg-black/40 p-2.5 rounded-lg border border-white/5 font-mono text-[11px] text-yellow-500 hover:border-yellow-500/30 transition-all cursor-pointer mb-2 group text-left"
+                        >
                           <span>/codigo {profile?.username || "tu_usuario"}</span>
-                          <span className="text-[9px] text-neutral-500 uppercase font-sans font-bold">
-                            {language === "es" ? "Copiar" : "Copy"}
+                          <span className="flex items-center gap-1 text-[9px] text-neutral-400 font-sans font-bold group-hover:text-yellow-500 transition-colors uppercase select-none">
+                            {copied ? (
+                              <>
+                                <Check size={10} className="text-emerald-500" />
+                                <span>{language === "es" ? "Copiado" : language === "pt" ? "Copiado" : "Copied"}</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={10} />
+                                <span>{language === "es" ? "Copiar" : language === "pt" ? "Copiar" : "Copy"}</span>
+                              </>
+                            )}
                           </span>
-                        </div>
+                        </button>
                         {!profile?.username && (
                           <p className="text-[10px] text-rose-400 font-semibold mt-1">
                             {language === "es" 
-                              ? "⚠️ Primero debés guardar un nombre de usuario en tu panel de perfil." 
+                              ? "⚠️ Primero debes guardar un nombre de usuario en tu panel de perfil." 
                               : language === "pt"
                               ? "⚠️ Primeiro você deve salvar um nome de usuário no seu painel de perfil."
                               : "⚠️ First you must save a username in your profile panel."}
