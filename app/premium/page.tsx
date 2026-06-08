@@ -863,7 +863,7 @@ export default function PremiumPage() {
 
                       {/* Botón de Enlace a Telegram */}
                       <a
-                        href="https://t.me/+dtPKjcBfiDUyOWQx"
+                        href="https://t.me/RaphaelPremiumBot?start=codigo"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#24A1DE]/30 bg-[#24A1DE]/10 py-3 text-xs font-bold text-[#24A1DE] hover:bg-[#24A1DE]/15 transition-all text-center cursor-pointer shadow-sm"

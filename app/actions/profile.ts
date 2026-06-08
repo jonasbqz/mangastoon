@@ -283,6 +283,8 @@ export async function getDailyTelegramCode(username: string, offsetDays = 0) {
   return `MST-${hash.substring(0, 5).toUpperCase()}`;
 }
 
+const failedAttemptsMap = new Map<string, { count: number; blockedUntil: number }>();
+
 // ─── Activar cuenta Premium ──────────────────────────────────────────────
 export async function upgradeToPremiumAction(type: "gifted" | "paid" = "paid", code?: string) {
   const supabase = await createClient();
@@ -294,6 +296,15 @@ export async function upgradeToPremiumAction(type: "gifted" | "paid" = "paid", c
 
   // Validación de código diario de Telegram para el Pase de Regalo
   if (type === "gifted") {
+    const userId = user.id;
+
+    // Verificar si el usuario está bloqueado por rate limit
+    const attemptInfo = failedAttemptsMap.get(userId);
+    if (attemptInfo && attemptInfo.blockedUntil > Date.now()) {
+      const minutesLeft = Math.ceil((attemptInfo.blockedUntil - Date.now()) / 60000);
+      return { error: `Demasiados intentos fallidos. Reintentá en ${minutesLeft} minutos.` };
+    }
+
     if (!code) {
       return { error: "Código de activación requerido. Pedile tu código al bot de Telegram usando tu nombre de usuario." };
     }
@@ -316,8 +327,26 @@ export async function upgradeToPremiumAction(type: "gifted" | "paid" = "paid", c
     const codeTomorrow = await getDailyTelegramCode(username, 1);
 
     if (cleanCode !== codeToday && cleanCode !== codeYesterday && cleanCode !== codeTomorrow) {
-      return { error: "Código incorrecto o expirado. Verificá que le hayas mandado tu usuario de MangaStoon exacto al bot." };
+      // Incrementar contador de intentos fallidos
+      const currentAttempts = attemptInfo ? attemptInfo.count + 1 : 1;
+      if (currentAttempts >= 5) {
+        failedAttemptsMap.set(userId, {
+          count: currentAttempts,
+          blockedUntil: Date.now() + 15 * 60 * 1000 // 15 minutos de bloqueo
+        });
+        return { error: "Código incorrecto. Tu cuenta fue bloqueada temporalmente por 15 minutos debido a demasiados intentos fallidos." };
+      } else {
+        failedAttemptsMap.set(userId, {
+          count: currentAttempts,
+          blockedUntil: 0
+        });
+        const remaining = 5 - currentAttempts;
+        return { error: `Código incorrecto. Te quedan ${remaining} intentos antes del bloqueo de seguridad.` };
+      }
     }
+
+    // Código correcto: limpiar intentos fallidos del usuario
+    failedAttemptsMap.delete(userId);
   }
 
   const updateData: any = {
