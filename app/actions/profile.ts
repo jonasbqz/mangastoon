@@ -271,7 +271,7 @@ export async function deleteAccountAction() {
 }
 
 // ─── Generación de código diario de Telegram ──────────────────────────────
-export function getDailyTelegramCode(username: string, offsetDays = 0) {
+export async function getDailyTelegramCode(username: string, offsetDays = 0) {
   const date = new Date();
   if (offsetDays !== 0) {
     date.setDate(date.getDate() + offsetDays);
@@ -311,9 +311,9 @@ export async function upgradeToPremiumAction(type: "gifted" | "paid" = "paid", c
 
     const username = profile.username;
     const cleanCode = code.trim().toUpperCase();
-    const codeToday = getDailyTelegramCode(username, 0);
-    const codeYesterday = getDailyTelegramCode(username, -1);
-    const codeTomorrow = getDailyTelegramCode(username, 1);
+    const codeToday = await getDailyTelegramCode(username, 0);
+    const codeYesterday = await getDailyTelegramCode(username, -1);
+    const codeTomorrow = await getDailyTelegramCode(username, 1);
 
     if (cleanCode !== codeToday && cleanCode !== codeYesterday && cleanCode !== codeTomorrow) {
       return { error: "Código incorrecto o expirado. Verificá que le hayas mandado tu usuario de MangaStoon exacto al bot." };

@@ -63,7 +63,7 @@ export async function POST(req: Request) {
         }
 
         // Generar código único para ese usuario
-        const codeToday = getDailyTelegramCode(arg, 0);
+        const codeToday = await getDailyTelegramCode(arg, 0);
 
         const codeText = `🔑 *MangaStoon Pase Premium Gratis* 🔑\n\n` +
           `👤 Usuario: *${arg}*\n` +
