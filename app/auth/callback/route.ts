@@ -28,7 +28,9 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const siteURL = origin && origin !== "null" ? origin : getSiteURL();
   const code = searchParams.get("code");
-  const next = getSafeNextPath(searchParams.get("next"));
+  const nextParam = searchParams.get("next");
+  const isAuthVerification = !nextParam || nextParam === "/" || nextParam === "/profile";
+  const next = isAuthVerification ? "/auth/verified" : getSafeNextPath(nextParam);
 
   if (!code) {
     return NextResponse.redirect(new URL("/?error=missing_code", siteURL));
