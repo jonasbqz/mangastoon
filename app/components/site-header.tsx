@@ -163,15 +163,29 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
   useEffect(() => {
     let active = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getUser().then(({ data: { user }, error }) => {
       if (active) {
-        const currentUser = session?.user ?? null;
+        if (error) {
+          console.warn("[SiteHeader] Sesión inválida o usuario eliminado de la base de datos. Purgando cookies locales...", error.message);
+          supabase.auth.signOut().then(() => {
+            setUser(null);
+            setLoadingUser(false);
+          });
+          return;
+        }
+
+        const currentUser = user ?? null;
         setUser(currentUser);
         setLoadingUser(false);
         if (currentUser) {
           useFavoritesStore.getState().syncWithServer();
           useHistoryStore.getState().syncWithServer();
         }
+      }
+    }).catch(() => {
+      if (active) {
+        setUser(null);
+        setLoadingUser(false);
       }
     });
 
