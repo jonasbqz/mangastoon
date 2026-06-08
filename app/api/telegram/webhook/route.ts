@@ -3,6 +3,7 @@ import { getDailyTelegramCode } from "../../../actions/profile";
 
 const GROUP_CHAT_ID = "-1003763338725";
 const telegramRequestLimitMap = new Map<number, { count: number; date: string }>();
+const userMessageTimeline = new Map<number, number[]>();
 
 async function isUserAdmin(token: string, userId: number): Promise<boolean> {
   try {
@@ -28,7 +29,7 @@ async function checkGroupMembership(token: string, userId: number): Promise<bool
   }
 }
 
-async function sendTelegramMessage(token: string, chatId: number, text: string, replyToMessageId?: number): Promise<boolean> {
+async function sendTelegramMessage(token: string, chatId: number, text: string, replyToMessageId?: number, replyMarkup?: any): Promise<boolean> {
   const telegramUrl = `https://api.telegram.org/bot${token}/sendMessage`;
   try {
     const res = await fetch(telegramUrl, {
@@ -42,6 +43,7 @@ async function sendTelegramMessage(token: string, chatId: number, text: string, 
         parse_mode: "Markdown",
         disable_web_page_preview: true,
         reply_to_message_id: replyToMessageId,
+        reply_markup: replyMarkup
       }),
     });
     const data = await res.json();
@@ -71,17 +73,59 @@ export async function POST(req: Request) {
     const text = message.text ? message.text.trim() : "";
     const senderId = message.from?.id;
 
-    // ─── 1. FILTRO ANTI-SPAM (ENLACES EXTERNOS EN EL GRUPO) ──────────────────
-    if (chatId.toString() === GROUP_CHAT_ID && text) {
-      const hasExternalLink = text.match(/https?:\/\/[^\s]+/i) && 
-                              !text.toLowerCase().includes("mangastoon.com") && 
-                              !text.toLowerCase().includes("t.me");
-      if (hasExternalLink) {
-        const isAdmin = await isUserAdmin(token, senderId);
-        if (!isAdmin) {
-          // Borrar mensaje de spam
+    // ─── 1. SEGURIDAD GRUPAL (SOLO EN EL SUPERGRUPO) ──────────────────────────
+    if (chatId.toString() === GROUP_CHAT_ID && senderId) {
+      const isAdmin = await isUserAdmin(token, senderId);
+
+      if (!isAdmin) {
+        // A. Anti-Flood (Spam rápido): > 5 mensajes en 5 segundos
+        const now = Date.now();
+        const timestamps = userMessageTimeline.get(senderId) || [];
+        const activeTimestamps = timestamps.filter(t => now - t < 5000);
+        activeTimestamps.push(now);
+        userMessageTimeline.set(senderId, activeTimestamps);
+
+        if (activeTimestamps.length > 5) {
+          // Silenciar al usuario por 30 minutos (1800 segundos)
+          const muteUntil = Math.floor(now / 1000) + 30 * 60;
+          await fetch(`https://api.telegram.org/bot${token}/restrictChatMember`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: GROUP_CHAT_ID,
+              user_id: senderId,
+              permissions: { can_send_messages: false },
+              until_date: muteUntil
+            })
+          });
+
+          // Borrar el mensaje infractor
           await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${GROUP_CHAT_ID}&message_id=${message.message_id}`);
+          
+          await sendTelegramMessage(token, chatId, `🔇 *@${message.from.username || message.from.first_name}* fue silenciado/a por *30 minutos* por mandar mensajes demasiado rápido (Anti-Flood).`);
           return NextResponse.json({ ok: true });
+        }
+
+        // B. Anti-Malware (Filtro de archivos potencialmente peligrosos)
+        if (message.document) {
+          const mimeType = message.document.mime_type || "";
+          const isAllowed = mimeType.startsWith("image/") || mimeType === "application/pdf";
+          if (!isAllowed) {
+            await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${GROUP_CHAT_ID}&message_id=${message.message_id}`);
+            await sendTelegramMessage(token, chatId, `⚠️ *@${message.from.username || message.from.first_name}*, por seguridad de todos no se permite compartir archivos potencialmente peligrosos (.zip, .exe, etc.).`);
+            return NextResponse.json({ ok: true });
+          }
+        }
+
+        // C. Filtro de Enlaces Externos
+        if (text) {
+          const hasExternalLink = text.match(/https?:\/\/[^\s]+/i) && 
+                                  !text.toLowerCase().includes("mangastoon.com") && 
+                                  !text.toLowerCase().includes("t.me");
+          if (hasExternalLink) {
+            await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${GROUP_CHAT_ID}&message_id=${message.message_id}`);
+            return NextResponse.json({ ok: true });
+          }
         }
       }
     }
@@ -93,12 +137,26 @@ export async function POST(req: Request) {
 
         const welcomeText = `👋 *¡Hola ${member.first_name || "MangaLector"}!*\n` +
           `Bienvenido/a a la comunidad oficial de *MangaStoon*.\n\n` +
-          `🔑 Si estás acá por el *Pase Premium Gratis*, podés pedir tu código de hoy enviándole un mensaje privado al bot:\n` +
-          `👉 [Hablar con el Bot](https://t.me/RaphaelPremiumBot) y escribí el comando:\n` +
-          `👉 \`/codigo TU_USUARIO\`\n\n` +
-          `_(Reemplazá TU_USUARIO con tu nombre de usuario exacto en la web)_`;
+          `🔑 Si estás acá por tu *Pase Premium Gratis*, podés pedir tu código diario de hoy hablando por privado con nuestro bot.`;
 
-        await sendTelegramMessage(token, chatId, welcomeText, message.message_id);
+        const replyMarkup = {
+          inline_keyboard: [
+            [
+              {
+                text: "🎁 Reclamar Pase Premium Gratis",
+                url: "https://t.me/RaphaelPremiumBot?start=codigo"
+              }
+            ],
+            [
+              {
+                text: "🌐 Visitar MangaStoon",
+                url: "https://mangastoon.com"
+              }
+            ]
+          ]
+        };
+
+        await sendTelegramMessage(token, chatId, welcomeText, message.message_id, replyMarkup);
       }
       return NextResponse.json({ ok: true });
     }
@@ -110,7 +168,7 @@ export async function POST(req: Request) {
       const arg = parts.slice(1).join(" ").trim();
 
       // Comandos de moderación para administradores
-      if ((command === "/kick" || command === "/mute") && chatId.toString() === GROUP_CHAT_ID) {
+      if ((command === "/kick" || command === "/mute") && chatId.toString() === GROUP_CHAT_ID && senderId) {
         const isAdmin = await isUserAdmin(token, senderId);
         if (!isAdmin) return NextResponse.json({ ok: true });
 
@@ -144,7 +202,7 @@ export async function POST(req: Request) {
       }
 
       // Comando /codigo ejecutado en el grupo público
-      if (command === "/codigo" && chatId.toString() === GROUP_CHAT_ID) {
+      if (command === "/codigo" && chatId.toString() === GROUP_CHAT_ID && senderId) {
         // Borrar el mensaje público para proteger la privacidad
         try {
           await fetch(`https://api.telegram.org/bot${token}/deleteMessage?chat_id=${GROUP_CHAT_ID}&message_id=${message.message_id}`);
@@ -175,7 +233,7 @@ export async function POST(req: Request) {
       }
 
       // Comandos ejecutados en privado
-      if (message.chat.type === "private") {
+      if (message.chat.type === "private" && senderId) {
         if (command === "/start") {
           const startText = `👑 *¡Hola ${message.from.first_name || "MangaLector"}!* Soy el bot oficial de MangaStoon.\n\n` +
             `Para conseguir tu código diario único de premium gratis, usá el comando:\n` +
