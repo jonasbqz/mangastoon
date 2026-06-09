@@ -713,22 +713,6 @@ export default function ReaderClient({
     setPageRetryVersions(new Array(pages.length).fill(0));
   }, [pages]);
 
-  const [hasAdblocker, setHasAdblocker] = useState(false);
-
-  useEffect(() => {
-    async function checkAdblocker() {
-      try {
-        const res = await fetch("/api/ads/tag", { method: "HEAD", cache: "no-store" });
-        if (!res.ok) setHasAdblocker(true);
-      } catch {
-        setHasAdblocker(true);
-      }
-    }
-    if (!isPremium) {
-      checkAdblocker();
-    }
-  }, [isPremium]);
-
   const handleRetrySubsequent = useCallback((startIndex: number) => {
     setPageRetryVersions((prev) => {
       const next = [...prev];
@@ -1526,72 +1510,6 @@ export default function ReaderClient({
     );
   };
 
-  const renderPromoBanner = () => {
-    if (isPremium) return null;
-
-    return (
-      <div className="mx-auto max-w-5xl px-4 md:px-6 mb-6">
-        <div 
-          onClick={() => setShowPremiumModal(true)}
-          className="w-full rounded-2xl border p-4.5 cursor-pointer transition-all duration-300 hover:border-amber-500/40 hover:scale-[1.01] relative overflow-hidden"
-          style={{
-            background: "linear-gradient(135deg, rgba(255, 107, 0, 0.08) 0%, rgba(245, 158, 11, 0.04) 100%)",
-            borderColor: hasAdblocker ? "rgba(239, 68, 68, 0.2)" : "rgba(245, 158, 11, 0.15)",
-          }}
-        >
-          {/* Decorative glow */}
-          <div className="absolute right-0 top-0 h-20 w-20 bg-amber-500/5 blur-lg rounded-full pointer-events-none" />
-
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${hasAdblocker ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-500'}`}>
-                {hasAdblocker ? (
-                  <AlertCircle size={16} />
-                ) : (
-                  <Crown size={16} className="fill-amber-500/20" />
-                )}
-              </div>
-              <div>
-                <h4 className="text-xs font-heading font-black uppercase tracking-wider text-white">
-                  {hasAdblocker 
-                    ? (readerLanguage === "es" ? "Bloqueador de Anuncios Detectado 🚫" : readerLanguage === "pt" ? "Bloqueador de Anúncios Detectado 🚫" : "AdBlocker Detected 🚫")
-                    : (readerLanguage === "es" ? "Acceso Gratuito Patrocinado 💎" : readerLanguage === "pt" ? "Acesso Gratuito Patrocinado 💎" : "Sponsored Free Access 💎")
-                  }
-                </h4>
-                <p className="mt-1 text-xs text-zinc-300 leading-relaxed font-medium">
-                  {hasAdblocker ? (
-                    readerLanguage === "es" 
-                      ? "Para mantener MangaStoon gratis, por favor desactivá tu AdBlock o activá tu Prueba Gratis de Premium para leer sin publicidad oficial."
-                      : readerLanguage === "pt"
-                        ? "Para manter o MangaStoon grátis, por favor desative seu AdBlock ou ative seu Teste Grátis de Premium para ler sem anúncios oficialmente."
-                        : "To keep MangaStoon free, please disable your AdBlock or activate your Free Premium Trial to read without official ads."
-                  ) : (
-                    readerLanguage === "es"
-                      ? "Unite a nuestro Telegram para reclamar tu Pase Premium Gratis. Disfrutá de lectura limpia, modo horizontal y descargas PDF extendidas."
-                      : readerLanguage === "pt"
-                        ? "Entre no nosso Telegram para resgatar seu Passe Premium Grátis. Desfrute de leitura limpa, modo horizontal e downloads em PDF."
-                        : "Join our Telegram to claim your Free Premium Pass. Enjoy ad-free reading, horizontal mode, and extended PDF downloads."
-                  )}
-                </p>
-              </div>
-            </div>
-            
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowPremiumModal(true);
-              }}
-              className="shrink-0 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-4.5 py-2.5 text-xs font-heading font-black text-black hover:from-amber-400 hover:to-yellow-400 shadow-lg shadow-amber-500/10 active:scale-95 transition-all w-full sm:w-auto text-center"
-            >
-              {readerLanguage === "es" ? "Probar Premium Gratis" : readerLanguage === "pt" ? "Testar Premium Grátis" : "Try Premium Free"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <main
       className={`${
@@ -1756,7 +1674,6 @@ export default function ReaderClient({
           </section>
 
           <section className="pb-0 pt-0">
-            {renderPromoBanner()}
             {activeReadingMode === "horizontal" ? (
               <HorizontalReader
                 pages={pages}
