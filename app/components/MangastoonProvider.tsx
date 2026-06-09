@@ -40,14 +40,6 @@ export default function MangastoonProvider() {
 
   useEffect(() => {
     async function checkMonetizationState() {
-      // Solo cargar publicidad en las páginas de cómic (detalle/preview y lector de capítulos).
-      // Estas páginas tienen rutas que empiezan con "/comics/".
-      // Evitamos cargar publicidad en el Home (/), explorar, perfil, favoritos, etc.
-      if (!pathname.startsWith("/comics/")) {
-        setShouldLoad(false);
-        return;
-      }
-
       // Usar caché de sessionStorage para evitar un fetch a Supabase en cada navegación entre capítulos
       const cachedPremium = getCachedPremiumState();
       if (cachedPremium !== null) {
