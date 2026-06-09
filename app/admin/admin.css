@@ -1,7 +1,7 @@
 /* Dashboard Layout */
 .dashboard-container {
   display: flex;
-  min-h: 100vh;
+  min-height: 100vh;
 }
 
 .sidebar {
@@ -145,7 +145,7 @@
 
 /* Login Page */
 .login-container {
-  min-h: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -437,7 +437,7 @@
 
 /* Loading overlays */
 .loading-screen {
-  min-h: 100vh;
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -5,6 +5,7 @@ import Script from "next/script";
 import AppFeedback from "./components/app-feedback";
 import Footer from "./components/Footer";
 import BottomNavbar from "./components/BottomNavbar";
+import HideOnAdmin from "./components/hide-on-admin";
 import { LanguageProvider } from "./components/language-provider";
 import PageTransitionLoader from "./components/PageTransitionLoader";
 import MangastoonProvider from "./components/MangastoonProvider";
@@ -202,9 +203,11 @@ export default async function RootLayout({
           <MangastoonProvider />
           <HeartbeatTracker />
           {children}
-          <Footer />
-          <BottomNavbar />
-          <AppFeedback />
+          <HideOnAdmin>
+            <Footer />
+            <BottomNavbar />
+            <AppFeedback />
+          </HideOnAdmin>
         </LanguageProvider>
       </body>
     </html>
