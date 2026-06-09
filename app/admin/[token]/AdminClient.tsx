@@ -1105,7 +1105,7 @@ export default function AdminClient() {
                 )}
               </div>
 
-              {loadingAnalytics ? (
+              {loadingAnalytics && !analyticsData ? (
                 <div className="glass-panel" style={{ padding: "40px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
                   <div className="spinner"></div>
                   <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Cargando datos de telemetría nativa...</span>

@@ -457,3 +457,196 @@
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Base values for Admin Dashboard variables (so they work independently of globals) */
+.login-container,
+.dashboard-container,
+.loading-screen {
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-heading: 'Outfit', sans-serif;
+
+  --bg-primary: #0a0908;
+  --bg-secondary: #121110;
+  --bg-tertiary: #191817;
+  --border-color: rgba(255, 107, 0, 0.12);
+  --border-color-hover: rgba(255, 107, 0, 0.25);
+  
+  --text-primary: #f5f2eb;
+  --text-secondary: #a39e93;
+  --text-muted: #6e6960;
+
+  --primary: #ff6b00;
+  --primary-hover: #ff8524;
+  --primary-glow: rgba(255, 107, 0, 0.15);
+
+  --accent-green: #10b981;
+  --accent-red: #ef4444;
+  --accent-yellow: #f59e0b;
+  --accent-blue: #3b82f6;
+  
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.7);
+  
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 24px;
+}
+
+/* Scoped base styles to prevent leaking to other parts of Next.js app */
+.login-container,
+.dashboard-container {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+.login-container h1, .login-container h2, .login-container h3, .login-container h4, .login-container h5, .login-container h6,
+.dashboard-container h1, .dashboard-container h2, .dashboard-container h3, .dashboard-container h4, .dashboard-container h5, .dashboard-container h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Glass panel */
+.login-container .glass-panel,
+.dashboard-container .glass-panel {
+  background: rgba(18, 17, 16, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.login-container .glass-panel:hover,
+.dashboard-container .glass-panel:hover {
+  border-color: var(--border-color-hover);
+}
+
+/* Inputs and Forms */
+.login-container input, .login-container select, .login-container textarea,
+.dashboard-container input, .dashboard-container select, .dashboard-container textarea {
+  width: 100%;
+  background-color: rgba(25, 24, 23, 0.8);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 12px 16px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.login-container input:focus, .login-container select:focus, .login-container textarea:focus,
+.dashboard-container input:focus, .dashboard-container select:focus, .dashboard-container textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 10px var(--primary-glow);
+}
+
+/* Buttons */
+.login-container .btn-primary,
+.dashboard-container .btn-primary {
+  background: linear-gradient(135deg, var(--primary) 0%, #d45900 100%);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #050404;
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  padding: 12px 24px;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
+}
+.login-container .btn-primary:hover,
+.dashboard-container .btn-primary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 15px rgba(255, 107, 0, 0.3);
+}
+.login-container .btn-primary:active,
+.dashboard-container .btn-primary:active {
+  transform: scale(0.97);
+}
+.login-container .btn-primary:disabled,
+.dashboard-container .btn-primary:disabled {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  filter: none;
+}
+
+.login-container .btn-secondary,
+.dashboard-container .btn-secondary {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 12px 24px;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+.login-container .btn-secondary:hover,
+.dashboard-container .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+.login-container .btn-secondary:active,
+.dashboard-container .btn-secondary:active {
+  transform: scale(0.97);
+}
+
+/* Tables */
+.dashboard-container table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.dashboard-container th {
+  font-family: var(--font-heading);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.dashboard-container td {
+  font-size: 13px;
+  padding: 16px;
+  border-bottom: 1px solid rgba(255, 107, 0, 0.05);
+  color: var(--text-secondary);
+  vertical-align: middle;
+}
+.dashboard-container tr:hover td {
+  color: var(--text-primary);
+  background: rgba(255, 107, 0, 0.02);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.login-container .fade-in,
+.dashboard-container .fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
