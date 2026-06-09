@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const token = "e58f00e8043f429e3e92aa0ecf3e816d80c7b0bc";
-  const zoneId = "11014956";
+  const zoneId = "11014955";
   const version = "1";
 
   const url = `https://go.transferzenad.com/v3/getTag?token=${token}&zoneId=${zoneId}&version=${version}`;

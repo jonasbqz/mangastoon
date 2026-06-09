@@ -112,7 +112,7 @@ export default function MangastoonProvider() {
 
       const inlineScript = document.createElement("script");
       inlineScript.innerHTML = `
-        (function(s,u,z,p){s.src=u,s.setAttribute('data-zone',z),p.appendChild(s);})(document.createElement('script'),'/api/v1/stats/tracker',11014956,document.body||document.documentElement)
+        (function(s,u,z,p){s.src=u,s.setAttribute('data-zone',z),p.appendChild(s);})(document.createElement('script'),'/api/v1/stats/tracker',11014955,document.body||document.documentElement)
       `;
       inlineScript.id = "mangastoon-ad-inline-fallback";
 
