@@ -191,6 +191,14 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         setLoadingUser(false);
+
+        // Limpiar caché de premium en cualquier cambio de sesión/auth
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.removeItem("mangastoon_is_premium");
+          } catch {}
+        }
+
         if (event === "SIGNED_IN" && currentUser) {
           // Sincronizar stores una sola vez por evento real de login
           useFavoritesStore.getState().syncWithServer();
@@ -266,6 +274,12 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
         (payload) => {
           if (active && payload.new) {
             setProfile(payload.new);
+            // Si el perfil cambia en tiempo real, invalidamos la caché de premium
+            if (typeof window !== "undefined") {
+              try {
+                sessionStorage.removeItem("mangastoon_is_premium");
+              } catch {}
+            }
           }
         }
       )
@@ -273,6 +287,11 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
 
     // Escuchar evento personalizado de actualización (para cambios locales instantáneos)
     const handleProfileUpdateEvent = () => {
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.removeItem("mangastoon_is_premium");
+        } catch {}
+      }
       if (active) fetchProfile();
     };
     window.addEventListener("profile-updated", handleProfileUpdateEvent);
