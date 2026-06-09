@@ -127,8 +127,8 @@ export async function POST(request: NextRequest) {
           duration: 0
         });
 
-      if (error) {
-        console.error("[StoonAnalytics] Error al insertar pageview:", error.message);
+      if (error && error.code !== "23503") {
+        console.error("[StoonAnalytics] Error al insertar pageview:", error.message, error.code);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
