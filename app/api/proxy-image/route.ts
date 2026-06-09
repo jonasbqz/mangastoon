@@ -121,6 +121,7 @@ export async function GET(req: Request) {
     const isHotlinkingBlockedHost = hostname.endsWith("olympusbiblioteca.com") || hostname.endsWith("olympusxyz.com") || hostname.endsWith("yoveo.xyz");
 
     if (isHotlinkingBlockedHost) {
+      // Try direct server-side fetch first
       try {
         const response = await fetch(imageUrl, {
           headers: {
@@ -144,18 +145,38 @@ export async function GET(req: Request) {
           });
         }
       } catch (error) {
-        console.error("[ProxyImage] Local fetch failed, using worker fallback:", error);
+        console.error("[ProxyImage] Direct fetch failed, trying worker server-side:", error);
       }
 
-      const workerUrl = `https://server-img.platformoctopus.workers.dev/img?url=${encodeURIComponent(imageUrl)}&origin=${encodeURIComponent(referer)}`;
-      return new Response(null, {
-        status: 307,
-        headers: {
-          "Location": workerUrl,
-          "Cache-Control": "public, max-age=31536000, immutable",
-          "X-Proxy-Method": "worker-fallback",
-        },
-      });
+      // CRITICAL: Next.js Image Optimizer does NOT follow 307 redirects — it returns 400.
+      // So we MUST fetch from the worker server-side and return bytes directly (200).
+      try {
+        const workerUrl = `https://server-img.platformoctopus.workers.dev/img?url=${encodeURIComponent(imageUrl)}&origin=${encodeURIComponent(referer)}`;
+        const workerRes = await fetch(workerUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          },
+          next: { revalidate: 31536000 },
+        });
+
+        if (workerRes.ok) {
+          const contentType = workerRes.headers.get("Content-Type") || "image/webp";
+          const buffer = await workerRes.arrayBuffer();
+          return new Response(buffer, {
+            status: 200,
+            headers: {
+              "Content-Type": contentType,
+              "Cache-Control": "public, max-age=31536000, immutable",
+              "X-Proxy-Method": "worker-server-fetch",
+            },
+          });
+        }
+      } catch (workerError) {
+        console.error("[ProxyImage] Worker server-side fetch failed:", workerError);
+      }
+
+      // Last resort: return fallback SVG (never redirect — Next.js Image can't follow them)
+      return fallbackImage("FETCH_FAILED");
     }
 
     // Para todos los demás hosts, redireccionar a images.weserv.nl para cache global y conversión a WebP automática con compresión (calidad 75)
