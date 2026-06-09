@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 
       const { error } = await supabaseDb
         .from("analytics_sessions")
-        .upsert({
+        .insert({
           session_id,
           user_id: userId,
           referrer,
@@ -97,14 +97,16 @@ export async function POST(request: NextRequest) {
           country,
           has_adblocker: hasAdblocker,
           created_at: new Date().toISOString()
-        }, { onConflict: "session_id" });
+        });
 
-      if (error) {
-        console.error("[StoonAnalytics] Error al insertar sesión:", error.message);
+      // Ignorar error de clave duplicada (sesión ya registrada — comportamiento esperado)
+      if (error && error.code !== "23505") {
+        console.error("[StoonAnalytics] Error al insertar sesión:", error.message, error.code);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 
       return NextResponse.json({ success: true, tracking: "session_start" });
+
     }
 
     // 2. REGISTRO DE VISTA DE PÁGINA
