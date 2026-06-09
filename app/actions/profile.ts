@@ -197,12 +197,20 @@ export async function updateUsername(newUsername: string) {
     return { error: "Solo se permiten letras, números, puntos, guiones y guiones bajos." };
   }
 
-  // Verificar bloqueo de 7 días
+  // Verificar bloqueo de 7 días y estado de administrador
   const { data: profile } = await supabase
     .from("profiles")
-    .select("username, username_updated_at")
+    .select("username, username_updated_at, is_admin")
     .eq("id", user.id)
     .single();
+
+  const lowerUsername = trimmed.toLowerCase();
+  const reservedWords = ["mangastoon", "admin", "owner", "staff", "moderador", "moderator", "soporte", "support", "system", "dueño", "dueno"];
+  const hasReservedWord = reservedWords.some((word) => lowerUsername.includes(word));
+
+  if (hasReservedWord && !profile?.is_admin) {
+    return { error: "El nombre de usuario contiene términos reservados para el equipo oficial." };
+  }
 
   if (profile?.username && profile?.username_updated_at) {
     const lastUpdate = new Date(profile.username_updated_at);

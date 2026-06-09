@@ -1,6 +1,7 @@
 import { logger } from "../../../utils/logger";
 import { getCached, getOrSetCached, setCached, stableCacheKey } from "../../../utils/server-cache";
 import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "../../../utils/supabase/server";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../utils/mangadex-config";
 import { getLocalizedTitleAsync } from "../../../utils/get-localized-title";
 import { MONLINE_API_URL } from "../../../utils/monline-config";
@@ -909,6 +910,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           } else if (lcDetails) {
             pages = await fetchMangaVfPages(lcDetails, currentChapter.id);
           }
+        }
+      }
+
+      // Registrar capítulo roto en Supabase si no tiene páginas
+      if (pages.length === 0 && currentChapter) {
+        try {
+          const supabase = await createClient();
+          await supabase.from("broken_chapters").upsert({
+            manga_id: localManga.slug,
+            manga_title: localManga.title,
+            chapter_id: currentChapter.id,
+            chapter_number: currentChapter.attributes?.chapter || "0",
+            detected_at: new Date().toISOString(),
+          }, {
+            onConflict: "manga_id,chapter_id",
+          });
+        } catch (dbErr) {
+          logger.error("[broken_chapters] Error reporting broken chapter:", dbErr);
         }
       }
 

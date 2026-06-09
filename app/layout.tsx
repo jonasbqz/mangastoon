@@ -8,6 +8,7 @@ import BottomNavbar from "./components/BottomNavbar";
 import { LanguageProvider } from "./components/language-provider";
 import PageTransitionLoader from "./components/PageTransitionLoader";
 import MangastoonProvider from "./components/MangastoonProvider";
+import HeartbeatTracker from "./components/HeartbeatTracker";
 import { SITE_DESCRIPTION, SITE_IMAGE, SITE_NAME, SITE_URL, safeJsonLd } from "./utils/seo";
 import "./globals.css";
 
@@ -199,6 +200,7 @@ export default async function RootLayout({
             dangerouslySetInnerHTML={safeJsonLd(organizationJsonLd)}
           />
           <MangastoonProvider />
+          <HeartbeatTracker />
           {children}
           <Footer />
           <BottomNavbar />
