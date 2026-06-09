@@ -41,10 +41,15 @@ function isMangaDexUuid(value: string) {
 }
 
 function buildRouteSlug(title: string | null | undefined, id: string) {
-  const cleanId = decodeURIComponent(id).replace(/^\/?comics\//, "").replace(/^\/+|\/+$/g, "");
+  let cleanId = decodeURIComponent(id).replace(/^\/?comics\//, "").replace(/^\/+|\/+$/g, "");
 
   if (!cleanId) return slugify(title);
   if (isMangaDexUuid(cleanId)) return `${slugify(title)}-${cleanId}`;
+
+  // Strip 'lc-' prefix if present to keep user-facing URLs clean
+  if (cleanId.startsWith("lc-")) {
+    cleanId = cleanId.substring(3);
+  }
 
   // Local/Monline IDs are already SEO slugs. Prefixing the title again creates
   // duplicated routes like /comics/title-title-20260514...
