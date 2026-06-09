@@ -96,19 +96,12 @@ function TransitionLoaderEvents() {
       return originalReplaceState.apply(this, [state, unused, url]);
     };
 
-    const handlePopState = () => {
-      // Show loader on browser back/forward navigation
-      queueMicrotask(() => setIsLoading(true));
-    };
-
     document.addEventListener("click", handleAnchorClick);
-    window.addEventListener("popstate", handlePopState);
 
     return () => {
       document.removeEventListener("click", handleAnchorClick);
       window.history.pushState = originalPushState;
       window.history.replaceState = originalReplaceState;
-      window.removeEventListener("popstate", handlePopState);
     };
   }, []);
 
