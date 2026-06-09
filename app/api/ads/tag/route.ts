@@ -39,7 +39,17 @@ export async function GET() {
     // Unescape quotes and backslashes
     const tag = match[1].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
 
-    return NextResponse.json({ tag });
+    // Extract host dynamically to update our proxy
+    const hostMatch = tag.match(/s\.src='https:\/\/([^/]+)\/tag\.min\.js'/);
+    const host = hostMatch ? hostMatch[1] : "al5sm.com";
+    
+    // Update global state for the stats proxy
+    (globalThis as any).currentMonetagHost = host;
+
+    // Rewrite script tag to go through our local proxy
+    const rewrittenTag = tag.replace(`https://${host}/tag.min.js`, `/api/v1/stats/tracker`);
+
+    return NextResponse.json({ tag: rewrittenTag });
   } catch (error) {
     console.error("[AdTag API GET] error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });

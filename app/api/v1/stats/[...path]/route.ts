@@ -11,15 +11,16 @@ export async function GET(
   const searchParams = request.nextUrl.searchParams.toString();
   const queryString = searchParams ? `?${searchParams}` : "";
 
+  const currentHost = (globalThis as any).currentMonetagHost || "al5sm.com";
   let targetUrl = "";
 
   if (path === "tracker") {
-    targetUrl = `https://jnbhi.com/tag.min.js`;
+    targetUrl = `https://${currentHost}/tag.min.js`;
   } else if (path === "apu.php") {
     targetUrl = `https://vayfuzsu.net/apu.php${queryString}`;
   } else {
     // Fallback proxy to propeller/monetag script gateways
-    targetUrl = `https://jnbhi.com/${path}${queryString}`;
+    targetUrl = `https://${currentHost}/${path}${queryString}`;
   }
 
   try {
@@ -83,12 +84,13 @@ export async function POST(
   const searchParams = request.nextUrl.searchParams.toString();
   const queryString = searchParams ? `?${searchParams}` : "";
 
+  const currentHost = (globalThis as any).currentMonetagHost || "al5sm.com";
   let targetUrl = "";
 
   if (path === "apu.php") {
     targetUrl = `https://vayfuzsu.net/apu.php${queryString}`;
   } else {
-    targetUrl = `https://jnbhi.com/${path}${queryString}`;
+    targetUrl = `https://${currentHost}/${path}${queryString}`;
   }
 
   try {
