@@ -277,15 +277,30 @@ async function fetchMonlineSearch(query: string, language: "es" | "en" | "pt", i
     appendStandardMangaDexFilters(mangaDexParams, isAdult, language);
 
     try {
-      const mangaDexResponse = await fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal });
-      const mangaDexPayload = mangaDexResponse.ok
-        ? ((await mangaDexResponse.json()) as MangaDexCollectionResponse)
-        : { data: [] };
-      const rawMangaDex = mangaDexPayload.data ?? [];
-      const statistics = await fetchMangaDexStatistics(rawMangaDex.map((manga) => manga.id), signal);
-      const mangaDexResults = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
-      const mangaVfResults = await mangaVfResultsPromise;
-      results = [...localResults, ...mangaDexResults, ...mangaVfResults];
+      const fetchPromise = fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal });
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error("Timeout")), 1000)
+      );
+
+      const mangaDexResponse = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+
+      if (mangaDexResponse.ok) {
+        const mangaDexPayload = (await mangaDexResponse.json()) as MangaDexCollectionResponse;
+        const rawMangaDex = mangaDexPayload.data ?? [];
+        
+        const statsPromise = fetchMangaDexStatistics(rawMangaDex.map((manga) => manga.id), signal);
+        const statistics = await Promise.race([
+          statsPromise,
+          new Promise<Record<string, any>>((res) => setTimeout(() => res({}), 800))
+        ]) as Record<string, any>;
+
+        const mangaDexResults = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
+        const mangaVfResults = await mangaVfResultsPromise;
+        results = [...localResults, ...mangaDexResults, ...mangaVfResults];
+      } else {
+        const mangaVfResults = await mangaVfResultsPromise;
+        results = [...localResults, ...mangaVfResults];
+      }
     } catch {
       const mangaVfResults = await mangaVfResultsPromise;
       results = [...localResults, ...mangaVfResults];
@@ -317,7 +332,6 @@ async function fetchMonlineSearch(query: string, language: "es" | "en" | "pt", i
       );
 
       const cleanSynopsis = manga.synopsis ? sanitizeText(manga.synopsis) : "";
-      const translatedSynopsis = cleanSynopsis ? await forceTranslate(cleanSynopsis, language) : "";
 
       return {
         ...manga,
@@ -326,7 +340,7 @@ async function fetchMonlineSearch(query: string, language: "es" | "en" | "pt", i
           ...manga.titleMap,
           [language]: translatedTitle,
         },
-        synopsis: translatedSynopsis || null,
+        synopsis: cleanSynopsis || null,
       };
     })
   );

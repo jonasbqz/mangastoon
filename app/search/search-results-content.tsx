@@ -321,13 +321,30 @@ async function fetchSearchResults(query: string, language: "es" | "en" | "pt", i
   mangaDexParams.set("order[relevance]", "desc");
   appendStandardMangaDexFilters(mangaDexParams, isAdult, language);
 
-  const mangaDexResponse = await fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal });
-  const mangaDexPayload = mangaDexResponse.ok
-    ? ((await mangaDexResponse.json()) as MangaDexCollectionResponse)
-    : { data: [] };
-  const rawMangaDex = mangaDexPayload.data ?? [];
-  const statistics = await fetchMangaDexStatistics(rawMangaDex.map((manga) => manga.id), signal);
-  const mangaDexResults = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
+  let mangaDexResults: MangaShowcaseItem[] = [];
+  try {
+    const fetchPromise = fetch(`/api/mangadex/manga?${mangaDexParams.toString()}`, { signal });
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error("Timeout")), 1500)
+    );
+
+    const mangaDexResponse = await Promise.race([fetchPromise, timeoutPromise]) as Response;
+
+    if (mangaDexResponse.ok) {
+      const mangaDexPayload = (await mangaDexResponse.json()) as MangaDexCollectionResponse;
+      const rawMangaDex = mangaDexPayload.data ?? [];
+      const statsPromise = fetchMangaDexStatistics(rawMangaDex.map((manga) => manga.id), signal);
+      const statistics = await Promise.race([
+        statsPromise,
+        new Promise<Record<string, any>>((res) => setTimeout(() => res({}), 1000))
+      ]) as Record<string, any>;
+
+      mangaDexResults = mapToShowcaseItems(rawMangaDex as MangaDexManga[], statistics, language);
+    }
+  } catch (err) {
+    console.warn("MangaDex search failed or timed out:", err);
+  }
+
   const mangaVfResults = await mangaVfResultsPromise;
 
   const seen = new Set<string>();

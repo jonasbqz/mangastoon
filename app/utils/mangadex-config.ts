@@ -54,6 +54,8 @@ export function appendMangaDexAvailableLanguageFilters(
   params.delete("availableTranslatedLanguage[]");
 
   getMangaDexAvailableLanguages(language).forEach((translatedLanguage) => {
-    params.append("availableTranslatedLanguage[]", translatedLanguage);
+    if (/^[a-z]{2}(-[a-z]{2})?$/i.test(translatedLanguage)) {
+      params.append("availableTranslatedLanguage[]", translatedLanguage);
+    }
   });
 }
