@@ -625,10 +625,33 @@ export default async function HomePage() {
 
   const worldTop = useLocalCatalog ? monlineWorldTop : fallbackRows?.topManhwas ?? [];
   const topManhwaKeys = new Set(localTopManhwas.map((manga) => manga.mangaDexId ?? manga.url));
-  const topManhwas = [
+  let mergedTopManhwas = [
     ...localTopManhwas,
     ...(fallbackRows?.topManhwas ?? []).filter((manga) => !topManhwaKeys.has(manga.mangaDexId ?? manga.url)),
-  ].slice(0, 10);
+  ];
+
+  if (mergedTopManhwas.length < 10 && useLocalCatalog) {
+    const existingKeys = new Set(mergedTopManhwas.map((manga) => manga.mangaDexId ?? manga.url));
+    const extraLocalComics = [
+      ...monlineWorldTop,
+      ...monlineLatest,
+    ].filter((manga) => !existingKeys.has(manga.mangaDexId ?? manga.url));
+
+    const seenExtras = new Set<string>();
+    const uniqueExtraComics = extraLocalComics.filter((manga) => {
+      const key = manga.mangaDexId ?? manga.url;
+      if (seenExtras.has(key)) return false;
+      seenExtras.add(key);
+      return true;
+    });
+
+    mergedTopManhwas = [
+      ...mergedTopManhwas,
+      ...uniqueExtraComics,
+    ];
+  }
+
+  const topManhwas = mergedTopManhwas.slice(0, 10);
   const latest = (combinedLatest.length > 0 ? combinedLatest : fallbackRows?.latest ?? []).slice(0, 60);
 
   if (worldTop.length === 0 && topManhwas.length === 0 && latest.length === 0) {
