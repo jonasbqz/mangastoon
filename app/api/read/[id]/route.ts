@@ -29,7 +29,7 @@ export const revalidate = 0;
 
 const CONSUMET_API_URL = "https://consumet-api-one.vercel.app/manga/manganato";
 const LOCAL_API_URL = MONLINE_API_URL;
-const MANGAVF_API_URL = process.env.MANGAVF_API_URL || "http://localhost:3001";
+const MANGAVF_API_URL = process.env.MANGAVF_API_URL || process.env.NEXT_PUBLIC_MANGAVF_API_URL || "http://localhost:3001";
 
 function normalizePageUrlToProxy(url: string): string {
   if (!url) return "";
@@ -200,6 +200,12 @@ function readResponseCacheKey(id: string, lang: SupportedLanguage, chapterId: st
 }
 
 function readCacheHeaders(cacheStatus: "HIT" | "MISS" | "BYPASS" = "MISS", ttl = READ_RESPONSE_TTL_SECONDS) {
+  if (cacheStatus === "BYPASS") {
+    return {
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+      "X-Mangastoon-Cache": "BYPASS",
+    };
+  }
   return {
     "Cache-Control": `public, max-age=${ttl}, s-maxage=${ttl}, stale-while-revalidate=${ttl * 12}`,
     "X-Mangastoon-Cache": cacheStatus,
@@ -1225,7 +1231,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       },
       {
         status: isRateLimit ? 429 : 503,
-        headers: { "Cache-Control": "s-maxage=60, stale-while-revalidate=86400" },
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+          "X-Mangastoon-Cache": "BYPASS",
+        },
       }
     );
   }
