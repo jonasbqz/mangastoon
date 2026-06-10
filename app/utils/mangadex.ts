@@ -1133,24 +1133,32 @@ async function fetchMangaVfSourceBySlug(id: string) {
 }
 
 export async function fetchMangaVfDetailsBySlug(id: string) {
-  const source = await fetchMangaVfSourceBySlug(id);
-  const sourceUrl = source?.url?.trim();
-  if (!sourceUrl) return null;
+  const cacheKey = `leercapitulo-details:${id}`;
+  return getOrSetCached(
+    cacheKey,
+    7200, // 2 horas (los detalles cambian poco)
+    async () => {
+      const source = await fetchMangaVfSourceBySlug(id);
+      const sourceUrl = source?.url?.trim();
+      if (!sourceUrl) return null;
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4000);
-  try {
-    const response = await fetch(
-      `${MANGAVF_API_URL}/api/v1/manga/chapters?url=${encodeURIComponent(sourceUrl)}`,
-      { cache: "no-store", signal: controller.signal }
-    );
-    if (!response.ok) return null;
-    return (await response.json()) as MangaVfDetails;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      try {
+        const response = await fetch(
+          `${MANGAVF_API_URL}/api/v1/manga/chapters?url=${encodeURIComponent(sourceUrl)}`,
+          { cache: "no-store", signal: controller.signal }
+        );
+        if (!response.ok) return null;
+        return (await response.json()) as MangaVfDetails;
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    { shouldCache: (details) => details !== null }
+  );
 }
 
 function mapMangaVfToMangaDetails(id: string, details: MangaVfDetails): MangaDetails | null {
@@ -1548,25 +1556,33 @@ export async function fetchMangaChapters(id: string, language: string): Promise<
 }
 
 export async function fetchMangaVfPages(details: MangaVfDetails, chapterId: string) {
-  const chapterUrl = (details.chapters ?? []).find((chapter) => getMangaVfChapterId(chapter) === chapterId)?.url?.trim();
-  if (!chapterUrl) return [];
+  const cacheKey = `leercapitulo-pages:${chapterId}`;
+  return getOrSetCached(
+    cacheKey,
+    86400, // 24 horas (las páginas de un capítulo nunca cambian)
+    async () => {
+      const chapterUrl = (details.chapters ?? []).find((chapter) => getMangaVfChapterId(chapter) === chapterId)?.url?.trim();
+      if (!chapterUrl) return [];
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4000);
-  try {
-    const response = await fetch(
-      `${MANGAVF_API_URL}/api/v1/manga/extract?url=${encodeURIComponent(chapterUrl)}`,
-      { cache: "no-store", signal: controller.signal }
-    );
-    if (!response.ok) return [];
-    const payload = (await response.json()) as any;
-    const pages = Array.isArray(payload.images) ? payload.images : [];
-    return pages.filter(Boolean) as string[];
-  } catch {
-    return [];
-  } finally {
-    clearTimeout(timeout);
-  }
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      try {
+        const response = await fetch(
+          `${MANGAVF_API_URL}/api/v1/manga/extract?url=${encodeURIComponent(chapterUrl)}`,
+          { cache: "no-store", signal: controller.signal }
+        );
+        if (!response.ok) return [];
+        const payload = (await response.json()) as any;
+        const pages = Array.isArray(payload.images) ? payload.images : [];
+        return pages.filter(Boolean) as string[];
+      } catch {
+        return [];
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    { shouldCache: (pages) => pages.length > 0 }
+  );
 }
 
 export type LeerCapituloLatestItem = {
