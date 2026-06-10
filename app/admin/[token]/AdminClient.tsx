@@ -1322,21 +1322,27 @@ export default function AdminClient() {
                     {/* Páginas Más Leídas (Top Mangas/Capítulos) */}
                     <div className="panel-card glass-panel" style={{ padding: "20px", gridColumn: "span 1" }}>
                       <h3 className="panel-title" style={{ marginBottom: "16px", fontSize: "13px" }}>Contenido Más Leído</h3>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "180px", overflowY: "auto" }}>
+                      <div className="custom-scrollbar" style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "180px", overflowY: "auto", paddingRight: "4px" }}>
                         {analyticsData.topPages?.map((page: any, idx: number) => (
-                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", borderBottom: "1px solid rgba(255,107,0,0.04)", paddingBottom: "4px" }}>
-                            <span
+                          <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", borderBottom: "1px solid rgba(255,107,0,0.04)", paddingBottom: "4px" }}>
+                            <a
+                              href={page.path}
+                              target="_blank"
+                              rel="noopener noreferrer"
                               style={{
                                 color: "var(--primary)",
                                 textOverflow: "ellipsis",
                                 whiteSpace: "nowrap",
                                 overflow: "hidden",
-                                maxWidth: "150px",
+                                maxWidth: "230px",
+                                textDecoration: "none",
+                                fontWeight: 500,
                               }}
-                              title={page.path}
+                              className="hover:underline transition-all duration-200"
+                              title={page.title || page.path}
                             >
                               {page.title || page.path}
-                            </span>
+                            </a>
                             <span style={{ color: "var(--text-muted)" }}>{page.views} vistas</span>
                           </div>
                         ))}
