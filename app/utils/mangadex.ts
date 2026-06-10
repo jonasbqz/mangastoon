@@ -1120,7 +1120,7 @@ async function fetchMangaVfSourceBySlug(id: string) {
 
     const source =
       results.find((item) => item.slug === lookupId) ??
-      results.find((item) => item.slug.endsWith("-" + lookupId)) ??
+      results.find((item) => item.slug?.endsWith("-" + lookupId)) ??
       results.find((item) => slugify(item.title) === lookupId) ??
       null;
 
@@ -1290,7 +1290,7 @@ async function searchLeerCapituloByTitle(title: string): Promise<string | null> 
     const matched =
       results.find((item) => slugify(item.title || "") === slugifiedTarget) ??
       results.find((item) => item.slug === slugifiedTarget) ??
-      results.find((item) => item.slug.endsWith("-" + slugifiedTarget)) ??
+      results.find((item) => item.slug?.endsWith("-" + slugifiedTarget)) ??
       results.find((item) => item.title?.toLowerCase() === title.toLowerCase()) ??
       null;
 
