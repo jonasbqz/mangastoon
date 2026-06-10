@@ -5,8 +5,6 @@ export const revalidate = 86400;
 const staticPages = [
   { path: "/", priority: "1.0", changefreq: "daily" },
   { path: "/explore", priority: "0.9", changefreq: "daily" },
-  { path: "/search", priority: "0.7", changefreq: "weekly" },
-  { path: "/favoritos", priority: "0.3", changefreq: "monthly" },
   { path: "/terminos", priority: "0.2", changefreq: "yearly" },
   { path: "/privacidad", priority: "0.2", changefreq: "yearly" },
   { path: "/dmca", priority: "0.2", changefreq: "yearly" },

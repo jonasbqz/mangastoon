@@ -55,6 +55,12 @@ function sitemapMultilingualUrl(
   lastmod: string,
   priority = "0.8"
 ): string[] {
+  if (urlEs === urlEn && urlEn === urlPt) {
+    return [
+      `  <url>\n    <loc>${escapeXml(urlEs)}</loc>\n    <lastmod>${lastmod}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>`,
+    ];
+  }
+
   const links = `\n    <xhtml:link rel="alternate" hreflang="es" href="${escapeXml(urlEs)}" />` +
                 `\n    <xhtml:link rel="alternate" hreflang="en" href="${escapeXml(urlEn)}" />` +
                 `\n    <xhtml:link rel="alternate" hreflang="pt" href="${escapeXml(urlPt)}" />`;

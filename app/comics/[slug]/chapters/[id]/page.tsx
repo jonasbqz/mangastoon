@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { headers, cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 import ReaderClient from "./reader-client";
 import { SITE_NAME, absoluteUrl, safeJsonLd } from "../../../../utils/seo";
 import { extractComicIdFromSlugId } from "../../../../utils/slugify";
@@ -100,6 +100,17 @@ export async function generateMetadata({
 
   const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang });
 
+  if (!data || !data.currentChapter || data.code === "LOCAL_PAGES_UNAVAILABLE") {
+    return {
+      title: "Capítulo no disponible - MangaStoon",
+      description: "Este capítulo no está disponible o no existe.",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
   const fallbackMangaTitle = slug
     .replace(/-\d{8}-[a-zA-Z0-9]+$/, "")
     .replace(/-/g, " ")
@@ -177,6 +188,11 @@ export default async function ReadPage({
   }
   const chapterId = resolvedSearchParams.chapter ?? id;
   const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang });
+
+  if (!data || !data.currentChapter || data.code === "LOCAL_PAGES_UNAVAILABLE") {
+    notFound();
+  }
+
   const canonicalSlug = data?.comicSlug;
 
   if (canonicalSlug && canonicalSlug !== slug) {
