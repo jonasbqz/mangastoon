@@ -2,6 +2,7 @@ import { logger } from "../../../utils/logger";
 import { getCached, getOrSetCached, setCached, stableCacheKey } from "../../../utils/server-cache";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../utils/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../utils/mangadex-config";
 import { getLocalizedTitleAsync } from "../../../utils/get-localized-title";
 import { MONLINE_API_URL } from "../../../utils/monline-config";
@@ -36,6 +37,34 @@ function normalizePageUrlToProxy(url: string): string {
   if (url.startsWith("/")) return url;
   if (url.includes("mangadex.org")) return url;
   return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+}
+
+async function reportBrokenChapter(
+  mangaId: string,
+  mangaTitle: string,
+  chapterId: string,
+  chapterNumber: string
+) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xlcsqqwelopzpslxgdni.supabase.co";
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabase = serviceRoleKey
+      ? createSupabaseClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
+      : await createClient();
+
+    await supabase.from("broken_chapters").upsert({
+      manga_id: mangaId,
+      manga_title: mangaTitle,
+      chapter_id: chapterId,
+      chapter_number: chapterNumber,
+      detected_at: new Date().toISOString(),
+    }, {
+      onConflict: "manga_id,chapter_id",
+    });
+    logger.info(`[broken_chapters] Successfully reported broken chapter ${chapterNumber} for manga ${mangaId}`);
+  } catch (dbErr) {
+    logger.error("[broken_chapters] Error reporting broken chapter:", dbErr);
+  }
 }
 
 type SupportedLanguage = "es" | "en" | "pt";
@@ -915,20 +944,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
       // Registrar capítulo roto en Supabase si no tiene páginas
       if (pages.length === 0 && currentChapter) {
-        try {
-          const supabase = await createClient();
-          await supabase.from("broken_chapters").upsert({
-            manga_id: localManga.slug,
-            manga_title: localManga.title,
-            chapter_id: currentChapter.id,
-            chapter_number: currentChapter.attributes?.chapter || "0",
-            detected_at: new Date().toISOString(),
-          }, {
-            onConflict: "manga_id,chapter_id",
-          });
-        } catch (dbErr) {
-          logger.error("[broken_chapters] Error reporting broken chapter:", dbErr);
-        }
+        await reportBrokenChapter(
+          localManga.slug,
+          localManga.title,
+          currentChapter.id,
+          currentChapter.attributes?.chapter || "0"
+        );
       }
 
       return cachedReadResponse(responseCacheKey, {
@@ -967,6 +988,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           chapters[0] ??
           null;
         const pages = currentChapter ? await fetchMangaVfPages(details, currentChapter.id) : [];
+
+        if (pages.length === 0 && currentChapter) {
+          await reportBrokenChapter(
+            id,
+            details.manga_title || details.title || "MangaStoon",
+            currentChapter.id,
+            currentChapter.attributes?.chapter || "0"
+          );
+        }
 
         return cachedReadResponse(responseCacheKey, {
           mangaTitle: details.manga_title || details.title || "MangaStoon",
@@ -1050,6 +1080,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           chapter: requestedChapter,
         });
 
+        if (pages.length === 0) {
+          await reportBrokenChapter(
+            targetMangaDexId || id,
+            mangaIdentity.title || "MangaStoon",
+            requestedChapter.id,
+            requestedChapter.attributes?.chapter || "0"
+          );
+        }
+
         return cachedReadResponse(responseCacheKey, {
           mangaTitle: mangaIdentity.title,
           coverImage: mangaIdentity.coverImage,
@@ -1121,6 +1160,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       : await findReadableChapterWithPages(finalChapters, currentChapter, mangaSegments);
     currentChapter = readableChapter.chapter;
     let pages = readableChapter.pages;
+
+    if (pages.length === 0 && currentChapter) {
+      await reportBrokenChapter(
+        targetMangaDexId || id,
+        mangaTitle || "MangaStoon",
+        currentChapter.id,
+        currentChapter.attributes?.chapter || "0"
+      );
+    }
 
     const payload = {
       mangaTitle,

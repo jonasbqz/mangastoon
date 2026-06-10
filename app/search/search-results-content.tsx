@@ -418,6 +418,15 @@ export default function SearchResultsContent() {
 
         // If no search results found, fetch popular local comics as recommendations
         if (mangas.length === 0) {
+          // Log failed search to the database
+          fetch("/api/search", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ query }),
+          }).catch((err) => console.error("Error logging failed search:", err));
+
           try {
             const recsRes = await fetch(`${MONLINE_API_URL}/api/comics?limit=6&order=views`, {
               signal: controller.signal,
