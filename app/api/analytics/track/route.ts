@@ -82,10 +82,10 @@ export async function POST(request: NextRequest) {
       const hasAdblocker = body.has_adblocker || false;
 
       // Obtener el ID del usuario si está logueado en la sesión
-      const { data: { session } } = await supabase.auth.getSession();
-      const userId = session?.user?.id || null;
+      const { data } = await supabase.auth.getSession();
+      const userId = data?.session?.user?.id || null;
 
-      const { error } = await supabaseDb
+      let { error } = await supabaseDb
         .from("analytics_sessions")
         .insert({
           session_id,
@@ -98,6 +98,24 @@ export async function POST(request: NextRequest) {
           has_adblocker: hasAdblocker,
           created_at: new Date().toISOString()
         });
+
+      // Si falla por violación de clave foránea (usuario inexistente en profiles), reintentamos sin user_id.
+      if (error && error.code === "23503") {
+        const retryResult = await supabaseDb
+          .from("analytics_sessions")
+          .insert({
+            session_id,
+            user_id: null,
+            referrer,
+            source,
+            device,
+            browser,
+            country,
+            has_adblocker: hasAdblocker,
+            created_at: new Date().toISOString()
+          });
+        error = retryResult.error;
+      }
 
       // Ignorar error de clave duplicada (sesión ya registrada — comportamiento esperado)
       if (error && error.code !== "23505") {

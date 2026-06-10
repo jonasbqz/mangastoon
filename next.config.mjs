@@ -4,7 +4,6 @@ const nextConfig = {
     localPatterns: [
       {
         pathname: "/api/proxy-image",
-        search: "**",
       },
     ],
     remotePatterns: [
