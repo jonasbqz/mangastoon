@@ -1,8 +1,10 @@
-﻿import { logger } from "./utils/logger";
+import { logger } from "./utils/logger";
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SITE_URL } from "./utils/seo";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   alternates: {
