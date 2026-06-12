@@ -1103,33 +1103,41 @@ function mapLocalComicToMangaDetails(comic: LocalApiComic): MangaDetails | null 
 }
 
 export async function fetchMangaVfSourceBySlug(id: string) {
-  const cleanId = id.startsWith("lc-") ? id.substring(3) : id;
-  const lookupId = cleanId.replace(/^manga[-_]?vf[-_]?/i, "");
-  const query = lookupId.replace(/-/g, " ");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const cacheKey = stableCacheKey("leercapitulo-source-by-slug", [id]);
+  return getOrSetCached(
+    cacheKey,
+    2592000, // 30 días (el URL de un manga en LeerCapitulo es estático)
+    async () => {
+      const cleanId = id.startsWith("lc-") ? id.substring(3) : id;
+      const lookupId = cleanId.replace(/^manga[-_]?vf[-_]?/i, "");
+      const query = lookupId.replace(/-/g, " ");
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
 
-  try {
-    const response = await fetch(
-      `${MANGAVF_API_URL}/api/v1/manga/search?q=${encodeURIComponent(query)}`,
-      { cache: "no-store", signal: controller.signal }
-    );
-    if (!response.ok) return null;
-    const payload = (await response.json()) as MangaVfSearchResponse;
-    const results = payload.results ?? [];
+      try {
+        const response = await fetch(
+          `${MANGAVF_API_URL}/api/v1/manga/search?q=${encodeURIComponent(query)}`,
+          { cache: "no-store", signal: controller.signal }
+        );
+        if (!response.ok) return null;
+        const payload = (await response.json()) as MangaVfSearchResponse;
+        const results = payload.results ?? [];
 
-    const source =
-      results.find((item) => item.slug === lookupId) ??
-      results.find((item) => item.slug?.endsWith("-" + lookupId)) ??
-      results.find((item) => slugify(item.title) === lookupId) ??
-      null;
+        const source =
+          results.find((item) => item.slug === lookupId) ??
+          results.find((item) => item.slug?.endsWith("-" + lookupId)) ??
+          results.find((item) => slugify(item.title) === lookupId) ??
+          null;
 
-    return source?.url?.includes("leercapitulo.co") ? source : null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
+        return source?.url?.includes("leercapitulo.co") ? source : null;
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    { shouldCache: (source) => source !== null }
+  );
 }
 
 export async function fetchMangaVfDetailsBySlug(id: string) {
@@ -1255,77 +1263,100 @@ export async function fetchMangaDetails(id: string, language?: string): Promise<
 }
 
 async function searchMangaDexByTitle(title: string): Promise<string | null> {
-  try {
-    const params = new URLSearchParams();
-    params.set("title", title);
-    params.set("limit", "5");
-    const response = await fetch(`https://api.mangadex.org/manga?${params.toString()}`);
-    if (!response.ok) return null;
-    const payload = await response.json();
-    const results = payload.data ?? [];
+  const cacheKey = stableCacheKey("mangadex-search-by-title", [title]);
+  return getOrSetCached(
+    cacheKey,
+    2592000, // 30 días
+    async () => {
+      try {
+        const params = new URLSearchParams();
+        params.set("title", title);
+        params.set("limit", "5");
+        const response = await fetch(`https://api.mangadex.org/manga?${params.toString()}`);
+        if (!response.ok) return null;
+        const payload = await response.json();
+        const results = payload.data ?? [];
 
-    const slugifiedTarget = slugify(title);
-    const matched = results.find((manga: any) => {
-      const titleMap = manga.attributes?.title ?? {};
-      const altTitles = manga.attributes?.altTitles ?? [];
-      const allTitles = [
-        ...Object.values(titleMap),
-        ...altTitles.flatMap((t: any) => Object.values(t))
-      ].map((t) => slugify(t as string));
+        const slugifiedTarget = slugify(title);
+        const matched = results.find((manga: any) => {
+          const titleMap = manga.attributes?.title ?? {};
+          const altTitles = manga.attributes?.altTitles ?? [];
+          const allTitles = [
+            ...Object.values(titleMap),
+            ...altTitles.flatMap((t: any) => Object.values(t))
+          ].map((t) => slugify(t as string));
 
-      return allTitles.includes(slugifiedTarget);
-    });
+          return allTitles.includes(slugifiedTarget);
+        });
 
-    return matched?.id ?? results[0]?.id ?? null;
-  } catch {
-    return null;
-  }
+        return matched?.id ?? results[0]?.id ?? null;
+      } catch {
+        return null;
+      }
+    },
+    { shouldCache: (id) => id !== null }
+  );
 }
 
 async function searchLeerCapituloByTitle(title: string): Promise<string | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
-  try {
-    const response = await fetch(
-      `${MANGAVF_API_URL}/api/v1/manga/search?q=${encodeURIComponent(title)}`,
-      { cache: "no-store", signal: controller.signal }
-    );
-    if (!response.ok) return null;
-    const payload = await response.json() as MangaVfSearchResponse;
-    const results = payload.results ?? [];
+  const cacheKey = stableCacheKey("leercapitulo-slug-by-title", [title]);
+  return getOrSetCached(
+    cacheKey,
+    2592000, // 30 días
+    async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const response = await fetch(
+          `${MANGAVF_API_URL}/api/v1/manga/search?q=${encodeURIComponent(title)}`,
+          { cache: "no-store", signal: controller.signal }
+        );
+        if (!response.ok) return null;
+        const payload = await response.json() as MangaVfSearchResponse;
+        const results = payload.results ?? [];
 
-    const slugifiedTarget = slugify(title);
-    const matched =
-      results.find((item) => slugify(item.title || "") === slugifiedTarget) ??
-      results.find((item) => item.slug === slugifiedTarget) ??
-      results.find((item) => item.slug?.endsWith("-" + slugifiedTarget)) ??
-      results.find((item) => item.title?.toLowerCase() === title.toLowerCase()) ??
-      null;
+        const slugifiedTarget = slugify(title);
+        const matched =
+          results.find((item) => slugify(item.title || "") === slugifiedTarget) ??
+          results.find((item) => item.slug === slugifiedTarget) ??
+          results.find((item) => item.slug?.endsWith("-" + slugifiedTarget)) ??
+          results.find((item) => item.title?.toLowerCase() === title.toLowerCase()) ??
+          null;
 
-    if (matched?.url?.includes("leercapitulo.co")) {
-      return (matched.slug || slugify(matched.title || "")).replace(/^manga[-_]?vf[-_]?/i, "");
-    }
-    return null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
+        if (matched?.url?.includes("leercapitulo.co")) {
+          return (matched.slug || slugify(matched.title || "")).replace(/^manga[-_]?vf[-_]?/i, "");
+        }
+        return null;
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(timeout);
+      }
+    },
+    { shouldCache: (slug) => slug !== null }
+  );
 }
 
 async function getMangaDexSpanishChapterCount(mangaId: string): Promise<number> {
-  try {
-    const params = new URLSearchParams();
-    params.append("translatedLanguage[]", "es");
-    params.append("translatedLanguage[]", "es-la");
-    params.set("limit", "1");
-    const response = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}/feed?${params.toString()}`);
-    if (!response.ok) return 0;
-    const payload = await response.json();
-    return payload.total ?? 0;
-  } catch {
-    return 0;
-  }
+  const cacheKey = stableCacheKey("mangadex-es-chapters-count", [mangaId]);
+  return getOrSetCached(
+    cacheKey,
+    7200, // 2 horas
+    async () => {
+      try {
+        const params = new URLSearchParams();
+        params.append("translatedLanguage[]", "es");
+        params.append("translatedLanguage[]", "es-la");
+        params.set("limit", "1");
+        const response = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}/feed?${params.toString()}`);
+        if (!response.ok) return 0;
+        const payload = await response.json();
+        return payload.total ?? 0;
+      } catch {
+        return 0;
+      }
+    }
+  );
 }
 
 export type ResolvedSource = {
