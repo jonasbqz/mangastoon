@@ -3,12 +3,14 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { headers, cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
+import { NextRequest } from "next/server";
 import ReaderClient from "./reader-client";
 import { SITE_NAME, absoluteUrl, safeJsonLd } from "../../../../utils/seo";
 import { extractComicIdFromSlugId } from "../../../../utils/slugify";
 import { fetchMangaDetails, hasSensitiveAdultTag } from "../../../../utils/mangadex";
 import AdultContentBlocker from "../../../../components/AdultContentBlocker";
 import { createClient } from "../../../../../utils/supabase/server";
+import { GET as getReaderData } from "../../../../../app/api/read/[id]/route";
 
 type SupportedLanguage = "es" | "en" | "pt";
 
@@ -64,28 +66,30 @@ async function fetchReaderData({
   lang: SupportedLanguage;
 }) {
   const headersList = await headers();
-  const port = process.env.PORT || "3000";
-  const url = new URL(`/api/read/${encodeURIComponent(id)}`, `http://127.0.0.1:${port}`);
+  const url = new URL(`http://localhost/api/read/${encodeURIComponent(id)}`);
   url.searchParams.set("lang", lang);
   if (chapter) url.searchParams.set("chapter", chapter);
 
+  const req = new NextRequest(url.toString(), {
+    headers: {
+      host: headersList.get("host") ?? "localhost:3000",
+      cookie: headersList.get("cookie") ?? "",
+    },
+  });
+
   try {
-    const response = await fetch(url.toString(), {
-      cache: "no-store",
-      headers: {
-        host: headersList.get("host") ?? "localhost:3000",
-        cookie: headersList.get("cookie") ?? "",
-      },
+    const response = await getReaderData(req, {
+      params: Promise.resolve({ id }),
     });
 
     if (!response.ok) {
-      console.error(`[fetchReaderData] Failed response status: ${response.status}`);
+      console.error(`[fetchReaderData] Direct GET call failed with status: ${response.status}`);
       return null;
     }
 
     return (await response.json()) as ReaderApiResponse;
   } catch (err) {
-    console.error("[fetchReaderData] Catch error fetching reader data:", err);
+    console.error("[fetchReaderData] Catch error calling direct GET handler:", err);
     return null;
   }
 }
