@@ -1065,6 +1065,10 @@ async function fetchSimilarMangas(
   language: SupportedLanguage,
   isAdult: boolean
 ) {
+  if (!isMangaDexUuid(currentMangaId)) {
+    return [];
+  }
+
   const uniqueTagIds = Array.from(new Set(genreTagIds)).filter(Boolean);
 
   if (uniqueTagIds.length < 2) {

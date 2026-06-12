@@ -499,12 +499,20 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
     searchParams.set("title", cleanTitle);
     searchParams.set("limit", "15");
 
-    let response = await fetch(`${LOCAL_API_URL}/api/comics?${searchParams.toString()}`, {
-      cache: "no-store",
-    });
+    const controller1 = new AbortController();
+    const timeout1 = setTimeout(() => controller1.abort(), 4000);
+    let response: Response;
+    try {
+      response = await fetch(`${LOCAL_API_URL}/api/comics?${searchParams.toString()}`, {
+        cache: "no-store",
+        signal: controller1.signal,
+      });
+    } finally {
+      clearTimeout(timeout1);
+    }
 
     let comics: any[] = [];
-    if (response.ok) {
+    if (response && response.ok) {
       const payload = await response.json();
       comics = extractLocalComics(payload);
     }
@@ -516,10 +524,19 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
     });
 
     if (!comic) {
-      const fallbackResponse = await fetch(`${LOCAL_API_URL}/api/comics?limit=300`, {
-        cache: "no-store",
-      });
-      if (fallbackResponse.ok) {
+      const controller2 = new AbortController();
+      const timeout2 = setTimeout(() => controller2.abort(), 4000);
+      let fallbackResponse: Response;
+      try {
+        fallbackResponse = await fetch(`${LOCAL_API_URL}/api/comics?limit=300`, {
+          cache: "no-store",
+          signal: controller2.signal,
+        });
+      } finally {
+        clearTimeout(timeout2);
+      }
+
+      if (fallbackResponse && fallbackResponse.ok) {
         const payload = await fallbackResponse.json();
         const allComics = extractLocalComics(payload);
         comic = allComics.find((item) => {
@@ -535,9 +552,19 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
     }
 
     const numericId = getStringValue(comic, ["id"]);
-    const detailResponse = numericId
-      ? await fetch(`${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`, { cache: "no-store" })
-      : null;
+    const controller3 = new AbortController();
+    const timeout3 = setTimeout(() => controller3.abort(), 4000);
+    let detailResponse: Response | null = null;
+    try {
+      if (numericId) {
+        detailResponse = await fetch(`${LOCAL_API_URL}/api/comics/${encodeURIComponent(numericId)}`, {
+          cache: "no-store",
+          signal: controller3.signal,
+        });
+      }
+    } finally {
+      clearTimeout(timeout3);
+    }
 
     let fullComic = comic;
     if (detailResponse?.ok) {
@@ -594,9 +621,17 @@ function stripChaptersForClient(chapters: ChapterFeedItem[]) {
 
 async function resolveLocalChapterPages(chapterId: string) {
   try {
-    const response = await fetch(`${LOCAL_API_URL}/api/chapters/${encodeURIComponent(chapterId)}/pages`, {
-      cache: "no-store",
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    let response: Response;
+    try {
+      response = await fetch(`${LOCAL_API_URL}/api/chapters/${encodeURIComponent(chapterId)}/pages`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!response.ok) {
       return [];
@@ -958,44 +993,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       let paginatedChapters = mergedChapters;
 
       // Try to fetch and merge external chapters (Spanish from LeerCapitulo/MangaDex, others from MangaDex)
-      if (!excludeChapters) {
-        try {
-          const resolution = await resolveBestSource(id);
-          const [mdChapters, lcChapters] = await Promise.all([
-            resolution.mangadexId ? fetchMangaDexChaptersOnly(resolution.mangadexId, lang) : Promise.resolve([]),
-            (lang === "es" && resolution.leercapituloSlug) ? fetchLeerCapituloChaptersOnly(resolution.leercapituloSlug) : Promise.resolve([])
-          ]);
-          
-          if (lang === "es" && resolution.leercapituloSlug) {
-            lcDetails = resolution.leercapituloDetails || await fetchMangaVfDetailsBySlug(resolution.leercapituloSlug);
-          }
-
-          const localNumbers = new Set(
-            mergedChapters
-              .map((ch) => ch.attributes?.chapter?.trim())
-              .filter(Boolean)
-          );
-
-          // Add unique chapters from external sources
-          const externalChapters = [...lcChapters, ...mdChapters];
-          const missingChapters = externalChapters.filter((ch) => {
-            const num = ch.attributes?.chapter?.trim();
-            return num && !localNumbers.has(num);
-          });
-
-          mergedChapters.push(...missingChapters);
-          mergedChapters.sort((a, b) => {
-            const aNum = parseFloat(a.attributes?.chapter || "0");
-            const bNum = parseFloat(b.attributes?.chapter || "0");
-            return bNum - aNum;
-          });
-          paginatedChapters = mergedChapters;
-        } catch (err) {
-          logger.error("Error merging external chapters for local manga", err);
-          paginatedChapters = mergedChapters;
-        }
-      } else {
+      // Bypassed for local mangas to avoid slow external API queries and transition timeouts (8s limit)
+      if (excludeChapters) {
         paginatedChapters = [];
+      } else {
+        paginatedChapters = mergedChapters;
       }
 
       const currentChapter =
