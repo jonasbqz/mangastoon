@@ -1102,7 +1102,7 @@ function mapLocalComicToMangaDetails(comic: LocalApiComic): MangaDetails | null 
   };
 }
 
-async function fetchMangaVfSourceBySlug(id: string) {
+export async function fetchMangaVfSourceBySlug(id: string) {
   const cleanId = id.startsWith("lc-") ? id.substring(3) : id;
   const lookupId = cleanId.replace(/^manga[-_]?vf[-_]?/i, "");
   const query = lookupId.replace(/-/g, " ");

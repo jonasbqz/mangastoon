@@ -13,7 +13,8 @@ import {
   getMangaVfChapterId,
   fetchMangaVfDetailsBySlug,
   fetchMangaDexChaptersOnly,
-  fetchLeerCapituloChaptersOnly
+  fetchLeerCapituloChaptersOnly,
+  fetchMangaVfSourceBySlug
 } from "../../../utils/mangadex";
 import {
   buildMonlineChapterSegments,
@@ -405,6 +406,23 @@ function slugToReadableTitle(slug: string): string {
 
 function getRequestedLeerCapituloChapterNumber(chapterId: string | null) {
   return chapterId?.match(/^lc-ch-(\d+(?:\.\d+)?)$/)?.[1] ?? null;
+}
+
+async function resolvePredictiveLeerCapituloChapterUrl(mangaSlug: string, chapterNumber: string): Promise<string | null> {
+  try {
+    const source = await fetchMangaVfSourceBySlug(mangaSlug);
+    const mangaUrl = source?.url?.trim();
+    if (!mangaUrl) return null;
+
+    const cleanUrl = mangaUrl.replace(/\/$/, "");
+    const parts = cleanUrl.split("/manga/");
+    if (parts.length < 2) return null;
+
+    return `${parts[0]}/leer/${parts[1]}/${chapterNumber}/`;
+  } catch (error) {
+    logger.error("[PredictiveURL] Error resolving predictive URL:", error);
+    return null;
+  }
 }
 
 async function resolveLatestLeerCapituloChapter(slug: string, chapterNumber: string) {
@@ -1068,7 +1086,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         comicSlug: localManga.slug,
         coverImage: localManga.coverImage,
         chapters: excludeChapters ? [] : stripChaptersForClient(paginatedChapters),
-        currentChapter: stripChapterForClient(currentChapter),
+      currentChapter: stripChapterForClient(currentChapter),
         pages: pages.map(normalizePageUrlToProxy),
         englishFallbackChapter: null,
         fallbackReason: null,
@@ -1079,16 +1097,34 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const latestChapterNumber = getRequestedLeerCapituloChapterNumber(chapterId);
     if (!localManga && lang === "es" && latestChapterNumber) {
-      const latestChapter = await resolveLatestLeerCapituloChapter(id, latestChapterNumber);
-      const chapterUrl = latestChapter?.chapter.url?.trim();
+      let latestChapter = await resolveLatestLeerCapituloChapter(id, latestChapterNumber);
+      let chapterUrl = latestChapter?.chapter.url?.trim();
+      let cover = latestChapter?.cover || "";
+      let mangaTitle = latestChapter?.title || slugToReadableTitle(id);
+
+      if (!chapterUrl) {
+        const resolution = await resolveBestSource(id);
+        if (resolution.leercapituloSlug) {
+          chapterUrl = await resolvePredictiveLeerCapituloChapterUrl(
+            resolution.leercapituloSlug,
+            latestChapterNumber
+          ) ?? undefined;
+          
+          if (resolution.leercapituloDetails) {
+            cover = resolution.leercapituloDetails.cover || cover;
+            mangaTitle = resolution.leercapituloDetails.manga_title || resolution.leercapituloDetails.title || mangaTitle;
+          }
+        }
+      }
+
       const pages = chapterUrl ? await fetchLeerCapituloPagesByUrl(chapterUrl) : [];
 
-      if (latestChapter && pages.length > 0) {
+      if (pages.length > 0) {
         const currentChapter = {
           id: chapterId || `lc-ch-${latestChapterNumber}`,
           attributes: {
             chapter: latestChapterNumber,
-            title: latestChapter.chapter.title || `Capitulo ${latestChapterNumber}`,
+            title: `Capítulo ${latestChapterNumber}`,
             translatedLanguage: "es",
             readableAt: new Date().toISOString(),
             publishAt: new Date().toISOString(),
@@ -1098,9 +1134,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         };
 
         return cachedReadResponse(responseCacheKey, {
-          mangaTitle: latestChapter.title,
+          mangaTitle,
           comicSlug: id,
-          coverImage: latestChapter.cover,
+          coverImage: cover,
           chapters: excludeChapters ? [] : [stripChapterForClient(currentChapter)],
           currentChapter: stripChapterForClient(currentChapter),
           pages: pages.map(normalizePageUrlToProxy),

@@ -1,10 +1,48 @@
 import { NextResponse } from "next/server";
 import { getDailyTelegramCode } from "../../../actions/profile";
 import { createClient } from "../../../../utils/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 
 const GROUP_CHAT_ID = "-1003763338725";
 const telegramRequestLimitMap = new Map<number, { count: number; date: string }>();
 const userMessageTimeline = new Map<number, number[]>();
+
+async function saveTelegramMessage(data: {
+  chat_id: number;
+  sender_id?: number;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  message_text: string;
+  is_from_bot: boolean;
+}) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xlcsqqwelopzpslxgdni.supabase.co";
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    let supabase;
+    if (serviceRoleKey) {
+      supabase = createSupabaseClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false }
+      });
+    } else {
+      supabase = await createClient();
+    }
+
+    await supabase.from("telegram_messages").insert({
+      chat_id: data.chat_id,
+      sender_id: data.sender_id || null,
+      username: data.username || null,
+      first_name: data.first_name || null,
+      last_name: data.last_name || null,
+      message_text: data.message_text,
+      is_from_bot: data.is_from_bot,
+      created_at: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error("[Telegram Webhook] Failed to save telegram message to DB:", err);
+  }
+}
 
 async function isUserAdmin(token: string, userId: number): Promise<boolean> {
   try {
@@ -40,6 +78,14 @@ async function sendTelegramMessage(
 ): Promise<boolean> {
   const telegramUrl = `https://api.telegram.org/bot${token}/sendMessage`;
   try {
+    // Log the outgoing message from the bot
+    await saveTelegramMessage({
+      chat_id: chatId,
+      message_text: text,
+      is_from_bot: true,
+      first_name: "Raphael Bot"
+    });
+
     const res = await fetch(telegramUrl, {
       method: "POST",
       headers: {
