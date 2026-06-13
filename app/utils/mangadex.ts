@@ -989,26 +989,40 @@ async function fetchLocalAPI(path: string, init?: RequestInit): Promise<Response
   const urls = [
     `${LOCAL_API_URL}${cleanPath}`,
     `http://172.17.0.1:8085${cleanPath}`,
-    `http://172.18.0.1:8085${cleanPath}`,
-    `http://172.19.0.1:8085${cleanPath}`,
-    `http://172.20.0.1:8085${cleanPath}`,
-    `http://172.21.0.1:8085${cleanPath}`,
-    `http://172.22.0.1:8085${cleanPath}`,
-    `http://172.23.0.1:8085${cleanPath}`,
-    `http://172.24.0.1:8085${cleanPath}`,
-    `http://172.25.0.1:8085${cleanPath}`,
-    `http://172.26.0.1:8085${cleanPath}`,
-    `http://172.27.0.1:8085${cleanPath}`,
-    `http://172.28.0.1:8085${cleanPath}`,
-    `http://172.29.0.1:8085${cleanPath}`,
-    `http://172.30.0.1:8085${cleanPath}`,
-    `http://172.31.0.1:8085${cleanPath}`,
     `http://host.docker.internal:8085${cleanPath}`,
     `http://127.0.0.1:8085${cleanPath}`,
     `http://localhost:8085${cleanPath}`,
   ];
 
-  const fetchPromises = urls.map(async (url) => {
+  // Detect and guess gateway IPs dynamically based on container subnets (e.g. 10.0.1.x)
+  try {
+    const os = require("os");
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      const netInfos = interfaces[name] || [];
+      for (const info of netInfos) {
+        if (info.family === "IPv4" && !info.internal) {
+          const ip = info.address;
+          const parts = ip.split(".");
+          if (parts.length === 4) {
+            urls.push(`http://${parts[0]}.${parts[1]}.${parts[2]}.1:8085${cleanPath}`);
+            urls.push(`http://${parts[0]}.${parts[1]}.0.1:8085${cleanPath}`);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    logger.error("[fetchLocalAPI] Error detecting dynamic gateways:", err);
+  }
+
+  // Prepend other common 172.x subnets just in case
+  for (let i = 18; i <= 31; i++) {
+    urls.push(`http://172.${i}.0.1:8085${cleanPath}`);
+  }
+
+  const uniqueUrls = Array.from(new Set(urls));
+
+  const fetchPromises = uniqueUrls.map(async (url) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2000);
     try {
