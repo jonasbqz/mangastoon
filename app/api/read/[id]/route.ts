@@ -1003,6 +1003,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   const lang = normalizeLanguage(request.nextUrl.searchParams.get("lang"));
   const chapterId = request.nextUrl.searchParams.get("chapter");
+  const slug = request.nextUrl.searchParams.get("slug");
   const limit = Math.max(0, Number(request.nextUrl.searchParams.get('limit')) || 20);
   const offset = Math.max(0, Number(request.nextUrl.searchParams.get('offset')) || 0);
   const excludeChapters = request.nextUrl.searchParams.get("excludeChapters") === "true";
@@ -1050,7 +1051,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           if (pages.length === 0 && currentChapter.attributes?.chapter) {
             logger.info(`[Fallback] Capítulo local ${currentChapter.id} (número ${currentChapter.attributes.chapter}) no tiene páginas válidas. Buscando en fuentes externas...`);
             try {
-              const resolution = await resolveBestSource(id);
+              const resolution = await resolveBestSource(id, slug);
 
               // 1. Intentar con LeerCapitulo
               if (resolution.leercapituloSlug) {
@@ -1136,7 +1137,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       let mangaTitle = latestChapter?.title || slugToReadableTitle(id);
 
       if (!chapterUrl) {
-        const resolution = await resolveBestSource(id);
+        const resolution = await resolveBestSource(id, slug);
         if (resolution.leercapituloSlug) {
           chapterUrl = await resolvePredictiveLeerCapituloChapterUrl(
             resolution.leercapituloSlug,
@@ -1181,7 +1182,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       }
     }
 
-    const resolution = await resolveBestSource(id);
+    const resolution = await resolveBestSource(id, slug);
 
     if (resolution.source === "leercapitulo" && resolution.leercapituloSlug) {
       const details = resolution.leercapituloDetails || await fetchMangaVfDetailsBySlug(resolution.leercapituloSlug);
@@ -1404,6 +1405,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return readResponse;
   } catch (error) {
+    logger.error("[GET /api/read/[id]] Error occurred in GET handler:", error);
     const isRateLimit = error instanceof Error && error.message === "RATE_LIMIT";
 
     return NextResponse.json(

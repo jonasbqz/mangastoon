@@ -1423,7 +1423,16 @@ export type ResolvedSource = {
   leercapituloDetails?: MangaVfDetails | null;
 };
 
-export async function resolveBestSource(idOrSlug: string): Promise<ResolvedSource> {
+function extractTitleFromSlug(slug: string): string {
+  const clean = cleanMangaSlug(slug);
+  const uuidMatch = clean.match(/^(.*?)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  if (uuidMatch && uuidMatch[1]) {
+    return uuidMatch[1].replace(/-/g, " ").trim();
+  }
+  return clean.replace(/-/g, " ").trim();
+}
+
+export async function resolveBestSource(idOrSlug: string, slug?: string | null): Promise<ResolvedSource> {
   const cacheKey = `source-resolution:${idOrSlug}`;
   const cached = await getCached<ResolvedSource>(cacheKey);
   if (cached) return cached;
@@ -1446,8 +1455,20 @@ export async function resolveBestSource(idOrSlug: string): Promise<ResolvedSourc
         if (title) {
           leercapituloSlug = (await searchLeerCapituloByTitle(title)) ?? undefined;
         }
+      } else {
+        logger.warn(`[resolveBestSource] MangaDex fetch returned non-ok status: ${response.status}`);
       }
-    } catch {}
+    } catch (err) {
+      logger.error(`[resolveBestSource] Error fetching from MangaDex:`, err);
+    }
+
+    if (!leercapituloSlug && slug) {
+      const extractedTitle = extractTitleFromSlug(slug);
+      logger.info(`[resolveBestSource] MangaDex failed, extracted title fallback: "${extractedTitle}"`);
+      if (extractedTitle && extractedTitle !== "mangastoon" && extractedTitle !== "comic") {
+        leercapituloSlug = (await searchLeerCapituloByTitle(extractedTitle)) ?? undefined;
+      }
+    }
   } else {
     leercapituloSlug = idOrSlug;
     leercapituloDetails = await fetchMangaVfDetailsBySlug(idOrSlug);

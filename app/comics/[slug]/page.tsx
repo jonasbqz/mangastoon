@@ -971,7 +971,7 @@ function buildChapterNumberLabel(
   return `${chapterPrefix} ${chapterNumber}.${suffix}`;
 }
 
-async function fetchMangaChapters(id: string, language: SupportedLanguage) {
+async function fetchMangaChapters(id: string, language: SupportedLanguage, slug?: string | null) {
   if (!isMangaDexUuid(id)) {
     const localComic = await fetchLocalComicBySlug(id);
 
@@ -980,7 +980,7 @@ async function fetchMangaChapters(id: string, language: SupportedLanguage) {
     }
   }
 
-  return fetchMangaChaptersExternal(id, language);
+  return fetchMangaChaptersExternal(id, language, slug);
 }
 
 async function fetchChapterLanguageFallback(
@@ -1144,7 +1144,7 @@ export default async function MangaDetailsPage({
   const isAdult = cookieStore.get("mangastoon_adult")?.value === "true";
 
   // 1. Lanzar fetches iniciales en paralelo
-  const mangaPromise = cachedFetchMangaDetails(id, cookieLang);
+  const mangaPromise = cachedFetchMangaDetails(id, cookieLang, slug);
   const ratingSummaryPromise = cachedFetchMangaRatingSummary(id);
   const suggestedLocalPromise = cachedFetchSuggestedLocalMangas(id);
   const supabasePromise = createClient().then(async (supabase) => {
@@ -1225,7 +1225,7 @@ export default async function MangaDetailsPage({
   const copy = UI_COPY[currentLanguage];
 
   // 3. Lanzar fetches secundarios en paralelo
-  const chaptersPromise = cachedFetchMangaChapters(id, currentLanguage);
+  const chaptersPromise = cachedFetchMangaChapters(id, currentLanguage, slug);
 
   const tags = (manga.attributes?.tags ?? [])
     .filter((tag) => tag.attributes?.group === "genre")

@@ -60,15 +60,18 @@ async function fetchReaderData({
   id,
   chapter,
   lang,
+  slug,
 }: {
   id: string;
   chapter?: string;
   lang: SupportedLanguage;
+  slug?: string;
 }) {
   const headersList = await headers();
   const url = new URL(`http://localhost/api/read/${encodeURIComponent(id)}`);
   url.searchParams.set("lang", lang);
   if (chapter) url.searchParams.set("chapter", chapter);
+  if (slug) url.searchParams.set("slug", slug);
 
   const req = new NextRequest(url.toString(), {
     headers: {
@@ -110,7 +113,7 @@ export async function generateMetadata({
   const mangaId = extractComicIdFromSlugId(slug);
   const chapterId = resolvedSearchParams.chapter ?? id;
 
-  const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang });
+  const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang, slug });
 
   if (!data || !data.currentChapter || data.code === "LOCAL_PAGES_UNAVAILABLE") {
     return {
@@ -199,7 +202,7 @@ export default async function ReadPage({
     }
   }
   const chapterId = resolvedSearchParams.chapter ?? id;
-  const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang });
+  const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang, slug });
 
   if (!data || !data.currentChapter || data.code === "LOCAL_PAGES_UNAVAILABLE") {
     notFound();
