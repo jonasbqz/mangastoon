@@ -143,9 +143,16 @@ export async function GET(req: Request) {
       referer = "https://yoveo.xyz/";
     } else if (hostname.endsWith("mangadex.org")) {
       referer = "https://mangadex.org/";
+    } else if (hostname.endsWith("t34798ndc.com") || hostname.endsWith("leercapitulo.co")) {
+      referer = "https://www.leercapitulo.co/";
     }
 
-    const isHotlinkingBlockedHost = hostname.endsWith("olympusbiblioteca.com") || hostname.endsWith("olympusxyz.com") || hostname.endsWith("yoveo.xyz");
+    const isHotlinkingBlockedHost = 
+      hostname.endsWith("olympusbiblioteca.com") || 
+      hostname.endsWith("olympusxyz.com") || 
+      hostname.endsWith("yoveo.xyz") ||
+      hostname.endsWith("t34798ndc.com") ||
+      hostname.endsWith("leercapitulo.co");
 
     if (isHotlinkingBlockedHost) {
       // IMPORTANT: Next.js Image Optimizer calls this route internally but does NOT

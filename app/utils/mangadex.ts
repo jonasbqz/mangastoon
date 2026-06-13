@@ -996,7 +996,7 @@ export async function fetchLocalComicBySlug(slug: string) {
       searchParams.set("limit", "15");
 
       const controller1 = new AbortController();
-      const timeout1 = setTimeout(() => controller1.abort(), 4000);
+      const timeout1 = setTimeout(() => controller1.abort(), 8000);
       let listResponse: Response;
       try {
         listResponse = await fetch(
@@ -1020,7 +1020,7 @@ export async function fetchLocalComicBySlug(slug: string) {
 
       if (!summary) {
         const controller2 = new AbortController();
-        const timeout2 = setTimeout(() => controller2.abort(), 4000);
+        const timeout2 = setTimeout(() => controller2.abort(), 8000);
         let fallbackResponse: Response;
         try {
           fallbackResponse = await fetch(
@@ -1046,7 +1046,7 @@ export async function fetchLocalComicBySlug(slug: string) {
       if (!summary || !numericId) return null;
 
       const controller3 = new AbortController();
-      const timeout3 = setTimeout(() => controller3.abort(), 4000);
+      const timeout3 = setTimeout(() => controller3.abort(), 8000);
       let detailResponse: Response;
       try {
         detailResponse = await fetch(

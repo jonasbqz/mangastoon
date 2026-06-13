@@ -500,7 +500,7 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
     searchParams.set("limit", "15");
 
     const controller1 = new AbortController();
-    const timeout1 = setTimeout(() => controller1.abort(), 4000);
+    const timeout1 = setTimeout(() => controller1.abort(), 8000);
     let response: Response;
     try {
       response = await fetch(`${LOCAL_API_URL}/api/comics?${searchParams.toString()}`, {
@@ -525,7 +525,7 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
 
     if (!comic) {
       const controller2 = new AbortController();
-      const timeout2 = setTimeout(() => controller2.abort(), 4000);
+      const timeout2 = setTimeout(() => controller2.abort(), 8000);
       let fallbackResponse: Response;
       try {
         fallbackResponse = await fetch(`${LOCAL_API_URL}/api/comics?limit=300`, {
@@ -553,7 +553,7 @@ async function resolveLocalMangaIdentity(slug: string, lang: SupportedLanguage) 
 
     const numericId = getStringValue(comic, ["id"]);
     const controller3 = new AbortController();
-    const timeout3 = setTimeout(() => controller3.abort(), 4000);
+    const timeout3 = setTimeout(() => controller3.abort(), 8000);
     let detailResponse: Response | null = null;
     try {
       if (numericId) {
@@ -622,7 +622,7 @@ function stripChaptersForClient(chapters: ChapterFeedItem[]) {
 async function resolveLocalChapterPages(chapterId: string) {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     let response: Response;
     try {
       response = await fetch(`${LOCAL_API_URL}/api/chapters/${encodeURIComponent(chapterId)}/pages`, {

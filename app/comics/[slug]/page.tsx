@@ -1101,11 +1101,19 @@ async function fetchSimilarMangas(
 
 async function fetchSuggestedLocalMangas(currentMangaId: string) {
   try {
-    const response = await fetch(`${LOCAL_API_URL}/api/comics?limit=15`, {
-      next: { revalidate: 300 },
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    let response: Response;
+    try {
+      response = await fetch(`${LOCAL_API_URL}/api/comics?limit=15`, {
+        next: { revalidate: 300 },
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
 
-    if (!response.ok) return [];
+    if (!response || !response.ok) return [];
 
     return extractLocalComics(await response.json())
       .filter((comic) => getLocalStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]) !== currentMangaId)

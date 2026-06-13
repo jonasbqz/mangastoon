@@ -1693,7 +1693,7 @@ export default function ReaderClient({
             ) : (
               <div className={`mx-auto flex w-full flex-col transition-all duration-300 ${PAGE_SIZE_CLASSES[pageSize]}`}>
                 {pages.map((pageUrl, index) => {
-                  const showAd = !isPremium && index > 0 && index % 5 === 0;
+                  const showAd = !isPremium && index > 0 && index % 15 === 0 && (index / 15) <= 3;
                   return (
                     <div key={pageUrl} className="flex flex-col w-full items-center">
                       <MangaPageImage
