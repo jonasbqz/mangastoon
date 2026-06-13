@@ -1257,7 +1257,7 @@ function mapMangaVfToMangaDetails(id: string, details: MangaVfDetails): MangaDet
   };
 }
 
-export async function fetchMangaDetails(id: string, language?: string): Promise<MangaDetails | null> {
+export async function fetchMangaDetails(id: string, language?: string, slug?: string | null): Promise<MangaDetails | null> {
   const cacheKey = `manga-details:${id}:${language || "all"}`;
   return getOrSetCached(cacheKey, 7200, async () => {
     let localManga: MangaDetails | null = null;
@@ -1285,7 +1285,7 @@ export async function fetchMangaDetails(id: string, language?: string): Promise<
       }
     }
 
-    const resolution = await resolveBestSource(id);
+    const resolution = await resolveBestSource(id, slug);
     if (resolution.source === "leercapitulo" && resolution.leercapituloSlug && resolution.leercapituloDetails) {
       return mapMangaVfToMangaDetails(id, resolution.leercapituloDetails);
     }
@@ -1664,7 +1664,7 @@ function getLocalChaptersFromComic(comic: any): ChapterFeedItem[] {
     .sort((a, b) => Number(b.attributes.chapter) - Number(a.attributes.chapter));
 }
 
-export async function fetchMangaChapters(id: string, language: string): Promise<ChapterFeedItem[]> {
+export async function fetchMangaChapters(id: string, language: string, slug?: string | null): Promise<ChapterFeedItem[]> {
   const cacheKey = `manga-chapters:${id}:${language}`;
   return getOrSetCached(cacheKey, 900, async () => {
     // Si no es un UUID de MangaDex, verificar si es un comic local
@@ -1675,7 +1675,7 @@ export async function fetchMangaChapters(id: string, language: string): Promise<
       }
     }
 
-    const resolution = await resolveBestSource(id);
+    const resolution = await resolveBestSource(id, slug);
 
     // If the language is NOT Spanish and this is NOT a LeerCapitulo manga, we ONLY fetch from MangaDex (no merging)
     if (language !== "es" && !id.startsWith("lc-")) {
