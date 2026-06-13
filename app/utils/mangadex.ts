@@ -1560,9 +1560,70 @@ export async function fetchLeerCapituloChaptersOnly(slug: string): Promise<Chapt
   return details ? mapMangaVfChapters(details) : [];
 }
 
+function getLocalChaptersFromComic(comic: any): ChapterFeedItem[] {
+  const scans = Array.isArray(comic.comicScans) ? comic.comicScans : [];
+  const scanName = scans[0]?.scanGroup?.name || comic.scan_group_name || null;
+
+  let chaptersToProcess: any[] = [];
+  const hasChaptersInScans = scans.some((scan: any) => scan && Array.isArray(scan.chapters) && scan.chapters.length > 0);
+
+  if (hasChaptersInScans) {
+    chaptersToProcess = scans.flatMap((scan: any) => {
+      if (!scan) return [];
+      const chapters = Array.isArray(scan.chapters) ? scan.chapters : [];
+      return chapters.map((ch: any) => ({ ...ch, scanName: scan.scanGroup?.name || scanName }));
+    });
+  } else {
+    const recent = Array.isArray(comic.recent_chapters)
+      ? comic.recent_chapters
+      : Array.isArray(comic.chapters)
+        ? comic.chapters
+        : [];
+    chaptersToProcess = recent.map((ch: any) => ({ ...ch, scanName }));
+  }
+
+  return chaptersToProcess
+    .flatMap((chapter: any) => {
+      if (!chapter) return [];
+      const id = getLocalStringValue(chapter, ["id", "chapterId", "chapter_id"]);
+      const chapterNumber = getLocalStringValue(chapter, ["chapterNumber", "chapter_number", "chapter", "number"]);
+
+      if (!id || !chapterNumber) {
+        return [];
+      }
+
+      const title = getLocalStringValue(chapter, ["title", "name"]);
+      const createdAt = getLocalStringValue(chapter, ["releaseDate", "release_date", "created_at", "createdAt", "readableAt", "updated_at", "updatedAt"]);
+      const chScanName = chapter.scanName || scanName;
+
+      return [{
+        id,
+        attributes: {
+          chapter: chapterNumber,
+          title,
+          translatedLanguage: "es",
+          readableAt: createdAt || null,
+          publishAt: createdAt || null,
+          createdAt: createdAt || null,
+          updatedAt: createdAt || null,
+        },
+        relationships: chScanName ? [{ id: "local-scan", type: "scanlation_group", attributes: { name: chScanName } }] : [],
+      }];
+    })
+    .sort((a, b) => Number(b.attributes.chapter) - Number(a.attributes.chapter));
+}
+
 export async function fetchMangaChapters(id: string, language: string): Promise<ChapterFeedItem[]> {
   const cacheKey = `manga-chapters:${id}:${language}`;
   return getOrSetCached(cacheKey, 900, async () => {
+    // Si no es un UUID de MangaDex, verificar si es un comic local
+    if (!isMangaDexUuid(id)) {
+      const localComic = await fetchLocalComicBySlug(id);
+      if (localComic) {
+        return getLocalChaptersFromComic(localComic);
+      }
+    }
+
     const resolution = await resolveBestSource(id);
 
     // If the language is NOT Spanish and this is NOT a LeerCapitulo manga, we ONLY fetch from MangaDex (no merging)
