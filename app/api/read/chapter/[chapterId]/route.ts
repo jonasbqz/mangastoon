@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../../utils/mangadex-config";
 import { filterMonlineChapterPageUrls, fetchMonlinePagesFromRoute, toMonlineSegment, uniqueNonEmpty, fetchLocalAPI } from "../../../../utils/monline";
 import { MONLINE_API_URL } from "../../../../utils/monline-config";
+import { resolveBestSource, fetchMangaVfDetailsBySlug, fetchMangaVfPages, mapMangaVfChapters } from "../../../../utils/mangadex";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -87,6 +88,47 @@ async function fetchLocalChapterPages(chapterId: string) {
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ chapterId: string }> }) {
   const { chapterId } = await params;
+
+  if (chapterId && chapterId.startsWith("lc-ch-")) {
+    const mangaTitle = request.nextUrl.searchParams.get("mangaTitle");
+    const referer = request.headers.get("referer");
+    let extractedMangaSlug = "";
+    if (referer) {
+      try {
+        const refererUrl = new URL(referer);
+        const match = refererUrl.pathname.match(/^\/comics\/([^/]+)\/chapters\//);
+        if (match) {
+          extractedMangaSlug = match[1];
+        }
+      } catch {}
+    }
+
+    const queryTitle = mangaTitle || extractedMangaSlug;
+    if (queryTitle) {
+      try {
+        const resolution = await resolveBestSource(queryTitle, queryTitle);
+        if (resolution.leercapituloSlug) {
+          const details = await fetchMangaVfDetailsBySlug(resolution.leercapituloSlug);
+          if (details) {
+            const chapters = mapMangaVfChapters(details);
+            const currentChapter = chapters.find((ch) => ch.id === chapterId);
+            if (currentChapter) {
+              const extPages = await fetchMangaVfPages(details, currentChapter.id);
+              if (extPages.length > 0) {
+                return NextResponse.json(
+                  { pages: extPages.map(normalizeLocalImageUrl) },
+                  { headers: { "Cache-Control": "no-store" } }
+                );
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("[GET /api/read/chapter] Error resolving LeerCapitulo pages:", err);
+      }
+    }
+  }
+
   const mangaSegments = uniqueNonEmpty([
     ...request.nextUrl.searchParams.getAll("mangaSegment"),
     toMonlineSegment(request.nextUrl.searchParams.get("mangaTitle")),

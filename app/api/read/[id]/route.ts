@@ -1158,7 +1158,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     const resolution = await resolveBestSource(id, slug);
 
-    if (resolution.source === "leercapitulo" && resolution.leercapituloSlug) {
+    if ((resolution.source === "leercapitulo" || (chapterId && chapterId.startsWith("lc-ch-"))) && resolution.leercapituloSlug) {
       const details = resolution.leercapituloDetails || await fetchMangaVfDetailsBySlug(resolution.leercapituloSlug);
 
       if (details) {
