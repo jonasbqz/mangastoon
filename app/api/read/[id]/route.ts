@@ -1142,11 +1142,38 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           },
         };
 
+        let fullChapters: ChapterFeedItem[] = [currentChapter];
+        try {
+          const resolution = await resolveBestSource(id, slug);
+          if (resolution.leercapituloSlug) {
+            const details = resolution.leercapituloDetails || await fetchMangaVfDetailsBySlug(resolution.leercapituloSlug);
+            if (details) {
+              const mapped = mapMangaVfChapters(details);
+              if (mapped.length > 0) {
+                fullChapters = mapped;
+              }
+            }
+          }
+        } catch (err) {
+          logger.error("[Shortcut] Error fetching full chapter list for navigation:", err);
+        }
+
+        if (!fullChapters.some(ch => ch.id === currentChapter.id)) {
+          fullChapters.push(currentChapter);
+        }
+
+        // Sort descending by chapter number
+        fullChapters.sort((a, b) => {
+          const aNum = parseFloat(a.attributes?.chapter || "0");
+          const bNum = parseFloat(b.attributes?.chapter || "0");
+          return bNum - aNum;
+        });
+
         return cachedReadResponse(responseCacheKey, {
           mangaTitle,
           comicSlug: id,
           coverImage: cover,
-          chapters: excludeChapters ? [] : [stripChapterForClient(currentChapter)],
+          chapters: excludeChapters ? [] : stripChaptersForClient(fullChapters),
           currentChapter: stripChapterForClient(currentChapter),
           pages: pages.map(normalizePageUrlToProxy),
           englishFallbackChapter: null,
