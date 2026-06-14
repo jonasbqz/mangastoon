@@ -1675,7 +1675,7 @@ function cleanCoreTitle(title: string): string {
     .trim();
 }
 
-export async function resolveDuplicateMangaDexIds(mangaId: string): Promise<string[]> {
+export async function resolveDuplicateMangaDexIds(mangaId: string, language?: string): Promise<string[]> {
   const cacheKey = `manga-duplicates:v2:${mangaId}`;
   return getOrSetCached(
     cacheKey,
@@ -1683,11 +1683,24 @@ export async function resolveDuplicateMangaDexIds(mangaId: string): Promise<stri
     async () => {
       const ids = [mangaId];
       try {
-        const detailRes = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}`);
-        if (!detailRes.ok) return ids;
-        const detailPayload = (await detailRes.json()) as MangaDetailsResponse;
-        const titleMap = detailPayload.data?.attributes?.title ?? {};
-        const originalTitle = titleMap.es || titleMap.en || Object.values(titleMap)[0] as string || "";
+        let titleMap: Record<string, string> | undefined;
+        
+        // Intentar leer los detalles desde la cache para evitar peticiones redundantes
+        const cachedAll = await getCached<any>(`manga-details:v2:${mangaId}:all`);
+        const cachedLang = language ? await getCached<any>(`manga-details:v2:${mangaId}:${language}`) : null;
+        const cachedData = cachedAll || cachedLang;
+
+        if (cachedData && cachedData.attributes?.title) {
+          titleMap = cachedData.attributes.title;
+        } else {
+          const detailRes = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}`);
+          if (detailRes.ok) {
+            const detailPayload = (await detailRes.ok ? await detailRes.json() : null) as MangaDetailsResponse | null;
+            titleMap = detailPayload?.data?.attributes?.title ?? {};
+          }
+        }
+
+        const originalTitle = titleMap?.es || titleMap?.en || (titleMap ? Object.values(titleMap)[0] : "") as string || "";
         if (!originalTitle) return ids;
 
         const coreTitle = cleanCoreTitle(originalTitle);
@@ -1725,7 +1738,7 @@ export async function fetchMangaChapters(id: string, language: string, slug?: st
         const mangaId = resolution.mangadexId || id;
         if (!isMangaDexUuid(mangaId)) return [];
         
-        const duplicateIds = await resolveDuplicateMangaDexIds(mangaId);
+        const duplicateIds = await resolveDuplicateMangaDexIds(mangaId, language);
         const chaptersPromises = duplicateIds.map(dId => fetchMangaDexChaptersOnly(dId, language));
         const chaptersLists = await Promise.all(chaptersPromises);
         
@@ -1756,7 +1769,7 @@ export async function fetchMangaChapters(id: string, language: string, slug?: st
       // If Spanish, fetch both in parallel and merge them
       const [mdChapters, lcChapters] = await Promise.all([
         isMangaDexUuid(mangadexId) ? (async () => {
-          const duplicateIds = await resolveDuplicateMangaDexIds(mangadexId);
+          const duplicateIds = await resolveDuplicateMangaDexIds(mangadexId, language);
           const chaptersPromises = duplicateIds.map(dId => fetchMangaDexChaptersOnly(dId, language));
           const chaptersLists = await Promise.all(chaptersPromises);
           
