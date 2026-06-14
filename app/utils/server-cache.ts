@@ -110,6 +110,70 @@ export async function getCached<T>(key: string) {
   return null;
 }
 
+export async function getCachedMulti<T>(keys: string[]): Promise<Record<string, T | null>> {
+  const results: Record<string, T | null> = {};
+  const missingKeys: string[] = [];
+
+  // 1. Check memory cache first
+  for (const key of keys) {
+    const mem = getMemory<T>(key);
+    if (mem !== null) {
+      results[key] = mem;
+    } else {
+      missingKeys.push(key);
+    }
+  }
+
+  if (missingKeys.length === 0) return results;
+
+  // 2. Fetch missing keys from Redis via Pipeline
+  if (redisEnabled) {
+    try {
+      const commands = missingKeys.map((key) => ["GET", key]);
+      const response = await fetch(`${UPSTASH_URL}/pipeline`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${UPSTASH_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(commands),
+        cache: "no-store",
+      });
+
+      if (response.ok) {
+        const payloads = (await response.json()) as Array<{ result?: string | null; error?: string }>;
+        if (Array.isArray(payloads)) {
+          payloads.forEach((payload, idx) => {
+            const key = missingKeys[idx];
+            if (payload && payload.result) {
+              try {
+                const val = JSON.parse(payload.result) as T;
+                results[key] = val;
+                setMemory(key, val, 60); // cache in memory for 60s
+              } catch {
+                results[key] = null;
+              }
+            } else {
+              results[key] = null;
+            }
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn("Redis pipeline cache failed", err);
+    }
+  }
+
+  // Fill in any remaining missing keys with null
+  for (const key of missingKeys) {
+    if (results[key] === undefined) {
+      results[key] = null;
+    }
+  }
+
+  return results;
+}
+
 export async function setCached<T>(key: string, value: T, ttlSeconds: number) {
   setMemory(key, value, ttlSeconds);
   await setRedis(key, value, ttlSeconds);

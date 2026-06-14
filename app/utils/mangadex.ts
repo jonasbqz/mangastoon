@@ -12,7 +12,7 @@ import {
 import { translateTagName } from "./tagTranslations";
 import { buildComicPath, slugify } from "./slugify";
 import { MONLINE_API_URL as MONLINE_CONFIG_API_URL } from "./monline-config";
-import { getCached, setCached, getOrSetCached, stableCacheKey } from "./server-cache";
+import { getCached, setCached, getOrSetCached, stableCacheKey, getCachedMulti } from "./server-cache";
 import { fetchLocalAPI, fetchMangaVfAPI } from "./monline";
 
 export type MangaDexLocalizedText = Record<string, string>;
@@ -1877,32 +1877,33 @@ export async function fetchLeerCapituloLatest(language: SupportedLanguage = "es"
 
         let filteredRecientes = recientes;
         if (!isAdult) {
-          const isAdultFlags = await Promise.all(
-            recientes.map(async (item) => {
-              const titleLower = item.title.toLowerCase();
-              const slugLower = item.slug.toLowerCase();
-              const adultRegex = /\b(adult|nsfw|hentai|erotic|erotico|porn|xxx|\+18|18\+|ecchi|sexual violence)\b/i;
-              if (adultRegex.test(titleLower) || adultRegex.test(slugLower)) {
-                return true;
-              }
-              if (slugLower.includes("el-alquimista-de-fuego-que-enamora")) {
-                return true;
-              }
-              const cached = await getCached<MangaVfDetails>(`leercapitulo-details:v2:${item.slug}`);
-              if (cached && Array.isArray(cached.genres)) {
-                const adultKeywords = new Set([
-                  "hentai", "ecchi", "erotica", "nsfw", "+18", "18+", "erotic", "erotico", "adult", "porn", "xxx", "sexual violence", "sexual-violence"
-                ]);
-                return cached.genres.some((genre) => {
-                  if (!genre) return false;
-                  const gl = genre.toLowerCase();
-                  return adultKeywords.has(gl) || adultRegex.test(gl);
-                });
-              }
+          const detailKeys = recientes.map((item) => `leercapitulo-details:v2:${item.slug}`);
+          const cachedDetailsMap = await getCachedMulti<MangaVfDetails>(detailKeys);
+
+          filteredRecientes = recientes.filter((item) => {
+            const titleLower = item.title.toLowerCase();
+            const slugLower = item.slug.toLowerCase();
+            const adultRegex = /\b(adult|nsfw|hentai|erotic|erotico|porn|xxx|\+18|18\+|ecchi|sexual violence)\b/i;
+            if (adultRegex.test(titleLower) || adultRegex.test(slugLower)) {
               return false;
-            })
-          );
-          filteredRecientes = recientes.filter((_, idx) => !isAdultFlags[idx]);
+            }
+            if (slugLower.includes("el-alquimista-de-fuego-que-enamora")) {
+              return false;
+            }
+            const cached = cachedDetailsMap[`leercapitulo-details:v2:${item.slug}`];
+            if (cached && Array.isArray(cached.genres)) {
+              const adultKeywords = new Set([
+                "hentai", "ecchi", "erotica", "nsfw", "+18", "18+", "erotic", "erotico", "adult", "porn", "xxx", "sexual violence", "sexual-violence"
+              ]);
+              const hasAdultGenre = cached.genres.some((genre) => {
+                if (!genre) return false;
+                const gl = genre.toLowerCase();
+                return adultKeywords.has(gl) || adultRegex.test(gl);
+              });
+              if (hasAdultGenre) return false;
+            }
+            return true;
+          });
         }
 
         return mapLeerCapituloLatestToShowcase(filteredRecientes, language);
