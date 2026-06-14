@@ -11,7 +11,7 @@ export default async function AdminPage({ params }: PageProps) {
   const adminToken =
     process.env.NEXT_PUBLIC_ADMIN_TOKEN ||
     process.env.ADMIN_TOKEN ||
-    "control-secreto-2026";
+    "demon";
 
   if (token !== adminToken) {
     notFound();
