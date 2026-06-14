@@ -9,6 +9,8 @@ import { SITE_NAME, absoluteUrl, safeJsonLd } from "../../../../utils/seo";
 import { extractComicIdFromSlugId } from "../../../../utils/slugify";
 import { fetchMangaDetails, hasSensitiveAdultTag } from "../../../../utils/mangadex";
 import AdultContentBlocker from "../../../../components/AdultContentBlocker";
+import DMCABlocker from "../../../../components/DMCABlocker";
+import { isDmcaBlocked } from "../../../../utils/dmca";
 import { createClient } from "../../../../../utils/supabase/server";
 import { GET as getReaderData } from "../../../../../app/api/read/[id]/route";
 
@@ -113,6 +115,17 @@ export async function generateMetadata({
   const mangaId = extractComicIdFromSlugId(slug);
   const chapterId = resolvedSearchParams.chapter ?? id;
 
+  if (isDmcaBlocked(mangaId)) {
+    return {
+      title: "Contenido no disponible - MangaStoon",
+      description: "Contenido retirado debido a una reclamación por infracción de derechos de autor.",
+      robots: {
+        index: false,
+        follow: false,
+      },
+    };
+  }
+
   const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang, slug });
 
   if (!data || !data.currentChapter || data.code === "LOCAL_PAGES_UNAVAILABLE") {
@@ -187,6 +200,14 @@ export default async function ReadPage({
   const lang = normalizeLanguage(resolvedSearchParams.lang || cookieLang);
   const mangaId = extractComicIdFromSlugId(slug);
   
+  if (isDmcaBlocked(mangaId)) {
+    return (
+      <main className="min-h-screen bg-[#0a0908] text-white">
+        <DMCABlocker lang={lang} />
+      </main>
+    );
+  }
+
   console.log("[Reader Server] lang resolved:", lang, "| cookieLang:", cookieLang, "| searchParamLang:", resolvedSearchParams.lang, "| slug:", slug);
 
   const isAdult = cookieStore.get("mangastoon_adult")?.value === "true";

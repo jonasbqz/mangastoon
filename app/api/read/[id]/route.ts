@@ -26,6 +26,7 @@ import {
   fetchMangaVfAPI,
 } from "../../../utils/monline";
 import { slugify } from "../../../utils/slugify";
+import { isDmcaBlocked } from "../../../utils/dmca";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -976,6 +977,12 @@ async function resolveChapterByNumber(
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (isDmcaBlocked(id)) {
+    return NextResponse.json(
+      { error: "Content removed due to copyright complaint", code: "CONTENT_REMOVED_DMCA" },
+      { status: 451 }
+    );
+  }
   const lang = normalizeLanguage(request.nextUrl.searchParams.get("lang"));
   const chapterId = request.nextUrl.searchParams.get("chapter");
   const slug = request.nextUrl.searchParams.get("slug");

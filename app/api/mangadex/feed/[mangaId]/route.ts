@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMangaDexRequestHeaders, toMangaDexApiUrl } from "../../../../utils/mangadex-config";
+import { isDmcaBlocked } from "../../../../utils/dmca";
 
 export const revalidate = 900;
 
@@ -29,6 +30,13 @@ export async function GET(
   { params }: { params: Promise<{ mangaId: string }> }
 ) {
   const { mangaId } = await params;
+
+  if (isDmcaBlocked(mangaId)) {
+    return NextResponse.json(
+      { error: "Content removed due to copyright complaint", code: "CONTENT_REMOVED_DMCA" },
+      { status: 451 }
+    );
+  }
 
   try {
     const response = await fetchWithRetry(

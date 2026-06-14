@@ -17,6 +17,8 @@ import { createClient } from "../../../utils/supabase/server";
 import { MangaCard, type MangaShowcaseItem } from "../../components/MangaCard";
 import SiteHeader, { type SupportedLanguage } from "../../components/site-header";
 import AdultContentBlocker from "../../components/AdultContentBlocker";
+import DMCABlocker from "../../components/DMCABlocker";
+import { isDmcaBlocked } from "../../utils/dmca";
 import SeoSynopsis from "./synopsis";
 import ChapterList from "./chapter-list";
 import ComicCoverImage from "./cover-image";
@@ -431,6 +433,20 @@ export async function generateMetadata({
   const { slug } = await params;
   const id = extractComicIdFromSlugId(slug);
   const fallbackCanonicalUrl = absoluteUrl(`/comics/${slug}`);
+
+  if (isDmcaBlocked(id)) {
+    return {
+      title: `Contenido no disponible | ${SITE_NAME}`,
+      description: "Contenido retirado debido a una reclamación por infracción de derechos de autor.",
+      robots: {
+        index: false,
+        follow: false,
+      },
+      alternates: {
+        canonical: fallbackCanonicalUrl,
+      },
+    };
+  }
 
   try {
     const cookieStore = await cookies();
@@ -1144,6 +1160,15 @@ export default async function MangaDetailsPage({
   const rawCookieLang = cookieStore.get("lang")?.value;
   const cookieLang = normalizeLanguage(rawCookieLang);
   const isAdult = cookieStore.get("mangastoon_adult")?.value === "true";
+
+  if (isDmcaBlocked(id)) {
+    return (
+      <main className="min-h-screen bg-[#0a0908] text-white">
+        <SiteHeader language={cookieLang} />
+        <DMCABlocker lang={cookieLang} />
+      </main>
+    );
+  }
 
   // 1. Lanzar fetches iniciales en paralelo
   const mangaPromise = cachedFetchMangaDetails(id, cookieLang, slug);

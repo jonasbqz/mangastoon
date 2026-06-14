@@ -11,6 +11,7 @@ import {
 } from "./mangadex-config";
 import { translateTagName } from "./tagTranslations";
 import { buildComicPath, slugify } from "./slugify";
+import { isDmcaBlocked } from "./dmca";
 import { MONLINE_API_URL as MONLINE_CONFIG_API_URL } from "./monline-config";
 import { getCached, setCached, getOrSetCached, stableCacheKey, getCachedMulti } from "./server-cache";
 import { fetchLocalAPI, fetchMangaVfAPI } from "./monline";
@@ -380,8 +381,10 @@ export function mapToShowcaseItems(
   statistics: Record<string, { rating?: { average?: number | null } }>,
   language: SupportedLanguage
 ): MangaDexShowcaseItem[] {
-  return mangas.map((manga) => ({
-    mal_id: Number.parseInt(manga.id.replace(/\D/g, "").slice(0, 9) || "0", 10),
+  return mangas
+    .filter((manga) => !isDmcaBlocked(manga.id))
+    .map((manga) => ({
+      mal_id: Number.parseInt(manga.id.replace(/\D/g, "").slice(0, 9) || "0", 10),
     title: getLocalizedTitle(
       {
         titleMap: manga.attributes.title,
@@ -1258,6 +1261,9 @@ function mapMangaVfToMangaDetails(id: string, details: MangaVfDetails): MangaDet
 }
 
 export async function fetchMangaDetails(id: string, language?: string, slug?: string | null): Promise<MangaDetails | null> {
+  if (isDmcaBlocked(id)) {
+    return null;
+  }
   const cacheKey = `manga-details:v2:${id}:${language || "all"}`;
   return getOrSetCached(
     cacheKey,
@@ -1718,6 +1724,9 @@ export async function resolveDuplicateMangaDexIds(mangaId: string, language?: st
 }
 
 export async function fetchMangaChapters(id: string, language: string, slug?: string | null): Promise<ChapterFeedItem[]> {
+  if (isDmcaBlocked(id)) {
+    return [];
+  }
   const cacheKey = `manga-chapters:v2:${id}:${language}`;
   return getOrSetCached(
     cacheKey,
