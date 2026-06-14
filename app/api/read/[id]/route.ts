@@ -14,7 +14,8 @@ import {
   fetchMangaVfDetailsBySlug,
   fetchMangaDexChaptersOnly,
   fetchLeerCapituloChaptersOnly,
-  fetchMangaVfSourceBySlug
+  fetchMangaVfSourceBySlug,
+  searchLeerCapituloByTitle
 } from "../../../utils/mangadex";
 import {
   buildMonlineChapterSegments,
@@ -92,6 +93,87 @@ async function reportBrokenChapter(
       }
     } else if (findError) {
       logger.error("[broken_chapters] Error searching broken chapter in database:", findError);
+    }
+
+    // Auto-enqueue logic for broken chapters to prioritize scraper fetching
+    try {
+      const cleanSlug = mangaId.startsWith("lc-") ? mangaId.substring(3) : mangaId;
+      let leercapituloSlug: string | null = null;
+
+      // Try resolving via searchLeerCapituloByTitle first
+      try {
+        leercapituloSlug = await searchLeerCapituloByTitle(mangaTitle);
+      } catch (err) {
+        logger.error("[broken_chapters] Error in searchLeerCapituloByTitle:", err);
+      }
+
+      if (!leercapituloSlug) {
+        // Fallback: build a guess slug
+        if (isMangaDexUuid(cleanSlug)) {
+          leercapituloSlug = slugify(mangaTitle);
+        } else {
+          const uuidMatch = cleanSlug.match(/^(.*?)-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+          leercapituloSlug = uuidMatch && uuidMatch[1] ? uuidMatch[1] : cleanSlug;
+        }
+      }
+
+      if (leercapituloSlug) {
+        const sourceUrl = `https://www.leercapitulo.co/manga/${leercapituloSlug}/`;
+
+        // Check DMCA blocklist
+        const blockedKeywords = ["ruridragon", "ruriragon", "ultimo-saiyuki", "ultimo saiyuki", "saiyuki", "pokemon-adventures", "pokemon adventures", "steel-ball-run", "steel ball run", "jojo"];
+        const isBlocked = blockedKeywords.some(kw => mangaTitle.toLowerCase().includes(kw) || leercapituloSlug!.toLowerCase().includes(kw));
+
+        if (!isBlocked && !isDmcaBlocked(mangaId)) {
+          // Check if already in queue
+          const { data: existingJob, error: checkQueueError } = await supabase
+            .from("scraper_queue")
+            .select("id, status")
+            .eq("source_url", sourceUrl)
+            .maybeSingle();
+
+          if (!checkQueueError) {
+            if (!existingJob) {
+              const { error: insertQueueError } = await supabase
+                .from("scraper_queue")
+                .insert({
+                  manga_title: mangaTitle,
+                  source_url: sourceUrl,
+                  status: "pending",
+                  priority: 5, // Medium priority
+                  requested_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                });
+
+              if (insertQueueError) {
+                logger.error("[broken_chapters] Error auto-enqueueing scraper job:", insertQueueError);
+              } else {
+                logger.info(`[broken_chapters] Auto-enqueued ${mangaTitle} (${sourceUrl}) with priority 5`);
+              }
+            } else if (existingJob.status === "failed") {
+              const { error: updateQueueError } = await supabase
+                .from("scraper_queue")
+                .update({
+                  status: "pending",
+                  priority: 5,
+                  error_message: null,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", existingJob.id);
+
+              if (updateQueueError) {
+                logger.error("[broken_chapters] Error resetting failed scraper job:", updateQueueError);
+              } else {
+                logger.info(`[broken_chapters] Reset failed scraper job for ${mangaTitle} to pending`);
+              }
+            }
+          }
+        } else {
+          logger.info(`[broken_chapters] Auto-enqueue skipped for ${mangaTitle} due to DMCA blocklist`);
+        }
+      }
+    } catch (enqueueErr) {
+      logger.error("[broken_chapters] Error in auto-enqueue workflow:", enqueueErr);
     }
   } catch (dbErr) {
     logger.error("[broken_chapters] Error reporting broken chapter:", dbErr);

@@ -1365,7 +1365,7 @@ async function searchMangaDexByTitle(title: string): Promise<string | null> {
   );
 }
 
-async function searchLeerCapituloByTitle(title: string): Promise<string | null> {
+export async function searchLeerCapituloByTitle(title: string): Promise<string | null> {
   const cacheKey = stableCacheKey("leercapitulo-slug-by-title-v2", [title]);
   return getOrSetCached(
     cacheKey,
