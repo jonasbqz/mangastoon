@@ -166,12 +166,15 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
     supabase.auth.getUser().then(({ data: { user }, error }) => {
       if (active) {
         if (error) {
-          console.warn("[SiteHeader] Sesión inválida o usuario eliminado de la base de datos. Purgando cookies locales...", error.message);
-          supabase.auth.signOut().then(() => {
-            setUser(null);
-            setLoadingUser(false);
-          });
-          return;
+          const isSessionMissing = error.message?.includes("Auth session missing");
+          if (!isSessionMissing) {
+            console.warn("[SiteHeader] Sesión inválida o usuario eliminado de la base de datos. Purgando cookies locales...", error.message);
+            supabase.auth.signOut().then(() => {
+              setUser(null);
+              setLoadingUser(false);
+            });
+            return;
+          }
         }
 
         const currentUser = user ?? null;
@@ -189,8 +192,6 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (active) {
         const currentUser = session?.user ?? null;
-        setUser(currentUser);
-        setLoadingUser(false);
 
         // Limpiar caché de premium en cualquier cambio de sesión/auth
         if (typeof window !== "undefined") {
@@ -200,12 +201,22 @@ export default function SiteHeader({ language }: { language: SupportedLanguage }
         }
 
         if (event === "SIGNED_IN" && currentUser) {
+          setUser(currentUser);
+          setLoadingUser(false);
           // Sincronizar stores una sola vez por evento real de login
           useFavoritesStore.getState().syncWithServer();
           useHistoryStore.getState().syncWithServer();
         } else if (event === "SIGNED_OUT") {
-          useFavoritesStore.getState().reset();
-          useHistoryStore.getState().reset();
+          // SOLO resetear si realmente había un usuario logueado en nuestro estado local del componente
+          // (evita borrar favoritos locales en la carga inicial para usuarios anónimos)
+          setUser((prevUser: any) => {
+            if (prevUser !== null) {
+              useFavoritesStore.getState().reset();
+              useHistoryStore.getState().reset();
+            }
+            return null;
+          });
+          setLoadingUser(false);
         }
       }
     });
