@@ -1918,8 +1918,8 @@ export async function fetchLeerCapituloLatest(language: SupportedLanguage = "es"
   );
 }
 
-export function deduplicateShowcaseItems(mangas: MangaShowcaseItem[]): MangaShowcaseItem[] {
-  const seen = new Map<string, MangaShowcaseItem>();
+export function deduplicateShowcaseItems<T extends MangaShowcaseItem>(mangas: T[]): T[] {
+  const seen = new Map<string, T>();
 
   for (const manga of mangas) {
     const key = manga.title.toLowerCase().trim();
@@ -1940,7 +1940,7 @@ export function deduplicateShowcaseItems(mangas: MangaShowcaseItem[]): MangaShow
     }
 
     // Helper to check if a manga is a Book Version
-    const isBookVersion = (item: MangaShowcaseItem) => {
+    const isBookVersion = (item: T) => {
       const titleValues = [
         ...Object.values(item.titleMap ?? {}),
         ...(item.altTitles ?? []).flatMap(alt => Object.values(alt))
