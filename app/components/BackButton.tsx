@@ -28,15 +28,13 @@ export default function BackButton({
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const referrer = document.referrer;
-      if (
-        referrer &&
-        !referrer.includes("/chapters/") &&
-        !referrer.includes("/read/") &&
-        !referrer.includes("/comics/") && // Evitar bucles entre fichas de mangas
-        !referrer.includes(window.location.pathname)
-      ) {
-        sessionStorage.setItem("mangastoon_manga_referrer", referrer);
+      const pathParts = window.location.pathname.split("/");
+      const lastPart = pathParts[pathParts.length - 1];
+
+      const storedMangaId = sessionStorage.getItem("mangastoon_current_manga_id");
+      if (storedMangaId !== lastPart) {
+        sessionStorage.setItem("mangastoon_current_manga_id", lastPart);
+        sessionStorage.setItem("mangastoon_manga_entry_time", String(Date.now()));
       }
     }
   }, []);
@@ -45,6 +43,7 @@ export default function BackButton({
     e.preventDefault();
     if (typeof window !== "undefined") {
       const storedReferrer = sessionStorage.getItem("mangastoon_manga_referrer");
+      const entryTimeStr = sessionStorage.getItem("mangastoon_manga_entry_time");
       const referrer = document.referrer;
       const isFromReader = referrer && (referrer.includes("/chapters/") || referrer.includes("/read/"));
       const isMangaPage = window.location.pathname.startsWith("/comics/") && 
@@ -54,7 +53,10 @@ export default function BackButton({
       let safeReferrer = storedReferrer;
       if (storedReferrer) {
         try {
-          const urlObj = new URL(storedReferrer);
+          const absoluteUrl = storedReferrer.startsWith("/") 
+            ? `${window.location.origin}${storedReferrer}`
+            : storedReferrer;
+          const urlObj = new URL(absoluteUrl);
           if (urlObj.host !== window.location.host || urlObj.pathname.includes("/comics/")) {
             safeReferrer = null;
           }
@@ -65,20 +67,26 @@ export default function BackButton({
         }
       }
 
-      // Si estamos en la página principal del manga (ficha técnica), siempre volvemos a la lista origen (Home, Buscar, etc.)
-      // Evitamos usar router.back() porque si el usuario leyó capítulos, el historial de navegación nos meterá de vuelta en el lector.
       if (isMangaPage) {
-        if (safeReferrer) {
+        let isTimedOut = false;
+        if (entryTimeStr) {
+          const entryTime = parseInt(entryTimeStr, 10);
+          if (!isNaN(entryTime) && Date.now() - entryTime > 10 * 60 * 1000) {
+            isTimedOut = true;
+          }
+        }
+
+        if (safeReferrer && !isTimedOut) {
           window.location.href = safeReferrer;
         } else {
-          router.push(fallbackHref);
+          window.location.href = fallbackHref;
         }
       } else if (isFromReader && safeReferrer && !safeReferrer.includes("/chapters/") && !safeReferrer.includes("/read/")) {
         window.location.href = safeReferrer;
       } else if (window.history.length > 1 && !isFromReader) {
         router.back();
       } else {
-        router.push(fallbackHref);
+        window.location.href = fallbackHref;
       }
     } else {
       router.push(fallbackHref);

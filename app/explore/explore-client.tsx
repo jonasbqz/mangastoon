@@ -19,6 +19,7 @@ import {
   type LocalApiComicsResponse,
   type MangaDexCollectionResponse,
   type MangaDexManga,
+  deduplicateShowcaseItems,
 } from "../utils/mangadex";
 import { getLocalizedTitleAsync } from "../utils/get-localized-title";
 import { translateTagName } from "../utils/tagTranslations";
@@ -623,7 +624,8 @@ export default function ExplorePage() {
       const combinedMangas = orderBy === "followedCount"
         ? interleaveShowcaseItems(localMangas, uniqueMangaDexMangas)
         : [...localMangas, ...uniqueMangaDexMangas];
-      const mixedMangas = sortShowcaseItems(combinedMangas, orderBy, sortDir).slice(0, 24);
+      const deduplicatedMangas = deduplicateShowcaseItems(combinedMangas);
+      const mixedMangas = sortShowcaseItems(deduplicatedMangas, orderBy, sortDir).slice(0, 24);
       const mangaDexTotal = mangaDexPayload.total ?? mangaDexPayload.pagination?.total ?? 0;
       const total = localTotal + (mangaDexTotal > 0 ? mangaDexTotal : MANGADEX_FALLBACK_TOTAL);
 

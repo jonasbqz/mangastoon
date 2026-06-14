@@ -82,6 +82,19 @@ export default function MangastoonProvider() {
     }
 
     checkMonetizationState();
+
+    if (typeof window !== "undefined") {
+      const currentPath = window.location.pathname;
+      const currentSearch = window.location.search;
+      const fullUrl = currentPath + currentSearch;
+
+      if (
+        !currentPath.startsWith("/comics/") &&
+        !currentPath.startsWith("/api/")
+      ) {
+        sessionStorage.setItem("mangastoon_manga_referrer", fullUrl);
+      }
+    }
   }, [pathname]);
   // ─── ANUNCIOS ACTIVADOS ──────────────────────────────────────────────────
   useEffect(() => {

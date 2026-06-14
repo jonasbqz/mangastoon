@@ -1668,6 +1668,42 @@ function getLocalChaptersFromComic(comic: any): ChapterFeedItem[] {
     .sort((a, b) => Number(b.attributes.chapter) - Number(a.attributes.chapter));
 }
 
+function cleanCoreTitle(title: string): string {
+  return title
+    .replace(/\s*[([（【].*?[)\]）】]\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function resolveDuplicateMangaDexIds(mangaId: string): Promise<string[]> {
+  const cacheKey = `manga-duplicates:v2:${mangaId}`;
+  return getOrSetCached(
+    cacheKey,
+    2592000, // 30 días
+    async () => {
+      const ids = [mangaId];
+      try {
+        const detailRes = await fetchMangaDex(`https://api.mangadex.org/manga/${mangaId}`);
+        if (!detailRes.ok) return ids;
+        const detailPayload = (await detailRes.json()) as MangaDetailsResponse;
+        const titleMap = detailPayload.data?.attributes?.title ?? {};
+        const originalTitle = titleMap.es || titleMap.en || Object.values(titleMap)[0] as string || "";
+        if (!originalTitle) return ids;
+
+        const coreTitle = cleanCoreTitle(originalTitle);
+        const searchRes = await fetchMangaDex(`https://api.mangadex.org/manga?title=${encodeURIComponent(coreTitle)}&limit=10`);
+        if (!searchRes.ok) return ids;
+        const searchPayload = await searchRes.json();
+        const matchedIds = (searchPayload.data ?? []).map((m: any) => m.id as string);
+        
+        return Array.from(new Set([...ids, ...matchedIds]));
+      } catch {
+        return ids;
+      }
+    }
+  );
+}
+
 export async function fetchMangaChapters(id: string, language: string, slug?: string | null): Promise<ChapterFeedItem[]> {
   const cacheKey = `manga-chapters:v2:${id}:${language}`;
   return getOrSetCached(
@@ -1688,12 +1724,55 @@ export async function fetchMangaChapters(id: string, language: string, slug?: st
       if (language !== "es" && isMangaDexUuid(id)) {
         const mangaId = resolution.mangadexId || id;
         if (!isMangaDexUuid(mangaId)) return [];
-        return fetchMangaDexChaptersOnly(mangaId, language);
+        
+        const duplicateIds = await resolveDuplicateMangaDexIds(mangaId);
+        const chaptersPromises = duplicateIds.map(dId => fetchMangaDexChaptersOnly(dId, language));
+        const chaptersLists = await Promise.all(chaptersPromises);
+        
+        const list: ChapterFeedItem[] = [];
+        const seenChapters = new Set<string>();
+        for (const subList of chaptersLists) {
+          for (const ch of subList) {
+            const num = ch.attributes?.chapter?.trim();
+            if (num && !seenChapters.has(num)) {
+              seenChapters.add(num);
+              list.push(ch);
+            }
+          }
+        }
+
+        // Sort descending by chapter number
+        list.sort((a, b) => {
+          const aNum = parseFloat(a.attributes?.chapter || "0");
+          const bNum = parseFloat(b.attributes?.chapter || "0");
+          return bNum - aNum;
+        });
+
+        return list;
       }
+
+      const mangadexId = resolution.mangadexId || id;
 
       // If Spanish, fetch both in parallel and merge them
       const [mdChapters, lcChapters] = await Promise.all([
-        resolution.mangadexId ? fetchMangaDexChaptersOnly(resolution.mangadexId, language) : Promise.resolve([]),
+        isMangaDexUuid(mangadexId) ? (async () => {
+          const duplicateIds = await resolveDuplicateMangaDexIds(mangadexId);
+          const chaptersPromises = duplicateIds.map(dId => fetchMangaDexChaptersOnly(dId, language));
+          const chaptersLists = await Promise.all(chaptersPromises);
+          
+          const list: ChapterFeedItem[] = [];
+          const seenChapters = new Set<string>();
+          for (const subList of chaptersLists) {
+            for (const ch of subList) {
+              const num = ch.attributes?.chapter?.trim();
+              if (num && !seenChapters.has(num)) {
+                seenChapters.add(num);
+                list.push(ch);
+              }
+            }
+          }
+          return list;
+        })() : Promise.resolve([]),
         resolution.leercapituloSlug ? fetchLeerCapituloChaptersOnly(resolution.leercapituloSlug) : Promise.resolve([])
       ]);
 
