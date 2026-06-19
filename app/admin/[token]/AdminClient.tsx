@@ -18,7 +18,8 @@ import {
   Globe,
   MessageSquare,
   Cpu,
-  Send
+  Send,
+  Zap
 } from "lucide-react";
 import "../admin.css";
 
@@ -91,6 +92,7 @@ export default function AdminClient() {
   const [scraperPriority, setScraperPriority] = useState<number>(0);
   const [scraperStatusMsg, setScraperStatusMsg] = useState<string | null>(null);
   const [scraperLoading, setScraperLoading] = useState(false);
+  const [enqueuingAll, setEnqueuingAll] = useState(false);
 
   // Telegram Form States (loaded inside useEffect to support Next.js SSR hydration safely)
   const [telegramBotToken, setTelegramBotToken] = useState("");
@@ -685,6 +687,32 @@ export default function AdminClient() {
       }
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Enqueue all broken chapters to scraper queue
+  const handleEnqueueAllBroken = async () => {
+    if (!confirm("¿Estás seguro de que querés encolar todos los capítulos rotos en el scraper? Se procesarán los mangas únicos que presenten alertas.")) {
+      return;
+    }
+    setEnqueuingAll(true);
+    try {
+      const res = await fetch("/api/admin/enqueue-broken", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || "Proceso completado con éxito.");
+        await fetchScraperQueue();
+      } else {
+        alert("Error: " + (data.error || "Ocurrió un error inesperado."));
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Error: " + (err.message || "Error de red al intentar encolar."));
+    } finally {
+      setEnqueuingAll(false);
     }
   };
 
@@ -1524,12 +1552,34 @@ export default function AdminClient() {
         {/* ─── TAB: BROKEN CHAPTERS ───────────────────────────────────────── */}
         {activeTab === "broken-chapters" && (
           <div className="panel-card glass-panel">
-            <div className="panel-title-row">
-              <h3 className="panel-title">
-                <AlertTriangle size={18} className="text-primary" />
-                Listado Completo de Capítulos con Páginas Vacías
-              </h3>
-              <span className="badge badge-red">{brokenChapters.length} alertas</span>
+            <div className="panel-title-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "15px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <h3 className="panel-title" style={{ margin: 0 }}>
+                  <AlertTriangle size={18} className="text-primary" />
+                  Listado Completo de Capítulos con Páginas Vacías
+                </h3>
+                <span className="badge badge-red">{brokenChapters.length} alertas</span>
+              </div>
+              {brokenChapters.length > 0 && (
+                <button
+                  className="btn-primary"
+                  onClick={handleEnqueueAllBroken}
+                  disabled={enqueuingAll}
+                  style={{ display: "flex", alignItems: "center", gap: "6px", padding: "8px 14px", fontSize: "12px", width: "auto", alignSelf: "center" }}
+                >
+                  {enqueuingAll ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      <span>Procesando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap size={14} />
+                      <span>Encolar Todo en Scraper</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
             <div className="table-wrapper">
