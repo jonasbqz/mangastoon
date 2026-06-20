@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "../../../utils/supabase/server";
+import { createClient } from "../../../../utils/supabase/server";
 import { searchLeerCapituloByTitle } from "../../../utils/mangadex";
 import { slugify } from "../../../utils/slugify";
 import { isDmcaBlocked } from "../../../utils/dmca";
