@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { headers, cookies } from "next/headers";
-import { redirect, notFound } from "next/navigation";
+import { redirect, notFound, permanentRedirect } from "next/navigation";
 import { NextRequest } from "next/server";
 import ReaderClient from "./reader-client";
 import { SITE_NAME, absoluteUrl, safeJsonLd } from "../../../../utils/seo";
@@ -162,8 +162,9 @@ export async function generateMetadata({
     description = `Leé el ${currentLabel} de ${mangaTitle} online gratis en español, inglés y portugués en MangaStoon.`;
   }
 
+  const canonicalSlug = data?.comicSlug || slug;
   const query = lang !== "es" ? `?lang=${encodeURIComponent(lang)}` : "";
-  const canonical = absoluteUrl(`/comics/${slug}/chapters/${chapterId}${query}`);
+  const canonical = absoluteUrl(`/comics/${canonicalSlug}/chapters/${chapterId}${query}`);
 
   return {
     title,
@@ -233,13 +234,14 @@ export default async function ReadPage({
 
   if (canonicalSlug && canonicalSlug !== slug) {
     const query = lang !== "es" ? `?lang=${encodeURIComponent(lang)}` : "";
-    redirect(`/comics/${canonicalSlug}/chapters/${chapterId}${query}`);
+    permanentRedirect(`/comics/${canonicalSlug}/chapters/${chapterId}${query}`);
   }
 
   const mangaTitle = data?.mangaTitle || SITE_NAME;
   const currentChapter = data?.currentChapter ?? null;
   const currentLabel = getChapterLabel(currentChapter, "Capítulo no disponible");
-  const canonical = absoluteUrl(`/comics/${slug}/chapters/${chapterId}`);
+  const activeSlug = canonicalSlug || slug;
+  const canonical = absoluteUrl(`/comics/${activeSlug}/chapters/${chapterId}`);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "ComicIssue",
@@ -248,7 +250,7 @@ export default async function ReadPage({
     isPartOf: {
       "@type": "ComicSeries",
       name: mangaTitle,
-      url: absoluteUrl(`/comics/${slug}`),
+      url: absoluteUrl(`/comics/${activeSlug}`),
     },
     url: canonical,
     inLanguage: lang,
