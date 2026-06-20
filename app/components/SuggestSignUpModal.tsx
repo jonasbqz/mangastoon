@@ -80,12 +80,55 @@ export default function SuggestSignUpModal({ open, onClose }: SuggestSignUpModal
 
             {/* Texto del Modal */}
             <h3 className="text-lg font-heading font-extrabold text-gray-100 leading-tight uppercase tracking-wide px-2">
-              ¡Guardá tus lecturas sin perder nada!
+              ¡Desbloqueá Beneficios Premium Gratis!
             </h3>
             
-            <p className="mt-3 text-xs leading-relaxed text-neutral-400 px-3">
-              Creá una cuenta en segundos para guardar tus favoritos e historial de forma permanente. Sincronizá tu progreso en cualquier celular o computadora automáticamente.
+            <p className="mt-2.5 text-[11px] leading-relaxed text-neutral-400 px-3">
+              Creá tu cuenta gratis en segundos y disfrutá de una lectura superior sin pagar nada:
             </p>
+
+            {/* Lista de Beneficios */}
+            <div className="mt-4 mb-4 text-left border-y border-white/5 py-3 px-2 flex flex-col gap-2.5">
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-[#ff6b00] mt-0.5">
+                  <Sparkles size={11} />
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-bold text-gray-200">Velocidad Máxima</h4>
+                  <p className="text-[10px] text-neutral-400">Lectura fluida con servidores premium dedicados.</p>
+                </div>
+              </div>
+              
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-[#ff6b00] mt-0.5">
+                  <Sparkles size={11} />
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-bold text-gray-200">PDFs Ilimitados</h4>
+                  <p className="text-[10px] text-neutral-400">Descargá tus capítulos preferidos para ver offline.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-[#ff6b00] mt-0.5">
+                  <Sparkles size={11} />
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-bold text-gray-200">Sincronización en la Nube</h4>
+                  <p className="text-[10px] text-neutral-400">Guardá tus favoritos e historial en cualquier dispositivo.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <div className="flex h-4.5 w-4.5 shrink-0 items-center justify-center rounded-full bg-orange-500/10 text-[#ff6b00] mt-0.5">
+                  <Sparkles size={11} />
+                </div>
+                <div>
+                  <h4 className="text-[11px] font-bold text-gray-200">Notificaciones al Instante</h4>
+                  <p className="text-[10px] text-neutral-400">Enterate al segundo cuando sale un nuevo capítulo.</p>
+                </div>
+              </div>
+            </div>
 
             {/* Acciones */}
             <div className="mt-6 flex flex-col gap-2.5">

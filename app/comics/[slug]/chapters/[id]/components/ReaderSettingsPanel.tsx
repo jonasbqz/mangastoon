@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { EyeOff, Eye, Palette, BookOpen, Scroll, ZoomIn, ZoomOut, Crown } from "lucide-react";
+import { EyeOff, Eye, Palette, BookOpen, Scroll, ZoomIn, ZoomOut, Crown, Columns2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { PageSize } from "../../../../../store/useReaderSettingsStore";
@@ -62,6 +62,10 @@ interface ReaderSettingsPanelProps {
   pageSize: PageSize;
   setPageSize: (size: PageSize) => void;
   onOpenPremiumModal?: () => void;
+  gaplessMode: boolean;
+  setGaplessMode: (enabled: boolean) => void;
+  doublePageSpread: boolean;
+  setDoublePageSpread: (enabled: boolean) => void;
 }
 
 export default function ReaderSettingsPanel({
@@ -84,6 +88,10 @@ export default function ReaderSettingsPanel({
   pageSize,
   setPageSize,
   onOpenPremiumModal,
+  gaplessMode,
+  setGaplessMode,
+  doublePageSpread,
+  setDoublePageSpread,
 }: ReaderSettingsPanelProps) {
   const [showThemes, setShowThemes] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -216,6 +224,38 @@ export default function ReaderSettingsPanel({
               <Crown size={10} className="absolute -right-1 -top-1 fill-amber-500 text-amber-500 shrink-0" />
             )}
           </ToolButton>
+
+          {/* Lectura sin márgenes (vertical only) */}
+          {readingMode === "vertical" && (
+            <ToolButton
+              title={gaplessMode ? "Desactivar lectura sin márgenes" : "Activar lectura sin márgenes"}
+              onClick={() => {
+                setGaplessMode(!gaplessMode);
+                toast.info(gaplessMode ? "Márgenes normales activados" : "Lectura continua sin márgenes activada 🚀");
+              }}
+              active={gaplessMode}
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22V2" />
+                <path d="m17 7-5-5-5 5" />
+                <path d="m17 17-5 5-5-5" />
+              </svg>
+            </ToolButton>
+          )}
+
+          {/* Doble página (horizontal only) */}
+          {readingMode === "horizontal" && (
+            <ToolButton
+              title={doublePageSpread ? "Desactivar doble página" : "Activar doble página (pantallas grandes)"}
+              onClick={() => {
+                setDoublePageSpread(!doublePageSpread);
+                toast.info(doublePageSpread ? "Páginas individuales" : "Modo doble página activado 📖");
+              }}
+              active={doublePageSpread}
+            >
+              <Columns2 className="h-5 w-5" />
+            </ToolButton>
+          )}
 
           {/* Zoom / Page width scaling controls */}
           <div className="flex flex-col gap-1.5 sm:gap-2">

@@ -38,6 +38,8 @@ interface HorizontalReaderProps {
   pageSize: PageSize;
   isReaderUiVisible: boolean;
   showControlsUI: boolean;
+  doublePageSpread: boolean;
+  onPageChange?: (page: number) => void;
 }
 
 const HORIZONTAL_PAGE_SIZE_CLASSES: Record<PageSize, string> = {
@@ -227,12 +229,15 @@ export default function HorizontalReader({
   pageSize,
   isReaderUiVisible,
   showControlsUI,
+  doublePageSpread,
+  onPageChange,
 }: HorizontalReaderProps) {
   const [currentPage, setCurrentPage] = useState(0);
   const [direction, setDirection] = useState(0);
   const [showHint, setShowHint] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isTall, setIsTall] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     setIsTall(false);
@@ -266,6 +271,42 @@ export default function HorizontalReader({
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
   }, [currentPage, pages]);
+
+  // Detect mobile width to automatically toggle single-page spread
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  const isDoublePageActive = doublePageSpread && !isMobile;
+
+  // Group pages into spreads: first page is single (cover), next pages are grouped in pairs of 2.
+  const spreads = (() => {
+    if (!pages || pages.length === 0) return [];
+    if (!isDoublePageActive) {
+      return pages.map((_, i) => [i]);
+    }
+    const result: number[][] = [];
+    result.push([0]); // Cover page is single
+    for (let i = 1; i < pages.length; i += 2) {
+      if (i + 1 < pages.length) {
+        result.push([i, i + 1]);
+      } else {
+        result.push([i]);
+      }
+    }
+    return result;
+  })();
+
+  const currentSpreadIndex = spreads.findIndex((spread) => spread.includes(currentPage));
+  const activeSpreadIndex = currentSpreadIndex >= 0 ? currentSpreadIndex : 0;
+
+  // Report page index changes to client coordinator
+  useEffect(() => {
+    onPageChange?.(currentPage);
+  }, [currentPage, onPageChange]);
 
   // Pre-load adjacent pages to browser cache using Image object
   useEffect(() => {
@@ -311,6 +352,30 @@ export default function HorizontalReader({
     setShowHint(false);
   }, [currentPage, pages.length, hasNextChapter, hasPreviousChapter, onNextChapter, onPreviousChapter]);
 
+  const goToNextSpread = useCallback(() => {
+    const nextSpreadIndex = activeSpreadIndex + 1;
+    if (nextSpreadIndex < spreads.length) {
+      const nextSpread = spreads[nextSpreadIndex];
+      setDirection(1);
+      setCurrentPage(nextSpread[0]);
+      setShowHint(false);
+    } else {
+      if (hasNextChapter) onNextChapter();
+    }
+  }, [activeSpreadIndex, spreads, hasNextChapter, onNextChapter]);
+
+  const goToPreviousSpread = useCallback(() => {
+    const prevSpreadIndex = activeSpreadIndex - 1;
+    if (prevSpreadIndex >= 0) {
+      const prevSpread = spreads[prevSpreadIndex];
+      setDirection(-1);
+      setCurrentPage(prevSpread[0]);
+      setShowHint(false);
+    } else {
+      if (hasPreviousChapter) onPreviousChapter();
+    }
+  }, [activeSpreadIndex, spreads, hasPreviousChapter, onPreviousChapter]);
+
   // Keyboard navigation
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -325,18 +390,16 @@ export default function HorizontalReader({
 
       if (e.key === "ArrowRight" || e.key === " ") {
         e.preventDefault();
-        goToPage(currentPage + 1);
+        goToNextSpread();
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        goToPage(currentPage - 1);
+        goToPreviousSpread();
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [currentPage, goToPage]);
-
-
+  }, [goToNextSpread, goToPreviousSpread]);
 
   // Tap zone handler
   function handleTapZone(e: React.MouseEvent) {
@@ -345,13 +408,11 @@ export default function HorizontalReader({
     const zoneWidth = rect.width / 3;
 
     if (x < zoneWidth) {
-      goToPage(currentPage - 1);
+      goToPreviousSpread();
     } else if (x > zoneWidth * 2) {
-      goToPage(currentPage + 1);
+      goToNextSpread();
     }
   }
-
-  const pageUrl = pages[currentPage] ?? "";
 
   return (
     <div className="relative mx-auto w-full max-w-5xl select-none overflow-hidden" ref={containerRef}>
@@ -360,29 +421,43 @@ export default function HorizontalReader({
         className="relative w-full min-h-[50vh] sm:min-h-[70vh] cursor-pointer rounded-2xl bg-black/5"
         onClick={handleTapZone}
         role="img"
-        aria-label={`${dictionary.page} ${currentPage + 1} - ${chapterLabel}`}
+        aria-label={
+          spreads[activeSpreadIndex]?.length === 2
+            ? `${dictionary.page} ${spreads[activeSpreadIndex][0] + 1}-${spreads[activeSpreadIndex][1] + 1} - ${chapterLabel}`
+            : `${dictionary.page} ${currentPage + 1} - ${chapterLabel}`
+        }
       >
         <motion.div
           className="flex w-full"
-          animate={{ x: `-${currentPage * 100}%` }}
+          animate={{ x: `-${activeSpreadIndex * 100}%` }}
           transition={{ duration: 0.22, ease: [0.25, 1, 0.5, 1] }}
         >
-          {pages.map((pageUrl, index) => {
-            const isNear = Math.abs(index - currentPage) <= 1;
+          {spreads.map((spreadPages, spreadIdx) => {
+            const isNear = Math.abs(spreadIdx - activeSpreadIndex) <= 1;
             return (
               <div
-                key={index}
-                className="w-full flex-shrink-0 flex justify-center items-center min-h-[50vh] sm:min-h-[70vh] relative"
+                key={spreadIdx}
+                className="w-full flex-shrink-0 flex justify-center items-center min-h-[50vh] sm:min-h-[70vh] relative gap-4 px-2"
               >
                 {isNear ? (
-                  <HorizontalReaderImage
-                    pageUrl={pageUrl}
-                    alt={`${dictionary.page} ${index + 1} - ${chapterLabel}`}
-                    dictionary={dictionary}
-                    pageSize={pageSize}
-                    mangaId={mangaId}
-                    chapterId={chapterId}
-                  />
+                  spreadPages.map((pageIdx) => {
+                    const pUrl = pages[pageIdx];
+                    return (
+                      <div
+                        key={pageIdx}
+                        className={spreadPages.length === 2 ? "flex-1 max-w-[50%] flex justify-center" : "w-full flex justify-center"}
+                      >
+                        <HorizontalReaderImage
+                          pageUrl={pUrl}
+                          alt={`${dictionary.page} ${pageIdx + 1} - ${chapterLabel}`}
+                          dictionary={dictionary}
+                          pageSize={pageSize}
+                          mangaId={mangaId}
+                          chapterId={chapterId}
+                        />
+                      </div>
+                    );
+                  })
                 ) : (
                   <div className="w-full h-full min-h-[50vh] flex justify-center items-center bg-[#0a0a0c] rounded-2xl">
                     <div className="relative flex flex-col items-center gap-3">
@@ -397,105 +472,136 @@ export default function HorizontalReader({
         </motion.div>
       </div>
 
-        {/* Tap zone visual hints */}
-        <AnimatePresence>
-          {showHint && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-between px-4"
-            >
-              <div className="flex h-full w-1/4 items-center justify-center">
-                <span className="rounded-full bg-black/60 p-3 text-white/70 backdrop-blur-sm">
-                  <ArrowLeft size={20} />
-                </span>
-              </div>
-              <div className="flex flex-col items-center gap-1">
-                <span className="rounded-lg bg-black/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/60 backdrop-blur-sm">
-                  {dictionary.tapHint}
-                </span>
-              </div>
-              <div className="flex h-full w-1/4 items-center justify-center">
-                <span className="rounded-full bg-black/60 p-3 text-white/70 backdrop-blur-sm">
-                  <ArrowRight size={20} />
-                </span>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+      {/* Tap zone visual hints */}
+      <AnimatePresence>
+        {showHint && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-between px-4"
+          >
+            <div className="flex h-full w-1/4 items-center justify-center">
+              <span className="rounded-full bg-black/60 p-3 text-white/70 backdrop-blur-sm">
+                <ArrowLeft size={20} />
+              </span>
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <span className="rounded-lg bg-black/60 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white/60 backdrop-blur-sm">
+                {dictionary.tapHint}
+              </span>
+            </div>
+            <div className="flex h-full w-1/4 items-center justify-center">
+              <span className="rounded-full bg-black/60 p-3 text-white/70 backdrop-blur-sm">
+                <ArrowRight size={20} />
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Floating Control Bar Dock de Alta Gama */}
       <div 
-        className="fixed left-1/2 z-40 flex -translate-x-1/2 items-center gap-2.5 rounded-full border border-amber-500/10 bg-[#0a0a0c]/95 px-4.5 py-2 shadow-[0_20px_50px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl ring-1 ring-white/5 bottom-6 opacity-100 pointer-events-auto"
+        className="fixed left-1/2 z-40 flex -translate-x-1/2 flex-col items-center gap-2 bottom-6 opacity-100 pointer-events-auto"
       >
-        {/* Previous Page */}
-        <button
-          type="button"
-          disabled={currentPage === 0 && !hasPreviousChapter}
-          onClick={() => goToPage(currentPage - 1)}
-          className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-amber-500 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 active:scale-90"
-          title={dictionary.previousPage}
-        >
-          <ArrowLeft size={16} />
-        </button>
-
-        {/* Page indicator Píldora Dorada Premium */}
-        <div className="mx-2 text-xs font-black tracking-widest text-amber-500/90 min-w-[3.8rem] text-center select-none bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
-          {currentPage + 1} / {pages.length}
+        {/* Segmented Page Completion Indicators */}
+        <div className="flex gap-1.5 max-w-[280px] sm:max-w-[400px] justify-center items-center px-3 py-1.5 rounded-full bg-[#0a0a0c]/85 border border-white/5 backdrop-blur-md shadow-lg flex-wrap mb-1">
+          {spreads.map((spreadPages, idx) => {
+            const isCompleted = idx < activeSpreadIndex;
+            const isActive = idx === activeSpreadIndex;
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => goToPage(spreadPages[0])}
+                className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                  isActive
+                    ? "w-4 bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"
+                    : isCompleted
+                      ? "w-2 bg-amber-500/50 hover:bg-amber-500/80"
+                      : "w-2 bg-white/20 hover:bg-white/45"
+                }`}
+                title={
+                  spreadPages.length === 2 
+                    ? `Páginas ${spreadPages[0] + 1}-${spreadPages[1] + 1}`
+                    : `Página ${spreadPages[0] + 1}`
+                }
+              />
+            );
+          })}
         </div>
 
-        {/* Next Page */}
-        <button
-          type="button"
-          disabled={currentPage === pages.length - 1 && !hasNextChapter}
-          onClick={() => goToPage(currentPage + 1)}
-          className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-amber-500 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 active:scale-90"
-          title={dictionary.nextPage}
-        >
-          <ArrowRight size={16} />
-        </button>
+        <div className="flex items-center gap-2.5 rounded-full border border-amber-500/10 bg-[#0a0a0c]/95 px-4.5 py-2 shadow-[0_20px_50px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl ring-1 ring-white/5">
+          {/* Previous Page */}
+          <button
+            type="button"
+            disabled={activeSpreadIndex === 0 && !hasPreviousChapter}
+            onClick={goToPreviousSpread}
+            className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-amber-500 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 active:scale-90"
+            title={dictionary.previousPage}
+          >
+            <ArrowLeft size={16} />
+          </button>
 
-        <div className="w-[1px] h-5 bg-white/15 mx-1" />
+          {/* Page indicator Píldora Dorada Premium */}
+          <div className="mx-2 text-xs font-black tracking-widest text-amber-500/90 min-w-[3.8rem] text-center select-none bg-amber-500/10 px-2.5 py-1 rounded-full border border-amber-500/20">
+            {spreads[activeSpreadIndex]?.length === 2
+              ? `${spreads[activeSpreadIndex][0] + 1}-${spreads[activeSpreadIndex][1] + 1} / ${pages.length}`
+              : `${currentPage + 1} / ${pages.length}`}
+          </div>
 
-        {/* Previous Chapter */}
-        <button
-          type="button"
-          disabled={!hasPreviousChapter}
-          onClick={onPreviousChapter}
-          className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-amber-400 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 active:scale-90"
-          title={dictionary.previousChapter}
-        >
-          <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m11 17-5-5 5-5" />
-            <path d="m18 17-5-5 5-5" />
-          </svg>
-        </button>
+          {/* Next Page */}
+          <button
+            type="button"
+            disabled={activeSpreadIndex === spreads.length - 1 && !hasNextChapter}
+            onClick={goToNextSpread}
+            className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-amber-500 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 active:scale-90"
+            title={dictionary.nextPage}
+          >
+            <ArrowRight size={16} />
+          </button>
 
-        {/* Chapter List dropdown/button */}
-        <button
-          type="button"
-          onClick={onList}
-          className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-amber-400 transition-all duration-200 active:scale-90"
-          title={dictionary.chapterList}
-        >
-          <List size={16} />
-        </button>
+          <div className="w-[1px] h-5 bg-white/15 mx-1" />
 
-        {/* Next Chapter */}
-        <button
-          type="button"
-          disabled={!hasNextChapter}
-          onClick={onNextChapter}
-          className="flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-black hover:brightness-110 disabled:bg-white/5 disabled:text-gray-600 transition-all duration-200 active:scale-90 shadow-lg shadow-amber-500/25"
-          title={dictionary.nextChapter}
-        >
-          <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="m13 17 5-5-5-5" />
-            <path d="m6 17 5-5-5-5" />
-          </svg>
-        </button>
+          {/* Previous Chapter */}
+          <button
+            type="button"
+            disabled={!hasPreviousChapter}
+            onClick={onPreviousChapter}
+            className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-amber-400 disabled:opacity-20 disabled:pointer-events-none transition-all duration-200 active:scale-90"
+            title={dictionary.previousChapter}
+          >
+            <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m11 17-5-5 5-5" />
+              <path d="m18 17-5-5 5-5" />
+            </svg>
+          </button>
+
+          {/* Chapter List dropdown/button */}
+          <button
+            type="button"
+            onClick={onList}
+            className="flex h-9.5 w-9.5 items-center justify-center rounded-full text-gray-400 hover:bg-white/10 hover:text-amber-400 transition-all duration-200 active:scale-90"
+            title={dictionary.chapterList}
+          >
+            <List size={16} />
+          </button>
+
+          {/* Next Chapter */}
+          <button
+            type="button"
+            disabled={!hasNextChapter}
+            onClick={onNextChapter}
+            className="flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 text-black hover:brightness-110 disabled:bg-white/5 disabled:text-gray-600 transition-all duration-200 active:scale-90 shadow-lg shadow-amber-500/25"
+            title={dictionary.nextChapter}
+          >
+            <svg viewBox="0 0 24 24" className="h-4.5 w-4.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m13 17 5-5-5-5" />
+              <path d="m6 17 5-5-5-5" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Preload adjacent pages */}

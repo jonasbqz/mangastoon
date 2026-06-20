@@ -29,6 +29,7 @@ interface MangaPageImageProps {
   pageIndex: number;
   mangaId?: string;
   chapterId?: string;
+  gaplessMode?: boolean;
 }
 
 export default function MangaPageImage({
@@ -40,6 +41,7 @@ export default function MangaPageImage({
   pageIndex,
   mangaId,
   chapterId,
+  gaplessMode = false,
 }: MangaPageImageProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [shouldLoad, setShouldLoad] = useState(priority);
@@ -146,7 +148,9 @@ export default function MangaPageImage({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full bg-[#0a0a0c] min-h-[50vh] sm:min-h-[70vh] flex justify-center ${
+      className={`relative w-full bg-[#0a0a0c] flex justify-center ${
+        gaplessMode ? (loaded ? "min-h-0" : "min-h-[30vh]") : "min-h-[50vh] sm:min-h-[70vh]"
+      } ${
         zoomLevel > 1 ? "overflow-x-auto custom-scrollbar scrollbar-hide" : "overflow-hidden"
       }`}
       style={{ contentVisibility: "auto", containIntrinsicSize: "auto 1000px" }}

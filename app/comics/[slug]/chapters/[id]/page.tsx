@@ -244,6 +244,7 @@ export default async function ReadPage({
     "@context": "https://schema.org",
     "@type": "ComicIssue",
     name: `${mangaTitle} - ${currentLabel}`,
+    issueNumber: getChapterNumber(currentChapter),
     isPartOf: {
       "@type": "ComicSeries",
       name: mangaTitle,

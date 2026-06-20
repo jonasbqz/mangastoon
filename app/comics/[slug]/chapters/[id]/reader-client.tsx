@@ -666,6 +666,10 @@ export default function ReaderClient({
   const setReadingMode = useReaderSettingsStore((state) => state.setReadingMode);
   const pageSize = useReaderSettingsStore((state) => state.pageSize);
   const setPageSize = useReaderSettingsStore((state) => state.setPageSize);
+  const gaplessMode = useReaderSettingsStore((state) => state.gaplessMode);
+  const setGaplessMode = useReaderSettingsStore((state) => state.setGaplessMode);
+  const doublePageSpread = useReaderSettingsStore((state) => state.doublePageSpread);
+  const setDoublePageSpread = useReaderSettingsStore((state) => state.setDoublePageSpread);
 
   const initialSelectedChapter = initialData?.currentChapter ?? null;
   const initialPages = (initialData?.pages ?? []).map(getOptimizedImageUrl);
@@ -708,6 +712,8 @@ export default function ReaderClient({
   const [readerTheme, setReaderTheme] = useState<ReaderTheme>("dark");
   const [hasScrolledPastHalf, setHasScrolledPastHalf] = useState(false);
   const [pageRetryVersions, setPageRetryVersions] = useState<number[]>([]);
+  const [horizontalPage, setHorizontalPage] = useState(0);
+  const [scrollProgress, setScrollProgress] = useState(0);
 
   useEffect(() => {
     setPageRetryVersions(new Array(pages.length).fill(0));
@@ -738,6 +744,22 @@ export default function ReaderClient({
   // Protect readingMode: only allow "horizontal" if the user is confirmed premium.
   // While auth is still loading, default to "vertical" to prevent flash of horizontal mode.
   const activeReadingMode = (authLoaded && isPremium) ? readingMode : "vertical";
+
+  useEffect(() => {
+    if (activeReadingMode !== "vertical") return;
+
+    const handleScroll = () => {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+      setScrollProgress(Math.min(100, Math.max(0, progress)));
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [activeReadingMode, pages.length]);
 
   useEffect(() => {
     const handleOpenAuthModal = (e: Event) => {
@@ -838,6 +860,42 @@ export default function ReaderClient({
       }
     }
     loadPremiumAndTheme();
+  }, []);
+
+  // Listen to auth state changes to dynamically update guest/logged-in status in the reader
+  useEffect(() => {
+    const supabase = createClient();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id, username, avatar_url, is_premium, telegram_grace_started, premium_until")
+          .eq("id", session.user.id)
+          .maybeSingle();
+        if (profile) {
+          setCurrentProfile(profile);
+          setIsPremium(!!profile.is_premium);
+          if (profile.telegram_grace_started) {
+            setTelegramGraceStarted(profile.telegram_grace_started);
+          }
+          const storedTheme = localStorage.getItem(READER_THEME_KEY) as ReaderTheme;
+          if (profile.is_premium && storedTheme) {
+            setReaderTheme(storedTheme);
+          }
+        }
+      } else {
+        setCurrentUser(null);
+        setCurrentProfile(null);
+        setIsPremium(false);
+        setTelegramGraceStarted(null);
+      }
+      setAuthLoaded(true);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -1200,6 +1258,17 @@ export default function ReaderClient({
     };
   }, [autoScroll]);
 
+  const readableChapters = dedupeChaptersByNumber(chapters).sort((a, b) => {
+    const aNum = parseChapterNumber(a);
+    const bNum = parseChapterNumber(b);
+    if (aNum !== null && bNum !== null) {
+      return aNum - bNum;
+    }
+    const aStr = normalizeChapterNumber(a) || "";
+    const bStr = normalizeChapterNumber(b) || "";
+    return aStr.localeCompare(bStr, undefined, { numeric: true, sensitivity: "base" });
+  });
+
   useEffect(() => {
     if (!currentChapter?.id || !mangaId || pages.length === 0) {
       return;
@@ -1234,17 +1303,6 @@ export default function ReaderClient({
       // Reading progress is a convenience feature; never block the reader if storage fails.
     }
   }, [addHistory, coverImage, currentChapter, dictionary, mangaId, mangaTitle, pages.length]);
-
-  const readableChapters = dedupeChaptersByNumber(chapters).sort((a, b) => {
-    const aNum = parseChapterNumber(a);
-    const bNum = parseChapterNumber(b);
-    if (aNum !== null && bNum !== null) {
-      return aNum - bNum;
-    }
-    const aStr = normalizeChapterNumber(a) || "";
-    const bStr = normalizeChapterNumber(b) || "";
-    return aStr.localeCompare(bStr, undefined, { numeric: true, sensitivity: "base" });
-  });
   const currentChapterIndex = findChapterIndexByIdOrNumber(
     readableChapters,
     currentChapter?.id,
@@ -1474,7 +1532,6 @@ export default function ReaderClient({
   function openChapterList() {
     router.push(`/comics/${routeSlug}#chapters`);
   }
-
   const renderGraceWarning = () => {
     if (!telegramGraceStarted) return null;
     const graceStart = new Date(telegramGraceStarted);
@@ -1510,14 +1567,28 @@ export default function ReaderClient({
     );
   };
 
+  const readingProgress = activeReadingMode === "horizontal"
+    ? (pages.length > 0 ? ((horizontalPage + 1) / pages.length) * 100 : 0)
+    : scrollProgress;
+
   return (
     <main
       className={`${
         activeReadingMode === "horizontal"
           ? "h-[100dvh] max-h-[100dvh] overflow-hidden relative"
-          : "min-h-screen px-0 pb-10 pt-2"
+          : `min-h-screen px-0 ${gaplessMode ? "pb-0 pt-0" : "pb-10 pt-2"}`
       } ${THEME_CLASSES[readerTheme].bg} ${THEME_CLASSES[readerTheme].text} transition-colors duration-300`}
     >
+      {/* Sleek Premium Universal Reading Progress Bar */}
+      <div className="fixed top-0 left-0 right-0 z-[60] h-[3px] w-full bg-white/10 pointer-events-none">
+        <motion.div
+          className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-500 shadow-[0_0_8px_rgba(245,158,11,0.6)]"
+          style={{ width: `${readingProgress}%` }}
+          animate={{ width: `${readingProgress}%` }}
+          transition={{ duration: activeReadingMode === "horizontal" ? 0.22 : 0.05, ease: "easeOut" }}
+        />
+      </div>
+
       {renderGraceWarning()}
       <ReaderHeader
         isAtTop={isAtTop}
@@ -1560,6 +1631,10 @@ export default function ReaderClient({
         pageSize={pageSize}
         setPageSize={setPageSize}
         onOpenPremiumModal={() => setShowPremiumModal(true)}
+        gaplessMode={gaplessMode}
+        setGaplessMode={setGaplessMode}
+        doublePageSpread={doublePageSpread}
+        setDoublePageSpread={setDoublePageSpread}
       />
 
       {loading ? (
@@ -1689,9 +1764,11 @@ export default function ReaderClient({
                 pageSize={pageSize}
                 isReaderUiVisible={isReaderUiVisible}
                 showControlsUI={showControlsUI}
+                doublePageSpread={doublePageSpread}
+                onPageChange={setHorizontalPage}
               />
             ) : (
-              <div className={`mx-auto flex w-full flex-col transition-all duration-300 ${PAGE_SIZE_CLASSES[pageSize]}`}>
+              <div className={`mx-auto flex w-full flex-col transition-all duration-300 ${gaplessMode ? "max-w-full w-full" : PAGE_SIZE_CLASSES[pageSize]}`}>
                 {pages.map((pageUrl, index) => {
                   const showAd = !isPremium && index > 0 && index % 15 === 0 && (index / 15) <= 3;
                   return (
@@ -1705,6 +1782,7 @@ export default function ReaderClient({
                         pageIndex={index}
                         mangaId={mangaId}
                         chapterId={currentChapter?.id || ""}
+                        gaplessMode={gaplessMode}
                       />
                       {showAd && (
                         <MangaAdBanner

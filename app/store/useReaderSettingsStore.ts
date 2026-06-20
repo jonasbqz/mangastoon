@@ -11,6 +11,10 @@ type ReaderSettingsState = {
   setReadingMode: (mode: ReadingMode) => void;
   pageSize: PageSize;
   setPageSize: (size: PageSize) => void;
+  gaplessMode: boolean;
+  setGaplessMode: (enabled: boolean) => void;
+  doublePageSpread: boolean;
+  setDoublePageSpread: (enabled: boolean) => void;
 };
 
 export const useReaderSettingsStore = create<ReaderSettingsState>()(
@@ -20,6 +24,10 @@ export const useReaderSettingsStore = create<ReaderSettingsState>()(
       setReadingMode: (mode) => set({ readingMode: mode }),
       pageSize: "medium",
       setPageSize: (size) => set({ pageSize: size }),
+      gaplessMode: false,
+      setGaplessMode: (enabled) => set({ gaplessMode: enabled }),
+      doublePageSpread: false,
+      setDoublePageSpread: (enabled) => set({ doublePageSpread: enabled }),
     }),
     { name: "mangastoon-reader-settings" }
   )
