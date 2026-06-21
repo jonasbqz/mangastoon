@@ -35,30 +35,55 @@ export async function GET(request: NextRequest) {
       sessionsCountRes,
       uniqueUsersCountRes,
       pageviewsRes,
-      performanceRes
+      performanceRes,
+      exactSessionsCountRes,
+      exactPageviewsCountRes,
+      exactPerformanceCountRes
     ] = await Promise.all([
       // Total de Sesiones (últimos X días)
       supabase
         .from("analytics_sessions")
         .select("session_id, country, device, source, created_at")
-        .gte("created_at", startDate),
+        .gte("created_at", startDate)
+        .limit(5000),
       
       // Lectores Activos (únicos por user_id o session_id)
       supabase
         .from("analytics_sessions")
         .select("session_id, user_id")
-        .gte("created_at", startDate),
+        .gte("created_at", startDate)
+        .limit(5000),
 
       // Páginas y duración (últimos X días)
       supabase
         .from("analytics_pageviews")
         .select("session_id, path, duration, created_at")
-        .gte("created_at", startDate),
+        .gte("created_at", startDate)
+        .limit(5000),
 
       // Performance de carga
       supabase
         .from("analytics_performance")
         .select("load_time_ms, success, created_at")
+        .gte("created_at", startDate)
+        .limit(5000),
+
+      // Exact count for Sessions KPI (no limit)
+      supabase
+        .from("analytics_sessions")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", startDate),
+
+      // Exact count for Pageviews KPI (no limit)
+      supabase
+        .from("analytics_pageviews")
+        .select("*", { count: "exact", head: true })
+        .gte("created_at", startDate),
+
+      // Exact count for Performance measurements (no limit)
+      supabase
+        .from("analytics_performance")
+        .select("*", { count: "exact", head: true })
         .gte("created_at", startDate)
     ]);
 
@@ -68,8 +93,8 @@ export async function GET(request: NextRequest) {
     const performanceData = performanceRes.data || [];
 
     // --- PROCESAR MÉTRICAS GENERALES (KPIs) ---
-    const totalSessions = sessionsData.length;
-    const totalPageViews = pageviewsData.length;
+    const totalSessions = exactSessionsCountRes.count || 0;
+    const totalPageViews = exactPageviewsCountRes.count || 0;
     
     // Contar usuarios únicos (si user_id es nulo, sumamos por session_id)
     const uniqueUserIds = new Set<string>();
@@ -235,7 +260,7 @@ export async function GET(request: NextRequest) {
       performance: {
         avgLoadTimeMs: avgLoadTime,
         successRatePercentage: successRate,
-        totalMeasurements: performanceData.length
+        totalMeasurements: exactPerformanceCountRes.count || 0
       }
     });
   } catch (error: any) {
