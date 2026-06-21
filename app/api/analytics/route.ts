@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../utils/supabase/server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // 1. Validar que el usuario que consulta sea Administrador
     const supabase = await createClient();
@@ -25,7 +25,10 @@ export async function GET() {
       return NextResponse.json({ error: "Acceso denegado. Se requiere cuenta de administrador." }, { status: 403 });
     }
 
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    // 1.5. Obtener rango de días solicitado
+    const daysParam = request.nextUrl.searchParams.get("days");
+    const days = daysParam ? parseInt(daysParam, 10) : 30;
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
     // 2. Ejecutar consultas en paralelo para máxima optimización
     const [
@@ -34,29 +37,29 @@ export async function GET() {
       pageviewsRes,
       performanceRes
     ] = await Promise.all([
-      // Total de Sesiones (últimos 30 días)
+      // Total de Sesiones (últimos X días)
       supabase
         .from("analytics_sessions")
         .select("session_id, country, device, source, created_at")
-        .gte("created_at", thirtyDaysAgo),
+        .gte("created_at", startDate),
       
       // Lectores Activos (únicos por user_id o session_id)
       supabase
         .from("analytics_sessions")
         .select("session_id, user_id")
-        .gte("created_at", thirtyDaysAgo),
+        .gte("created_at", startDate),
 
-      // Páginas y duración (últimos 30 días)
+      // Páginas y duración (últimos X días)
       supabase
         .from("analytics_pageviews")
         .select("session_id, path, duration, created_at")
-        .gte("created_at", thirtyDaysAgo),
+        .gte("created_at", startDate),
 
       // Performance de carga
       supabase
         .from("analytics_performance")
         .select("load_time_ms, success, created_at")
-        .gte("created_at", thirtyDaysAgo)
+        .gte("created_at", startDate)
     ]);
 
     const sessionsData = sessionsCountRes.data || [];
@@ -90,23 +93,37 @@ export async function GET() {
     const averageSessionDuration = `${mins}m ${secs}s`;
 
     // --- PROCESAR GRÁFICO DIARIO DE VISITAS ---
-    // Agrupar vistas de página por fecha DD/MM
+    // Agrupar vistas de página por fecha DD/MM o HH:00 (si days === 1)
     const dailyViewsMap: { [date: string]: number } = {};
     const now = new Date();
     
-    // Inicializar los últimos 30 días con 0 para que no falten fechas en el gráfico
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const day = String(d.getDate()).padStart(2, "0");
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      dailyViewsMap[`${day}/${month}`] = 0;
+    if (days === 1) {
+      // Para las últimas 24 horas, agrupamos por bloques de hora
+      for (let i = 23; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 60 * 60 * 1000);
+        const hour = String(d.getHours()).padStart(2, "0") + ":00";
+        dailyViewsMap[hour] = 0;
+      }
+    } else {
+      // Inicializar las fechas con 0
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        dailyViewsMap[`${day}/${month}`] = 0;
+      }
     }
 
     pageviewsData.forEach(p => {
       const pDate = new Date(p.created_at);
-      const day = String(pDate.getDate()).padStart(2, "0");
-      const month = String(pDate.getMonth() + 1).padStart(2, "0");
-      const key = `${day}/${month}`;
+      let key = "";
+      if (days === 1) {
+        key = String(pDate.getHours()).padStart(2, "0") + ":00";
+      } else {
+        const day = String(pDate.getDate()).padStart(2, "0");
+        const month = String(pDate.getMonth() + 1).padStart(2, "0");
+        key = `${day}/${month}`;
+      }
       if (dailyViewsMap[key] !== undefined) {
         dailyViewsMap[key]++;
       }
@@ -196,9 +213,9 @@ export async function GET() {
 
     // --- PROCESAR PERFORMANCE DE CARGA ---
     const loadTimes = performanceData.map(p => p.load_time_ms);
-    const avgLoadTime = loadTimes.length > 0 ? Math.round(loadTimes.reduce((acc, t) => acc + t, 0) / loadTimes.length) : 0;
+    const avgLoadTime = loadTimes.length > 0 ? Math.round(loadTimes.reduce((acc, t) => acc + t, 0) / loadTimes.length) : null;
     const loadSuccesses = performanceData.filter(p => p.success).length;
-    const successRate = performanceData.length > 0 ? parseFloat(((loadSuccesses / performanceData.length) * 100).toFixed(1)) : 100;
+    const successRate = performanceData.length > 0 ? parseFloat(((loadSuccesses / performanceData.length) * 100).toFixed(1)) : null;
 
     return NextResponse.json({
       isDemo: false,

@@ -93,6 +93,8 @@ export default function AdminClient() {
   const [scraperStatusMsg, setScraperStatusMsg] = useState<string | null>(null);
   const [scraperLoading, setScraperLoading] = useState(false);
   const [enqueuingAll, setEnqueuingAll] = useState(false);
+  const [enqueuingMangaId, setEnqueuingMangaId] = useState<string | null>(null);
+  const [enqueuingSearchQuery, setEnqueuingSearchQuery] = useState<string | null>(null);
 
   // Telegram Form States (loaded inside useEffect to support Next.js SSR hydration safely)
   const [telegramBotToken, setTelegramBotToken] = useState("");
@@ -115,6 +117,8 @@ export default function AdminClient() {
   // Google Analytics States
   const [analyticsData, setAnalyticsData] = useState<any | null>(null);
   const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [selectedDays, setSelectedDays] = useState(30);
+  const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number; val: number; date: string } | null>(null);
 
   // Load localstorage values on mount
   useEffect(() => {
@@ -292,7 +296,7 @@ export default function AdminClient() {
 
       // d. Dynamic active tab data
       if (activeTab === "dashboard") {
-        await fetchAnalytics();
+        await fetchAnalytics(selectedDays);
       } else if (activeTab === "failed-searches") {
         await fetchFailedSearches();
       } else if (activeTab === "comment-moderation") {
@@ -424,6 +428,29 @@ export default function AdminClient() {
     setScraperMangaTitle(query);
     setScraperSourceUrl("");
     setActiveTab("scraper-queue");
+  };
+
+  const handleAutoEnqueueSearch = async (query: string) => {
+    setEnqueuingSearchQuery(query);
+    try {
+      const res = await fetch("/api/admin/enqueue-by-title", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: query, priority: 5 })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || "Manga agregado a la cola con éxito.");
+        await fetchScraperQueue();
+      } else {
+        alert("Error: " + (data.error || "No se pudo encolar automáticamente."));
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Error de red al intentar encolar: " + err.message);
+    } finally {
+      setEnqueuingSearchQuery(null);
+    }
   };
 
   const handleDeleteComment = async (commentId: string) => {
@@ -590,7 +617,7 @@ export default function AdminClient() {
   useEffect(() => {
     if (!currentUserProfile?.is_admin) return;
     if (activeTab === "dashboard") {
-      fetchAnalytics();
+      fetchAnalytics(selectedDays);
     } else if (activeTab === "failed-searches") {
       fetchFailedSearches();
     } else if (activeTab === "comment-moderation") {
@@ -598,7 +625,7 @@ export default function AdminClient() {
     } else if (activeTab === "scraper-queue") {
       fetchScraperQueue();
     }
-  }, [activeTab, currentUserProfile]);
+  }, [activeTab, currentUserProfile, selectedDays]);
 
   // Handle Login
   const handleLogin = async (e: React.FormEvent) => {
@@ -716,6 +743,30 @@ export default function AdminClient() {
     }
   };
 
+  // Enqueue a single broken manga to scraper queue
+  const handleEnqueueSingleBroken = async (mangaId: string) => {
+    setEnqueuingMangaId(mangaId);
+    try {
+      const res = await fetch("/api/admin/enqueue-broken", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mangaId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(data.message || "Manga encolado con éxito.");
+        await fetchScraperQueue();
+      } else {
+        alert("Error: " + (data.error || "Ocurrió un error inesperado."));
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Error: " + (err.message || "Error de red al intentar encolar."));
+    } finally {
+      setEnqueuingMangaId(null);
+    }
+  };
+
   // Add new administrator
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -788,10 +839,10 @@ export default function AdminClient() {
   };
 
   // Fetch Google Analytics v4 Data
-  const fetchAnalytics = async () => {
+  const fetchAnalytics = async (days: number = 30) => {
     setLoadingAnalytics(true);
     try {
-      const response = await fetch("/api/analytics");
+      const response = await fetch(`/api/analytics?days=${days}`);
       if (response.ok) {
         const data = await response.json();
         setAnalyticsData(data);
@@ -1113,7 +1164,15 @@ export default function AdminClient() {
           <div>
             {/* Cards Grid */}
             <div className="stats-grid">
-              <div className="stat-card glass-panel">
+              <div 
+                className="stat-card glass-panel"
+                style={{ cursor: "pointer", transition: "all 0.2s ease" }}
+                onClick={() => {
+                  const el = document.getElementById("active-readers-section");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                title="Hacer clic para ver el listado de lectores activos"
+              >
                 <div className="stat-info">
                   <span className="stat-label">Usuarios en línea (3m)</span>
                   <span className="stat-value">{activeUsers.length}</span>
@@ -1146,14 +1205,36 @@ export default function AdminClient() {
 
             {/* StoonAnalytics Telemetry Section */}
             <div className="analytics-section" style={{ marginTop: "32px", marginBottom: "32px" }}>
-              <div className="section-title-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <div className="section-title-row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", flexWrap: "wrap", gap: "12px" }}>
                 <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "8px", fontFamily: "var(--font-heading)" }}>
                   <TrendingUp size={18} className="text-primary" />
-                  Métricas de Telemetría StoonAnalytics (Últimos 30 días)
+                  Métricas de Telemetría StoonAnalytics
                 </h2>
-                {analyticsData?.isDemo && (
-                  <span className="badge badge-yellow" style={{ fontSize: "10px" }}>Modo Simulación</span>
-                )}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  {analyticsData?.isDemo && (
+                    <span className="badge badge-yellow" style={{ fontSize: "10px" }}>Modo Simulación</span>
+                  )}
+                  <select
+                    value={selectedDays}
+                    onChange={(e) => setSelectedDays(Number(e.target.value))}
+                    style={{
+                      background: "var(--bg-secondary)",
+                      border: "1px solid rgba(255,107,0,0.2)",
+                      borderRadius: "6px",
+                      color: "var(--text-primary)",
+                      padding: "6px 12px",
+                      fontSize: "13px",
+                      outline: "none",
+                      cursor: "pointer",
+                      fontFamily: "inherit"
+                    }}
+                  >
+                    <option value={1}>Últimas 24 horas</option>
+                    <option value={7}>Últimos 7 días</option>
+                    <option value={30}>Últimos 30 días</option>
+                    <option value={90}>Últimos 90 días</option>
+                  </select>
+                </div>
               </div>
 
               {loadingAnalytics && !analyticsData ? (
@@ -1202,18 +1283,28 @@ export default function AdminClient() {
                       </div>
                     </div>
                     <div className="stat-card glass-panel" style={{ padding: "16px 20px" }}>
-                      <div className="stat-info">
-                        <span className="stat-label">Carga Hojas (Prom)</span>
-                        <span className="stat-value" style={{ fontSize: "24px", color: "var(--accent-blue)" }}>
-                          {analyticsData.performance?.avgLoadTimeMs !== undefined ? (analyticsData.performance.avgLoadTimeMs / 1000).toFixed(2) + "s" : "0.00s"}
+                      <div className="stat-info" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
+                        <div>
+                          <span className="stat-label">Carga Hojas (Prom)</span>
+                          <span className="stat-value" style={{ fontSize: "24px", color: "var(--accent-blue)" }}>
+                            {analyticsData.performance?.avgLoadTimeMs !== null && analyticsData.performance?.avgLoadTimeMs !== undefined ? (analyticsData.performance.avgLoadTimeMs / 1000).toFixed(2) + "s" : "Sin datos"}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px" }}>
+                          {analyticsData.performance?.totalMeasurements ? `${analyticsData.performance.totalMeasurements.toLocaleString()} mediciones` : "Sin mediciones"}
                         </span>
                       </div>
                     </div>
                     <div className="stat-card glass-panel" style={{ padding: "16px 20px" }}>
-                      <div className="stat-info">
-                        <span className="stat-label font-bold">Carga Exitosa</span>
-                        <span className="stat-value" style={{ fontSize: "24px", color: "var(--accent-green)" }}>
-                          {analyticsData.performance?.successRatePercentage !== undefined ? analyticsData.performance.successRatePercentage + "%" : "100%"}
+                      <div className="stat-info" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
+                        <div>
+                          <span className="stat-label font-bold">Carga Exitosa</span>
+                          <span className="stat-value" style={{ fontSize: "24px", color: "var(--accent-green)" }}>
+                            {analyticsData.performance?.successRatePercentage !== null && analyticsData.performance?.successRatePercentage !== undefined ? analyticsData.performance.successRatePercentage + "%" : "Sin datos"}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px" }}>
+                          {analyticsData.performance?.totalMeasurements ? `${analyticsData.performance.totalMeasurements.toLocaleString()} mediciones` : "Sin mediciones"}
                         </span>
                       </div>
                     </div>
@@ -1238,11 +1329,11 @@ export default function AdminClient() {
                               const views = points.map((p: any) => p.views);
                               const maxVal = Math.max(...views, 100);
                               const minVal = Math.min(...views, 0);
-                              const range = maxVal - minVal;
+                              const range = maxVal - minVal || 1;
 
                               // Generate SVG path string
                               const pathPoints = points.map((p: any, idx: number) => {
-                                const x = (idx / (points.length - 1)) * width;
+                                const x = points.length > 1 ? (idx / (points.length - 1)) * width : width / 2;
                                 const y = height - ((p.views - minVal) / range) * (height - 20) - 10;
                                 return { x, y, val: p.views, date: p.date };
                               });
@@ -1254,35 +1345,121 @@ export default function AdminClient() {
                               const areaPath = `${linePath} L ${width} ${height} L 0 ${height} Z`;
 
                               return (
-                                <svg
-                                  viewBox={`0 0 ${width} ${height}`}
-                                  width="100%"
-                                  height="100%"
-                                  preserveAspectRatio="none"
-                                  style={{ overflow: "visible" }}
-                                >
-                                  <defs>
-                                    <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.4" stroke="none" />
-                                      <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.0" stroke="none" />
-                                    </linearGradient>
-                                  </defs>
-                                  {/* Grid Lines */}
-                                  <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,107,0,0.05)" strokeDasharray="3,3" />
-                                  <line x1="0" y1={height - 10} x2={width} y2={height - 10} stroke="rgba(255,107,0,0.1)" />
-                                  
-                                  {/* Area */}
-                                  <path d={areaPath} fill="url(#chartGradient)" />
-                                  {/* Line */}
-                                  <path d={linePath} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                                  
-                                  {/* Dots for hover references */}
-                                  {pathPoints.filter((_: any, i: number) => i % 5 === 0 || i === pathPoints.length - 1).map((p: any, idx: number) => (
-                                    <g key={idx}>
-                                      <circle cx={p.x} cy={p.y} r="4" fill="var(--primary)" stroke="var(--bg-secondary)" strokeWidth="1.5" />
-                                    </g>
-                                  ))}
-                                </svg>
+                                <>
+                                  <svg
+                                    viewBox={`0 0 ${width} ${height}`}
+                                    width="100%"
+                                    height="100%"
+                                    preserveAspectRatio="none"
+                                    style={{ overflow: "visible" }}
+                                    onMouseLeave={() => setHoveredPoint(null)}
+                                  >
+                                    <defs>
+                                      <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.4" stroke="none" />
+                                        <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.0" stroke="none" />
+                                      </linearGradient>
+                                    </defs>
+                                    {/* Grid Lines */}
+                                    <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="rgba(255,107,0,0.05)" strokeDasharray="3,3" />
+                                    <line x1="0" y1={height - 10} x2={width} y2={height - 10} stroke="rgba(255,107,0,0.1)" />
+                                    
+                                    {/* Area */}
+                                    <path d={areaPath} fill="url(#chartGradient)" />
+                                    {/* Line */}
+                                    <path d={linePath} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                                    
+                                    {/* Vertical cursor line */}
+                                    {hoveredPoint && (
+                                      <line
+                                        x1={hoveredPoint.x}
+                                        y1={0}
+                                        x2={hoveredPoint.x}
+                                        y2={height}
+                                        stroke="var(--primary)"
+                                        strokeOpacity="0.4"
+                                        strokeDasharray="4,4"
+                                        strokeWidth="1.5"
+                                      />
+                                    )}
+
+                                    {/* Dots for hover references */}
+                                    {pathPoints.filter((_: any, i: number) => i % 5 === 0 || i === pathPoints.length - 1).map((p: any, idx: number) => (
+                                      <g key={idx}>
+                                        <circle cx={p.x} cy={p.y} r="4" fill="var(--primary)" stroke="var(--bg-secondary)" strokeWidth="1.5" />
+                                      </g>
+                                    ))}
+
+                                    {/* Highlighted active point */}
+                                    {hoveredPoint && (
+                                      <>
+                                        <circle
+                                          cx={hoveredPoint.x}
+                                          cy={hoveredPoint.y}
+                                          r="7"
+                                          fill="var(--primary)"
+                                          fillOpacity="0.3"
+                                        />
+                                        <circle
+                                          cx={hoveredPoint.x}
+                                          cy={hoveredPoint.y}
+                                          r="4"
+                                          fill="var(--primary)"
+                                          stroke="var(--bg-secondary)"
+                                          strokeWidth="2"
+                                        />
+                                      </>
+                                    )}
+
+                                    {/* Transparent columns for hover interaction */}
+                                    {pathPoints.map((p: any, idx: number) => {
+                                      const rectW = points.length > 1 ? width / (points.length - 1) : width;
+                                      const rectX = points.length > 1 ? p.x - rectW / 2 : 0;
+                                      return (
+                                        <rect
+                                          key={idx}
+                                          x={Math.max(0, rectX)}
+                                          y={0}
+                                          width={rectW}
+                                          height={height}
+                                          fill="transparent"
+                                          style={{ cursor: "pointer" }}
+                                          onMouseEnter={() => setHoveredPoint(p)}
+                                        />
+                                      );
+                                    })}
+                                  </svg>
+
+                                  {/* Absolute-positioned dynamic tooltip */}
+                                  {hoveredPoint && (
+                                    <div
+                                      style={{
+                                        position: "absolute",
+                                        left: `${(hoveredPoint.x / width) * 100}%`,
+                                        top: `${(hoveredPoint.y / height) * 100}%`,
+                                        transform: "translate(-50%, -125%)",
+                                        background: "var(--bg-secondary)",
+                                        border: "1px solid rgba(255,107,0,0.3)",
+                                        borderRadius: "6px",
+                                        padding: "6px 10px",
+                                        boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+                                        pointerEvents: "none",
+                                        zIndex: 10,
+                                        whiteSpace: "nowrap",
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "2px"
+                                      }}
+                                    >
+                                      <span style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: 500 }}>
+                                        {hoveredPoint.date}
+                                      </span>
+                                      <span style={{ fontSize: "12px", color: "var(--text-primary)", fontWeight: 700 }}>
+                                        {hoveredPoint.val.toLocaleString()} vistas
+                                      </span>
+                                    </div>
+                                  )}
+                                </>
                               );
                             })()}
                           </div>
@@ -1408,7 +1585,7 @@ export default function AdminClient() {
             {/* Split panels */}
             <div className="panel-grid">
               {/* Online Users List */}
-              <div className="panel-card glass-panel">
+              <div className="panel-card glass-panel" id="active-readers-section">
                 <div className="panel-title-row">
                   <h3 className="panel-title">
                     <Globe size={18} className="text-primary" />
@@ -1509,11 +1686,24 @@ export default function AdminClient() {
                               </div>
                             </td>
                             <td>
-                              <div style={{ display: "flex", gap: "6px" }}>
+                              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                                 <button
                                   className="action-btn"
-                                  title="Marcar como resuelto"
-                                  style={{ color: "var(--accent-green)" }}
+                                  title="Re-escanear Manga: Agrega a la cola del scraper para corregir"
+                                  style={{ color: "var(--primary)" }}
+                                  onClick={() => handleEnqueueSingleBroken(ch.manga_id)}
+                                  disabled={enqueuingMangaId === ch.manga_id}
+                                >
+                                  {enqueuingMangaId === ch.manga_id ? (
+                                    <RefreshCw size={14} className="animate-spin" />
+                                  ) : (
+                                    <Zap size={14} />
+                                  )}
+                                </button>
+                                <button
+                                  className="action-btn"
+                                  title="Borrar Alerta: Descartar el reporte de la base de datos sin re-escanear"
+                                  style={{ color: "var(--accent-red)" }}
                                   onClick={() => handleResolveChapter(ch.id)}
                                 >
                                   <CheckCircle size={14} />
@@ -1582,6 +1772,12 @@ export default function AdminClient() {
               )}
             </div>
 
+            <div style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "16px", padding: "12px 16px", background: "rgba(255,107,0,0.05)", borderRadius: "6px", borderLeft: "3px solid var(--primary)", lineHeight: "1.6" }}>
+              <strong>Gestión de Capítulos Rotos:</strong><br />
+              • <strong>Re-escanear Manga:</strong> Envía el manga a la cola del scraper para descargar las páginas que faltan y solucionar el problema.<br />
+              • <strong>Borrar Alerta (Descartar):</strong> Elimina el reporte de la base de datos de alertas sin realizar ningún re-escaneo. Usalo si ya se solucionó o es una falsa alarma.
+            </div>
+
             <div className="table-wrapper">
               {brokenChapters.length === 0 ? (
                 <div className="empty-state" style={{ padding: "60px 20px" }}>
@@ -1617,21 +1813,62 @@ export default function AdminClient() {
                           {new Date(ch.detected_at).toLocaleString()}
                         </td>
                         <td>
-                          <div style={{ display: "flex", gap: "10px" }}>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            <button
+                              className="btn-primary"
+                              style={{ 
+                                padding: "6px 12px", 
+                                fontSize: "11px", 
+                                background: "var(--primary)", 
+                                color: "white",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                width: "auto"
+                              }}
+                              onClick={() => handleEnqueueSingleBroken(ch.manga_id)}
+                              disabled={enqueuingMangaId === ch.manga_id}
+                              title="Re-escanear Manga: Agrega este manga a la cola del scraper para descargar las páginas faltantes."
+                            >
+                              {enqueuingMangaId === ch.manga_id ? (
+                                <RefreshCw size={12} className="animate-spin" />
+                              ) : (
+                                <Zap size={12} />
+                              )}
+                              <span>Re-escanear Manga</span>
+                            </button>
+
                             <button
                               className="btn-secondary"
-                              style={{ padding: "6px 12px", fontSize: "11px", borderColor: "rgba(16, 185, 129, 0.2)", color: "var(--accent-green)" }}
+                              style={{ 
+                                padding: "6px 12px", 
+                                fontSize: "11px", 
+                                borderColor: "rgba(239, 68, 68, 0.2)", 
+                                color: "var(--accent-red)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px"
+                              }}
                               onClick={() => handleResolveChapter(ch.id)}
+                              title="Borrar Alerta (Descartar): Quita esta alerta de la base de datos sin re-escanear."
                             >
                               <CheckCircle size={12} />
-                              <span>Resolver</span>
+                              <span>Borrar Alerta (Descartar)</span>
                             </button>
+
                             <a
                               href={`https://mangastoon.com/comics/${ch.manga_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="btn-secondary"
-                              style={{ padding: "6px 12px", fontSize: "11px" }}
+                              style={{ 
+                                padding: "6px 12px", 
+                                fontSize: "11px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px"
+                              }}
+                              title="Ver Manga en el Frontend público"
                             >
                               <ExternalLink size={12} />
                               <span>Manga</span>
@@ -1688,19 +1925,59 @@ export default function AdminClient() {
                           {new Date(s.last_searched).toLocaleString()}
                         </td>
                         <td>
-                          <div style={{ display: "flex", gap: "10px" }}>
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                             <button
                               className="btn-primary"
-                              style={{ padding: "6px 12px", fontSize: "11px" }}
-                              onClick={() => handleEnqueueSearch(s.query)}
+                              style={{ 
+                                padding: "6px 12px", 
+                                fontSize: "11px", 
+                                background: "var(--primary)",
+                                color: "white",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px"
+                              }}
+                              onClick={() => handleAutoEnqueueSearch(s.query)}
+                              disabled={enqueuingSearchQuery === s.query}
+                              title="Auto-encolar: Busca en LeerCapítulo/MangaDex de forma automática e inserta en la cola."
                             >
-                              <Plus size={12} />
-                              <span>Mandar al Scraper</span>
+                              {enqueuingSearchQuery === s.query ? (
+                                <RefreshCw size={12} className="animate-spin" />
+                              ) : (
+                                <Zap size={12} />
+                              )}
+                              <span>Auto-encolar</span>
                             </button>
+
                             <button
                               className="btn-secondary"
-                              style={{ padding: "6px 12px", fontSize: "11px", borderColor: "rgba(16, 185, 129, 0.2)", color: "var(--accent-green)" }}
+                              style={{ 
+                                padding: "6px 12px", 
+                                fontSize: "11px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px"
+                              }}
+                              onClick={() => handleEnqueueSearch(s.query)}
+                              title="Configurar Manual: Te redirige al formulario del scraper con el título pre-cargado para fijar la URL y prioridad."
+                            >
+                              <Plus size={12} />
+                              <span>Configurar Manual</span>
+                            </button>
+
+                            <button
+                              className="btn-secondary"
+                              style={{ 
+                                padding: "6px 12px", 
+                                fontSize: "11px", 
+                                borderColor: "rgba(16, 185, 129, 0.2)", 
+                                color: "var(--accent-green)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px"
+                              }}
                               onClick={() => handleResolveSearch(s.id)}
+                              title="Resolver: Marca este término como resuelto o descartado."
                             >
                               <CheckCircle size={12} />
                               <span>Resolver</span>

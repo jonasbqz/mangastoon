@@ -68,10 +68,41 @@ export default function ChapterList({
 }: ChapterListProps) {
   const history = useHistoryStore((state) => state.history);
   const [mounted, setMounted] = useState(false);
+  const [progressMap, setProgressMap] = useState<Record<string, { page: number; total: number }>>({});
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+    try {
+      const tempMap: Record<string, { page: number; total: number }> = {};
+      const targetMangaId = mangaId.startsWith("lc-") ? mangaId.substring(3) : mangaId;
+      const cleanMangaId = extractComicIdFromSlugId(targetMangaId);
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith("mangastoon_progress:")) {
+          const parts = key.split(":");
+          if (parts.length >= 3) {
+            const keyMangaId = parts[1];
+            const chapterId = parts.slice(2).join(":");
+
+            const cleanKeyMangaId = extractComicIdFromSlugId(keyMangaId.startsWith("lc-") ? keyMangaId.substring(3) : keyMangaId);
+            if (cleanKeyMangaId === cleanMangaId) {
+              const val = localStorage.getItem(key);
+              if (val) {
+                const parsed = JSON.parse(val);
+                if (parsed && typeof parsed.page === "number" && typeof parsed.total === "number") {
+                  tempMap[chapterId] = parsed;
+                }
+              }
+            }
+          }
+        }
+      }
+      setProgressMap(tempMap);
+    } catch (e) {
+      console.error("Error loading progress from localStorage:", e);
+    }
+  }, [mangaId]);
 
   const cleanId = (id: string) => {
     const cleaned = id.startsWith("lc-") ? id.substring(3) : id;
@@ -79,17 +110,18 @@ export default function ChapterList({
   };
   const mangaHistory = mounted ? history.find((h) => cleanId(h.mangaId) === cleanId(mangaId)) : null;
 
-  const getIsRead = (chapterId: string, chapterLabel: string) => {
-    if (!mangaHistory) return false;
-    if (mangaHistory.chapterId === chapterId) return true;
+  const getIsRead = (chapterId: string) => {
+    if (!mounted) return false;
 
-    const readNum = parseFloat(mangaHistory.chapterNumber);
-    if (isNaN(readNum)) return false;
+    const progress = progressMap[chapterId];
+    if (progress && progress.total > 0) {
+      if (progress.page >= progress.total - 1) {
+        return true;
+      }
+    }
 
-    const match = chapterLabel.match(/\d+(?:\.\d+)?/);
-    if (match) {
-      const currentNum = parseFloat(match[0]);
-      return !isNaN(currentNum) && currentNum <= readNum;
+    if (mangaHistory && mangaHistory.chapterId === chapterId) {
+      return true;
     }
 
     return false;
@@ -180,17 +212,34 @@ export default function ChapterList({
 
       <div className="grid grid-cols-1 gap-2 sm:block">
         {visibleRows.map(({ chapter, chapterLabel, publishedLabel }) => {
-          const isRead = getIsRead(chapter.id, chapterLabel);
+          const isRead = getIsRead(chapter.id);
           return (
             <Link
               key={chapter.id}
               href={buildChapterPath(mangaTitle, routeSlug || (mangaId.startsWith("lc-") ? mangaId.substring(3) : mangaId), chapter.id, language)}
-              className={`animate-soft-enter flex items-center justify-between gap-2 rounded-xl border p-3 transition-all duration-300 sm:mb-2 sm:gap-3 sm:p-4 ${
+              className={`animate-soft-enter relative overflow-hidden flex items-center justify-between gap-2 rounded-xl border p-3 transition-all duration-300 sm:mb-2 sm:gap-3 sm:p-4 ${
                 isRead 
                   ? "border-white/[0.02] bg-white/[0.02] hover:bg-white/[0.04]" 
                   : "border-white/5 bg-white/5 hover:bg-white/10"
               }`}
             >
+              {mounted && (() => {
+                const progress = progressMap[chapter.id];
+                if (progress && progress.total > 0) {
+                  const percent = progress.total === 1 
+                    ? 100 
+                    : Math.min(100, Math.max(0, (progress.page / (progress.total - 1)) * 100));
+                  if (percent > 0) {
+                    return (
+                      <div 
+                        className="absolute bottom-0 left-0 h-[3px] bg-amber-500 transition-all duration-300"
+                        style={{ width: `${percent}%` }}
+                      />
+                    );
+                  }
+                }
+                return null;
+              })()}
               <div className="flex min-w-0 items-center gap-3">
                 <BookOpen className={`h-4 w-4 shrink-0 sm:h-5 sm:w-5 transition-colors duration-300 ${isRead ? "text-amber-500/35" : "text-amber-500"}`} />
                 <p className={`text-sm sm:text-base transition-colors duration-300 ${isRead ? "text-neutral-400/60 font-medium" : "text-white font-semibold"}`}>{chapterLabel}</p>

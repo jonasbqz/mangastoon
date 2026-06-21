@@ -989,6 +989,10 @@ export default function ReaderClient({
             `mangastoon_last_page:${mangaId}:${currentChapter.id}`,
             String(currentVisibleIndex)
           );
+          localStorage.setItem(
+            `mangastoon_progress:${mangaId}:${currentChapter.id}`,
+            JSON.stringify({ page: currentVisibleIndex, total: pages.length })
+          );
         } catch {}
       }, 150);
     };

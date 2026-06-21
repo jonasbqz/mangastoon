@@ -43,6 +43,57 @@ function parseUserAgent(ua: string | null) {
   return { device, browser };
 }
 
+async function ensureSessionExists(supabaseDb: any, session_id: string, request: NextRequest) {
+  try {
+    const { data, error } = await supabaseDb
+      .from("analytics_sessions")
+      .select("session_id")
+      .eq("session_id", session_id)
+      .maybeSingle();
+
+    if (!data && !error) {
+      const userAgent = request.headers.get("user-agent") || "";
+      let device = "Desktop";
+      let browser = "Otros";
+      
+      const lower = userAgent.toLowerCase();
+      if (lower.includes("ipad") || lower.includes("tablet") || (lower.includes("android") && !lower.includes("mobile"))) {
+        device = "Tablet";
+      } else if (lower.includes("mobile") || lower.includes("iphone") || lower.includes("android")) {
+        device = "Mobile";
+      }
+
+      if (lower.includes("chrome") || lower.includes("criod")) browser = "Chrome";
+      else if (lower.includes("firefox")) browser = "Firefox";
+      else if (lower.includes("safari") && !lower.includes("chrome")) browser = "Safari";
+      else if (lower.includes("edge") || lower.includes("edg/")) browser = "Edge";
+      else if (lower.includes("opera") || lower.includes("opr/")) browser = "Opera";
+
+      const country = 
+        request.headers.get("x-vercel-ip-country") || 
+        request.headers.get("cf-ipcountry") || 
+        request.headers.get("x-real-ip-country") ||
+        "Desconocido";
+
+      await supabaseDb
+        .from("analytics_sessions")
+        .insert({
+          session_id,
+          user_id: null,
+          referrer: null,
+          source: "Direct",
+          device,
+          browser,
+          country,
+          has_adblocker: false,
+          created_at: new Date().toISOString()
+        });
+    }
+  } catch (err) {
+    console.error("[StoonAnalytics] Error in ensureSessionExists:", err);
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -72,6 +123,11 @@ export async function POST(request: NextRequest) {
       request.headers.get("x-real-ip-country") ||
       "Desconocido";
 
+    // Asegurar que la sesión exista antes de insertar cualquier métrica secundaria para evitar violaciones de FK
+    if (type === "pageview" || type === "heartbeat" || type === "event" || type === "performance") {
+      await ensureSessionExists(supabaseDb, session_id, request);
+    }
+
     // 1. REGISTRO DE INICIO DE SESIÓN
     if (type === "session_start") {
       const userAgent = request.headers.get("user-agent");
@@ -87,7 +143,7 @@ export async function POST(request: NextRequest) {
 
       let { error } = await supabaseDb
         .from("analytics_sessions")
-        .insert({
+        .upsert({
           session_id,
           user_id: userId,
           referrer,
@@ -97,13 +153,13 @@ export async function POST(request: NextRequest) {
           country,
           has_adblocker: hasAdblocker,
           created_at: new Date().toISOString()
-        });
+        }, { onConflict: "session_id" });
 
       // Si falla por violación de clave foránea (usuario inexistente en profiles), reintentamos sin user_id.
       if (error && error.code === "23503") {
         const retryResult = await supabaseDb
           .from("analytics_sessions")
-          .insert({
+          .upsert({
             session_id,
             user_id: null,
             referrer,
@@ -113,13 +169,12 @@ export async function POST(request: NextRequest) {
             country,
             has_adblocker: hasAdblocker,
             created_at: new Date().toISOString()
-          });
+          }, { onConflict: "session_id" });
         error = retryResult.error;
       }
 
-      // Ignorar error de clave duplicada (sesión ya registrada — comportamiento esperado)
-      if (error && error.code !== "23505") {
-        console.error("[StoonAnalytics] Error al insertar sesión:", error.message, error.code);
+      if (error) {
+        console.error("[StoonAnalytics] Error al registrar/actualizar sesión:", error.message, error.code);
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
 

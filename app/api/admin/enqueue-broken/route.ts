@@ -34,10 +34,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Acceso denegado. Se requiere cuenta de administrador." }, { status: 403 });
     }
 
-    // Fetch all broken chapters
-    const { data: brokenChapters, error: fetchError } = await supabase
+    let targetMangaId: string | null = null;
+    try {
+      const body = await request.json();
+      targetMangaId = body?.mangaId || null;
+    } catch {}
+
+    // Fetch broken chapters (filter by mangaId if specified)
+    let query = supabase
       .from("broken_chapters")
       .select("manga_id, manga_title");
+
+    if (targetMangaId) {
+      query = query.eq("manga_id", targetMangaId);
+    }
+
+    const { data: brokenChapters, error: fetchError } = await query;
 
     if (fetchError) {
       return NextResponse.json({ error: `Error fetching broken chapters: ${fetchError.message}` }, { status: 500 });

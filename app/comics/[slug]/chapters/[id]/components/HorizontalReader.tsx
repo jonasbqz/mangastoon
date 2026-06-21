@@ -264,6 +264,10 @@ export default function HorizontalReader({
     if (!pages || pages.length === 0) return;
     try {
       localStorage.setItem(`mangastoon_last_page:${mangaId}:${chapterId}`, String(currentPage));
+      localStorage.setItem(
+        `mangastoon_progress:${mangaId}:${chapterId}`,
+        JSON.stringify({ page: currentPage, total: pages.length })
+      );
     } catch {}
   }, [currentPage, mangaId, chapterId, pages.length]);
 
