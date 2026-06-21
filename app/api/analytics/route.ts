@@ -1,6 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../utils/supabase/server";
 
+async function fetchAllPageviews(supabase: any, startDate: string) {
+  let allData: any[] = [];
+  let from = 0;
+  let to = 4999;
+  let hasMore = true;
+  
+  while (hasMore && allData.length < 30000) { // Capped at 30k for safety
+    const { data, error } = await supabase
+      .from("analytics_pageviews")
+      .select("session_id, path, duration, created_at")
+      .gte("created_at", startDate)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+      
+    if (error || !data || data.length === 0) {
+      hasMore = false;
+    } else {
+      allData = allData.concat(data);
+      if (data.length < 5000) {
+        hasMore = false;
+      } else {
+        from += 5000;
+        to += 5000;
+      }
+    }
+  }
+  return allData;
+}
+
+async function fetchAllSessions(supabase: any, startDate: string) {
+  let allData: any[] = [];
+  let from = 0;
+  let to = 4999;
+  let hasMore = true;
+  
+  while (hasMore && allData.length < 20000) { // Capped at 20k for safety
+    const { data, error } = await supabase
+      .from("analytics_sessions")
+      .select("session_id, user_id, country, device, source, created_at")
+      .gte("created_at", startDate)
+      .order("created_at", { ascending: false })
+      .range(from, to);
+      
+    if (error || !data || data.length === 0) {
+      hasMore = false;
+    } else {
+      allData = allData.concat(data);
+      if (data.length < 5000) {
+        hasMore = false;
+      } else {
+        from += 5000;
+        to += 5000;
+      }
+    }
+  }
+  return allData;
+}
+
 export async function GET(request: NextRequest) {
   try {
     // 1. Validar que el usuario que consulta sea Administrador
@@ -30,66 +88,43 @@ export async function GET(request: NextRequest) {
     const days = daysParam ? parseInt(daysParam, 10) : 30;
     const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-    // 2. Ejecutar consultas en paralelo para máxima optimización
+    // 2. Ejecutar consultas en paralelo para máxima optimización (Conteos exactos y muestras de rendimiento)
     const [
-      sessionsCountRes,
-      uniqueUsersCountRes,
-      pageviewsRes,
       performanceRes,
       exactSessionsCountRes,
       exactPageviewsCountRes,
       exactPerformanceCountRes
     ] = await Promise.all([
-      // Total de Sesiones (últimos X días)
-      supabase
-        .from("analytics_sessions")
-        .select("session_id, country, device, source, created_at")
-        .gte("created_at", startDate)
-        .limit(5000),
-      
-      // Lectores Activos (únicos por user_id o session_id)
-      supabase
-        .from("analytics_sessions")
-        .select("session_id, user_id")
-        .gte("created_at", startDate)
-        .limit(5000),
-
-      // Páginas y duración (últimos X días)
-      supabase
-        .from("analytics_pageviews")
-        .select("session_id, path, duration, created_at")
-        .gte("created_at", startDate)
-        .limit(5000),
-
-      // Performance de carga
+      // Performance de carga (muestra de las 5000 más recientes para promedios)
       supabase
         .from("analytics_performance")
         .select("load_time_ms, success, created_at")
         .gte("created_at", startDate)
+        .order("created_at", { ascending: false })
         .limit(5000),
 
-      // Exact count for Sessions KPI (no limit)
+      // Conteo exacto de Sesiones (sin límite)
       supabase
         .from("analytics_sessions")
         .select("*", { count: "exact", head: true })
         .gte("created_at", startDate),
 
-      // Exact count for Pageviews KPI (no limit)
+      // Conteo exacto de Pageviews (sin límite)
       supabase
         .from("analytics_pageviews")
         .select("*", { count: "exact", head: true })
         .gte("created_at", startDate),
 
-      // Exact count for Performance measurements (no limit)
+      // Conteo exacto de Mediciones de rendimiento (sin límite)
       supabase
         .from("analytics_performance")
         .select("*", { count: "exact", head: true })
         .gte("created_at", startDate)
     ]);
 
-    const sessionsData = sessionsCountRes.data || [];
-    const uniqueUsersData = uniqueUsersCountRes.data || [];
-    const pageviewsData = pageviewsRes.data || [];
+    // 3. Obtener todo el historial de sesiones y vistas paginado de forma recursiva e indexada
+    const sessionsData = await fetchAllSessions(supabase, startDate);
+    const pageviewsData = await fetchAllPageviews(supabase, startDate);
     const performanceData = performanceRes.data || [];
 
     // --- PROCESAR MÉTRICAS GENERALES (KPIs) ---
@@ -99,7 +134,7 @@ export async function GET(request: NextRequest) {
     // Contar usuarios únicos (si user_id es nulo, sumamos por session_id)
     const uniqueUserIds = new Set<string>();
     const anonSessionIds = new Set<string>();
-    uniqueUsersData.forEach(row => {
+    sessionsData.forEach(row => {
       if (row.user_id) {
         uniqueUserIds.add(row.user_id);
       } else {
