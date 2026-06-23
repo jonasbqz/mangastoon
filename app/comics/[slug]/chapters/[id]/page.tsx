@@ -227,7 +227,16 @@ export default async function ReadPage({
   const chapterId = resolvedSearchParams.chapter ?? id;
   const data = await cachedFetchReaderData({ id: mangaId, chapter: chapterId, lang, slug });
 
-  if (!data || !data.currentChapter || data.code === "LOCAL_PAGES_UNAVAILABLE") {
+  const isEnglishFallbackExternal = !!data?.englishFallbackChapter?.attributes?.externalUrl;
+  const hasNoNativeFallback = !data?.englishFallbackChapter || isEnglishFallbackExternal;
+  const isCurrentChapterExternal = !!data?.currentChapter?.attributes?.externalUrl;
+
+  if (
+    !data ||
+    !data.currentChapter ||
+    data.code === "LOCAL_PAGES_UNAVAILABLE" ||
+    ((!data.pages || data.pages.length === 0 || isCurrentChapterExternal) && hasNoNativeFallback)
+  ) {
     notFound();
   }
 

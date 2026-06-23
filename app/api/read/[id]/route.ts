@@ -1056,7 +1056,11 @@ async function resolveChapterByNumber(
   if (!response.ok) return null;
 
   const payload = (await response.json()) as ChapterFeedResponse;
-  return payload.data?.[0] ?? null;
+  const chapter = payload.data?.[0] ?? null;
+  if (chapter?.attributes?.externalUrl) {
+    return null;
+  }
+  return chapter;
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -1400,6 +1404,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       ]);
 
       if (requestedChapter) {
+        const isExternal = !!requestedChapter.attributes?.externalUrl;
+
+        if (isExternal) {
+          return cachedReadResponse(responseCacheKey, {
+            mangaTitle: mangaIdentity.title,
+            coverImage: mangaIdentity.coverImage,
+            chapters: [],
+            currentChapter: stripChapterForClient(requestedChapter),
+            pages: [],
+            englishFallbackChapter: null,
+            fallbackReason: "unavailable",
+            error: "Capítulo externo no disponible.",
+            code: "LOCAL_PAGES_UNAVAILABLE",
+          }, { status: 404 });
+        }
+
         const pages = await fetchChapterPages(chapterId, {
           mangaSegments: mangaIdentity.segments,
           chapter: requestedChapter,
@@ -1483,6 +1503,23 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         fallbackReason = "unavailable";
       }
 
+      const isEnglishFallbackExternal = !!englishFallbackChapter?.attributes?.externalUrl;
+      const hasNoNativeFallback = !englishFallbackChapter || isEnglishFallbackExternal;
+
+      if (hasNoNativeFallback) {
+        return cachedReadResponse(responseCacheKey, {
+          mangaTitle,
+          coverImage,
+          chapters: excludeChapters ? [] : stripChaptersForClient(finalChapters),
+          currentChapter: stripChapterForClient(requestedChapter ?? { id: chapterId, attributes: { chapter: requestedChapterNumber, translatedLanguage: servedLanguage } } as any),
+          pages: [],
+          englishFallbackChapter: null,
+          fallbackReason: "unavailable",
+          error: "Capítulo no disponible nativamente.",
+          code: "LOCAL_PAGES_UNAVAILABLE",
+        }, { status: 404 });
+      }
+
       return cachedReadResponse(responseCacheKey, {
         mangaTitle,
         coverImage,
@@ -1526,6 +1563,24 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       if (!englishFallbackChapter) {
         fallbackReason = "unavailable";
       }
+    }
+
+    const isEnglishFallbackExternal = !!englishFallbackChapter?.attributes?.externalUrl;
+    const hasNoNativeFallback = !englishFallbackChapter || isEnglishFallbackExternal;
+    const isCurrentChapterExternal = !!currentChapter?.attributes?.externalUrl;
+
+    if ((pages.length === 0 || isCurrentChapterExternal) && hasNoNativeFallback && !isExternalSource) {
+      return cachedReadResponse(responseCacheKey, {
+        mangaTitle,
+        coverImage,
+        chapters: excludeChapters ? [] : stripChaptersForClient(finalChapters),
+        currentChapter: stripChapterForClient(currentChapter),
+        pages: [],
+        englishFallbackChapter: null,
+        fallbackReason: "unavailable",
+        error: "Capítulo no disponible nativamente.",
+        code: "LOCAL_PAGES_UNAVAILABLE",
+      }, { status: 404 });
     }
 
     const payload = {
