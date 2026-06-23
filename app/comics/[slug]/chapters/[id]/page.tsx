@@ -22,6 +22,7 @@ type ChapterFeedItem = {
     chapter?: string | null;
     title?: string | null;
     translatedLanguage?: string | null;
+    externalUrl?: string | null;
   };
 };
 

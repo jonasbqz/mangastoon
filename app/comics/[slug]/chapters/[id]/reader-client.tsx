@@ -147,12 +147,15 @@ export type ReaderDictionary = {
   nextPage: string;
 };
 
+
+
 export type ChapterFeedItem = {
   id: string;
   attributes?: {
     chapter?: string | null;
     title?: string | null;
     translatedLanguage?: string | null;
+    externalUrl?: string | null;
   };
 };
 
@@ -1695,16 +1698,42 @@ export default function ReaderClient({
               <p className="mt-4 text-sm leading-7 text-gray-400">{error}</p>
               <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
                 {englishFallbackChapter ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAutoScroll(false);
-                      router.push(buildReaderUrl(routeSlug, englishFallbackChapter.id, "en"));
-                    }}
+                  englishFallbackChapter.attributes?.externalUrl ? (
+                    <a
+                      href={englishFallbackChapter.attributes.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-6 py-3 text-sm font-heading font-bold text-black transition hover:from-amber-400 hover:to-yellow-400"
+                    >
+                      {englishFallbackChapter.attributes.externalUrl.includes("mangaplus")
+                        ? (readerLanguage === "es" ? "Leer en MangaPlus (Inglés)" : readerLanguage === "pt" ? "Ler no MangaPlus (Inglês)" : "Read on MangaPlus (English)")
+                        : (readerLanguage === "es" ? "Leer en fuente externa (Inglés)" : readerLanguage === "pt" ? "Ler na fonte externa (Inglês)" : "Read on external source (English)")}
+                    </a>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAutoScroll(false);
+                        router.push(buildReaderUrl(routeSlug, englishFallbackChapter.id, "en"));
+                      }}
+                      className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-6 py-3 text-sm font-heading font-bold text-black transition hover:from-amber-400 hover:to-yellow-400"
+                    >
+                      {dictionary.readInEnglish}
+                    </button>
+                  )
+                ) : null}
+
+                {(!pages || pages.length === 0) && currentChapter?.attributes?.externalUrl ? (
+                  <a
+                    href={currentChapter.attributes.externalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 px-6 py-3 text-sm font-heading font-bold text-black transition hover:from-amber-400 hover:to-yellow-400"
                   >
-                    {dictionary.readInEnglish}
-                  </button>
+                    {currentChapter.attributes.externalUrl.includes("mangaplus")
+                      ? (readerLanguage === "es" ? "Leer en MangaPlus" : readerLanguage === "pt" ? "Ler no MangaPlus" : "Read on MangaPlus")
+                      : (readerLanguage === "es" ? "Leer en fuente externa" : readerLanguage === "pt" ? "Ler na fonte externa" : "Read on external source")}
+                  </a>
                 ) : null}
                 <Link
                   href={`/comics/${routeSlug}`}
