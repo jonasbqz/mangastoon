@@ -1614,6 +1614,7 @@ export type ChapterFeedItem = {
     publishAt?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
+    externalUrl?: string | null;
   };
 };
 
@@ -1682,8 +1683,8 @@ export async function fetchMangaDexChaptersOnly(mangaId: string, language: strin
       }
 
       const payload = (await response.json()) as ChapterFeedResponse;
-      const batch = payload.data ?? [];
-      total = payload.total ?? batch.length;
+      const batch = (payload.data ?? []).filter((ch) => !ch.attributes?.externalUrl);
+      total = payload.total ?? (payload.data?.length ?? 0);
       chapters.push(...batch);
       offset += payload.limit ?? limit;
     } while (offset < total);

@@ -193,6 +193,7 @@ type ChapterFeedItem = {
     publishAt?: string | null;
     createdAt?: string | null;
     updatedAt?: string | null;
+    externalUrl?: string | null;
   };
 };
 
@@ -827,8 +828,8 @@ async function resolveAllChapters(mangaId: string, lang: SupportedLanguage) {
   }
 
   const firstPayload = (await firstResponse.json()) as ChapterFeedResponse;
-  const chapters: ChapterFeedItem[] = [...(firstPayload.data ?? [])];
-  const total = firstPayload.total ?? chapters.length;
+  const chapters: ChapterFeedItem[] = [...(firstPayload.data ?? [])].filter((ch) => !ch.attributes?.externalUrl);
+  const total = firstPayload.total ?? (firstPayload.data?.length ?? 0);
   const limitReturned = firstPayload.limit ?? limit;
 
   // Si hay más capítulos que el límite retornado, descargar el resto en paralelo
@@ -855,7 +856,7 @@ async function resolveAllChapters(mangaId: string, lang: SupportedLanguage) {
         continue;
       }
       const payload = (await response.json()) as ChapterFeedResponse;
-      chapters.push(...(payload.data ?? []));
+      chapters.push(...(payload.data ?? []).filter((ch) => !ch.attributes?.externalUrl));
     }
   }
 

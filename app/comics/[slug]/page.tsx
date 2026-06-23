@@ -100,6 +100,7 @@ type ChapterFeedItem = {
     createdAt?: string | null;
     updatedAt?: string | null;
     translatedLanguage?: string | null;
+    externalUrl?: string | null;
   };
   relationships?: Array<{
     id: string;
@@ -1024,11 +1025,16 @@ async function fetchChapterLanguageFallback(
     }
 
     const payload = (await response.json()) as ChapterFeedResponse;
+    const firstChapter = payload.data?.[0] ?? null;
+
+    if (firstChapter?.attributes?.externalUrl) {
+      return { language, total: 0, firstChapter: null };
+    }
 
     return {
       language,
       total: payload.total ?? payload.data?.length ?? 0,
-      firstChapter: payload.data?.[0] ?? null,
+      firstChapter,
     };
   } catch {
     return { language, total: 0, firstChapter: null };
@@ -1050,7 +1056,7 @@ async function findBestChapterLanguageFallback(
   );
 
   return fallbacks
-    .filter((fallback) => fallback.total > 0 && fallback.firstChapter)
+    .filter((fallback) => fallback.total > 0 && fallback.firstChapter && !fallback.firstChapter.attributes?.externalUrl)
     .sort((a, b) => b.total - a.total)[0] ?? null;
 }
 
