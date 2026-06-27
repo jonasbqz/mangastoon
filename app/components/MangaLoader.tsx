@@ -20,22 +20,7 @@ const LOADING_QUOTES: Record<SupportedLanguage, string[]> = {
     "Haciendo un pacto con el Shinigami...",
     "Afilando la espada de cazador de demonios..."
   ],
-  en: [
-    "Channeling chakra to load the page...",
-    "Opening the pages of the grimoire...",
-    "Training in the Hyperbolic Time Chamber...",
-    "Drawing panels with premium ink...",
-    "Awakening the server's hidden power...",
-    "Tuning the opening animation...",
-    "Dodging the spoiler of the century...",
-    "Gathering the Dragon Balls...",
-    "Activating Sage Mode...",
-    "Searching for the One Piece (might take a while)...",
-    "Going beyond limits (Plus Ultra!)...",
-    "Loading the next story arc...",
-    "Making a deal with a Shinigami...",
-    "Sharpening the demon slayer blade..."
-  ],
+  en: [],
   pt: [
     "Canalizando chakra para carregar a página...",
     "Abrindo as páginas do grimório...",
@@ -54,6 +39,9 @@ const LOADING_QUOTES: Record<SupportedLanguage, string[]> = {
   ]
 };
 
+// Map 'en' to 'es' quotes for type safety
+(LOADING_QUOTES as any).en = LOADING_QUOTES.es;
+
 export default function MangaLoader({ 
   fullScreen = false,
   language: propLang,
@@ -63,17 +51,17 @@ export default function MangaLoader({
   language?: SupportedLanguage;
   message?: string; 
 }) {
-  const [language, setLanguage] = useState<SupportedLanguage>(propLang || "es");
+  const [language, setLanguage] = useState<SupportedLanguage>("es");
 
   useEffect(() => {
     if (propLang) {
-      setLanguage(propLang);
+      setLanguage(propLang === "pt" ? "pt" : "es");
       return;
     }
     if (typeof window !== "undefined") {
       const stored = window.localStorage.getItem("lang");
-      if (stored === "en" || stored === "pt") {
-        setLanguage(stored as SupportedLanguage);
+      if (stored === "pt") {
+        setLanguage("pt");
         return;
       }
       
@@ -81,8 +69,8 @@ export default function MangaLoader({
         .split("; ")
         .find((row) => row.startsWith("lang="))
         ?.split("=")[1];
-      if (cookieValue === "en" || cookieValue === "pt") {
-        setLanguage(cookieValue as SupportedLanguage);
+      if (cookieValue === "pt") {
+        setLanguage("pt");
       }
     }
   }, [propLang]);
