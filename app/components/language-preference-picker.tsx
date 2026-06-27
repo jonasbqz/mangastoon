@@ -10,7 +10,6 @@ const LANGUAGE_OPTIONS: Array<{
   label: string;
 }> = [
   { code: "es", label: "Espa\u00f1ol" },
-  { code: "en", label: "English" },
   { code: "pt", label: "Portugu\u00eas" },
 ];
 

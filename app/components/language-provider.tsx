@@ -28,7 +28,7 @@ const ADULT_COOKIE_NAME = "mangastoon_adult";
 const LanguageContext = createContext<LanguageContextValue | null>(null);
 
 function normalizeLanguage(value: string | null | undefined): SupportedLanguage {
-  if (value === "en" || value === "pt") {
+  if (value === "pt") {
     return value;
   }
 
