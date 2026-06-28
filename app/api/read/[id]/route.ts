@@ -1485,7 +1485,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     let englishFallbackChapter: ChapterFeedItem | null = null;
     let fallbackReason: "english" | "unavailable" | null = null;
     if (!currentChapter && chapterId && (requestedChapter || requestedChapterNumber)) {
-      if (servedLanguage !== "en") {
+      if (servedLanguage !== "en" && (false as boolean)) {
         const fallbackNum = requestedChapterNumber || requestedChapter?.attributes?.chapter;
         if (fallbackNum) {
           try {
@@ -1546,8 +1546,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         currentChapter.attributes?.chapter || "0"
       );
 
-      if (servedLanguage !== "en") {
-        const fallbackNum = currentChapter.attributes?.chapter;
+      if (servedLanguage !== "en" && (false as boolean)) {
+        const fallbackNum = currentChapter?.attributes?.chapter;
         if (fallbackNum) {
           try {
             englishFallbackChapter = await findChapterByNumber(targetMangaDexId, "en", fallbackNum);
