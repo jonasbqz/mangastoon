@@ -287,18 +287,18 @@ function getMonlineLatestChapters(comic: MonlineComic, language: SupportedLangua
   ]);
   const parsedChapters = [...chapters]
     .sort((a, b) => {
-      const aDate = getChapterTimestamp(a);
-      const bDate = getChapterTimestamp(b);
-
-      if (aDate > 0 && bDate > 0 && aDate !== bDate) {
-        return bDate - aDate;
-      }
-
       const aNumber = getChapterNumericNumber(a);
       const bNumber = getChapterNumericNumber(b);
 
       if (aNumber !== null && bNumber !== null && aNumber !== bNumber) {
         return bNumber - aNumber;
+      }
+
+      const aDate = getChapterTimestamp(a);
+      const bDate = getChapterTimestamp(b);
+
+      if (aDate > 0 && bDate > 0 && aDate !== bDate) {
+        return bDate - aDate;
       }
 
       return 0;
