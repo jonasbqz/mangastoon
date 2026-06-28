@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { fetchLocalAPI } from "../../utils/monline";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -24,9 +25,7 @@ function getStringValue(source: Record<string, any>, keys: string[]) {
 
 async function fetchComicsPage(page: number) {
   try {
-    const response = await fetch(`${MONLINE_API_URL}/api/comics?limit=120&page=${page}`, {
-      next: { revalidate: 86400 }
-    });
+    const response = await fetchLocalAPI(`/api/comics?limit=120&page=${page}`);
 
     if (!response.ok) return [];
 

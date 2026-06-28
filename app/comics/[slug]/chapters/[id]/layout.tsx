@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { fetchLocalAPI } from "../../../../utils/monline";
 import { MANGADEX_API_URL, MONLINE_API_URL, SITE_IMAGE, SITE_NAME, absoluteUrl } from "../../../../utils/seo";
 import { getLocalizedTitle } from "../../../../utils/get-localized-title";
 import { extractComicIdFromSlugId } from "../../../../utils/slugify";
@@ -122,7 +123,7 @@ async function getLocalReadMetadata(slug: string) {
     const cleanSlug = cleanMangaSlug(slug);
     const cacheKey = `local-read-metadata-comics-list`;
     const comics = await getOrSetCached(cacheKey, 300, async () => {
-      const response = await fetch(`${MONLINE_API_URL}/api/comics?limit=100`, { cache: "no-store" });
+      const response = await fetchLocalAPI(`/api/comics?limit=100`);
       if (!response.ok) return [];
       const payload = (await response.json()) as LocalComicsResponse;
       return extractLocalComics(payload);

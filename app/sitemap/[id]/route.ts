@@ -1,4 +1,5 @@
 import { logger } from "../../utils/logger";
+import { fetchLocalAPI } from "../../utils/monline";
 import type { NextRequest } from "next/server";
 import {
   MAX_MANGADEX_SITEMAP_PAGES,
@@ -134,9 +135,11 @@ async function getMonlineUrls(localSitemapId: number) {
   searchParams.set("limit", SITEMAP_PAGE_SIZE.toString());
   searchParams.set("page", String(localSitemapId + 1));
 
-  const payload = await fetchSitemapJson<Parameters<typeof extractMonlineSitemapComics>[0]>(
-    `${MONLINE_API_URL}/api/comics?${searchParams.toString()}`
-  );
+  const response = await fetchLocalAPI(`/api/comics?${searchParams.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Sitemap upstream failed: ${response.status}`);
+  }
+  const payload = (await response.json()) as Parameters<typeof extractMonlineSitemapComics>[0];
 
   return extractMonlineSitemapComics(payload).flatMap((comic): string[] => {
     if (!comic || typeof comic !== "object") return [];

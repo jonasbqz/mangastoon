@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchLocalAPI } from "./monline";
 import { MONLINE_API_URL as MONLINE_CONFIG_API_URL } from "./monline-config";
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://mangastoon.com").replace(/\/$/, "");
@@ -153,9 +154,11 @@ export async function getMonlineSitemapTotal() {
     searchParams.set("limit", "1");
     searchParams.set("page", "1");
 
-    const payload = await fetchSitemapJson<MonlineSitemapPayload>(
-      `${MONLINE_API_URL}/api/comics?${searchParams.toString()}`
-    );
+    const response = await fetchLocalAPI(`/api/comics?${searchParams.toString()}`);
+    if (!response.ok) {
+      throw new Error(`Response not ok: ${response.status}`);
+    }
+    const payload = (await response.json()) as MonlineSitemapPayload;
     return Math.max(0, getMonlineSitemapTotalFromPayload(payload, extractMonlineSitemapComics(payload).length));
   } catch (error) {
     console.error("[Sitemap SEO] Error fetching Monline sitemap total, using fallback:", error);

@@ -204,13 +204,18 @@ export async function fetchHostAPI(port: number, path: string, init?: RequestIni
     }
   }
 
-  const urls = [
+  const targetPorts = port === 8085 ? [8085, 8887, 3000] : [port];
+  const targetHosts = ["monline-api", "api", "localhost", "127.0.0.1", "172.17.0.1", "host.docker.internal"];
+
+  const urls: string[] = [
     `${defaultBaseUrl}${cleanPath}`,
-    `http://172.17.0.1:${port}${cleanPath}`,
-    `http://host.docker.internal:${port}${cleanPath}`,
-    `http://127.0.0.1:${port}${cleanPath}`,
-    `http://localhost:${port}${cleanPath}`,
   ];
+
+  for (const h of targetHosts) {
+    for (const p of targetPorts) {
+      urls.push(`http://${h}:${p}${cleanPath}`);
+    }
+  }
 
   // Detect and guess gateway IPs dynamically based on container subnets (e.g. 10.0.1.x)
   try {
@@ -223,8 +228,10 @@ export async function fetchHostAPI(port: number, path: string, init?: RequestIni
           const ip = info.address;
           const parts = ip.split(".");
           if (parts.length === 4) {
-            urls.push(`http://${parts[0]}.${parts[1]}.${parts[2]}.1:${port}${cleanPath}`);
-            urls.push(`http://${parts[0]}.${parts[1]}.0.1:${port}${cleanPath}`);
+            for (const p of targetPorts) {
+              urls.push(`http://${parts[0]}.${parts[1]}.${parts[2]}.1:${p}${cleanPath}`);
+              urls.push(`http://${parts[0]}.${parts[1]}.0.1:${p}${cleanPath}`);
+            }
           }
         }
       }
@@ -235,7 +242,9 @@ export async function fetchHostAPI(port: number, path: string, init?: RequestIni
 
   // Prepend other common 172.x subnets just in case
   for (let i = 18; i <= 31; i++) {
-    urls.push(`http://172.${i}.0.1:${port}${cleanPath}`);
+    for (const p of targetPorts) {
+      urls.push(`http://172.${i}.0.1:${p}${cleanPath}`);
+    }
   }
 
   const uniqueUrls = Array.from(new Set(urls));
