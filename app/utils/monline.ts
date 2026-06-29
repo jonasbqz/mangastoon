@@ -323,7 +323,10 @@ export async function fetchMangaVfAPI(path: string, init?: RequestInit): Promise
   const now = Date.now();
   if (now < scraperOfflineUntil) {
     logger.warn(`[fetchMangaVfAPI] Circuit breaker is OPEN. Scraper is offline. Skipping request to ${path}`);
-    throw new Error("Scraper is offline (circuit breaker open)");
+    return new Response(
+      JSON.stringify({ results: [], recientes: [], chapters: [], pages: [], error: "Scraper offline (circuit breaker open)" }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
   }
 
   try {
@@ -336,7 +339,11 @@ export async function fetchMangaVfAPI(path: string, init?: RequestInit): Promise
     return res;
   } catch (error) {
     recordScraperFailure();
-    throw error;
+    logger.warn(`[fetchMangaVfAPI] Failed to fetch path ${path}. Returning fallback 503.`, error);
+    return new Response(
+      JSON.stringify({ results: [], recientes: [], chapters: [], pages: [], error: "Scraper fetch failed" }),
+      { status: 503, headers: { "Content-Type": "application/json" } }
+    );
   }
 }
 
