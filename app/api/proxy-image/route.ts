@@ -9,7 +9,7 @@ const ALLOWED_SUFFIXES = [
   ".ikigaimangas.cloud",
   ".olympusbiblioteca.com",
   ".olympusxyz.com",
-  ".platformoctopus.workers.dev",
+  ".sasadane2.workers.dev",
   ".mangavf.fr",
   ".statically.io",
   ".flyimg.io",
@@ -27,7 +27,7 @@ const ALLOWED_EXACT_HOSTS = new Set([
   "image.ikigaimangas.cloud",
   "dashboard.olympusbiblioteca.com",
   "dashboard.olympusxyz.com",
-  "server-img.platformoctopus.workers.dev",
+  "rapid-fog-0cdd.sasadane2.workers.dev",
   "cdn.mangavf.fr",
   "cdn.statically.io",
   "demo.flyimg.io",
@@ -197,7 +197,7 @@ export async function GET(req: Request) {
 
       // 2. Fetch via Cloudflare Worker (server-side, never redirect)
       try {
-        const workerUrl = `https://server-img.platformoctopus.workers.dev/img?url=${encodeURIComponent(imageUrl)}&origin=${encodeURIComponent(referer)}`;
+        const workerUrl = `https://rapid-fog-0cdd.sasadane2.workers.dev/img?url=${encodeURIComponent(imageUrl)}&origin=${encodeURIComponent(referer)}`;
         const workerRes = await fetchWithTimeout(workerUrl, {
           next: { revalidate: 31536000 },
         } as any, 5000);

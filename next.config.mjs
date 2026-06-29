@@ -49,7 +49,7 @@ const nextConfig = {
       },
       {
         protocol: "https",
-        hostname: "server-img.platformoctopus.workers.dev",
+        hostname: "rapid-fog-0cdd.sasadane2.workers.dev",
         pathname: "/**",
       },
       {
