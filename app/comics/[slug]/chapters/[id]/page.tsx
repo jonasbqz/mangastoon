@@ -203,11 +203,7 @@ export default async function ReadPage({
   const mangaId = extractComicIdFromSlugId(slug);
   
   if (isDmcaBlocked(mangaId)) {
-    return (
-      <main className="min-h-screen bg-[#0a0908] text-white">
-        <DMCABlocker lang={lang} />
-      </main>
-    );
+    notFound();
   }
 
   console.log("[Reader Server] lang resolved:", lang, "| cookieLang:", cookieLang, "| searchParamLang:", resolvedSearchParams.lang, "| slug:", slug);

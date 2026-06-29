@@ -1149,12 +1149,7 @@ export default async function MangaDetailsPage({
   const isAdult = cookieStore.get("lectorfenix_adult")?.value === "true";
 
   if (isDmcaBlocked(id)) {
-    return (
-      <main className="min-h-screen bg-[#0a0908] text-white">
-        <SiteHeader language={cookieLang} />
-        <DMCABlocker lang={cookieLang} />
-      </main>
-    );
+    notFound();
   }
 
   // 1. Lanzar fetches iniciales en paralelo

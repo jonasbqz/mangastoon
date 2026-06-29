@@ -1,4 +1,5 @@
 const DMCA_BLOCKED_IDS = new Set([
+  "e52ca767-92fc-4b4e-9343-656dd18da17d", // Reported by Hetzner DMCA
   "4bafceb5-c1b9-46f7-928d-3ff01b6627b4", // O Ultimo Saiyuki
   "141609b6-cf86-4266-904c-6648f389cdc9", // RuriDragon
   "c0defdaa-e9eb-4c7d-ae27-db989fcf0105", // Viz Manga reported listing
