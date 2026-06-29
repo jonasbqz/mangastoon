@@ -178,6 +178,21 @@ const lastSuccessfulBaseUrl: Record<number, string> = {};
 
 export async function fetchHostAPI(port: number, path: string, init?: RequestInit): Promise<Response> {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
+
+  // Si estamos en el navegador (cliente), evitamos probes a IPs y puertos http locales
+  // redirigiendo al proxy relativo HTTPS de Next.js para esquivar Mixed Content.
+  if (typeof window !== "undefined") {
+    if (port === 8085) {
+      return fetch(`/api/monline${cleanPath}`, init);
+    }
+    const defaultBaseUrl = (
+      process.env.NEXT_PUBLIC_MANGAVF_API_URL ||
+      process.env.MANGAVF_API_URL ||
+      "http://localhost:3001"
+    ).replace(/\/$/, "");
+    return fetch(`${defaultBaseUrl}${cleanPath}`, init);
+  }
+
   const defaultBaseUrl =
     port === 8085
       ? MONLINE_API_URL
