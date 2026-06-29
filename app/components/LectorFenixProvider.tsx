@@ -101,15 +101,6 @@ export default function LectorFenixProvider() {
   useEffect(() => {
     if (!shouldLoad) return;
 
-    // Si ya cargamos el script de Monetag en esta sesión SPA, no lo volvemos a inyectar
-    // para evitar DOM thrashing, re-compilación de JS y el lag por re-evaluación en cada click.
-    if (typeof window !== "undefined" && (window as any).__monetagLoaded) {
-      return;
-    }
-    if (typeof window !== "undefined") {
-      (window as any).__monetagLoaded = true;
-    }
-
     let active = true;
 
     function runFallback() {
@@ -174,7 +165,7 @@ export default function LectorFenixProvider() {
     return () => {
       active = false;
     };
-  }, [shouldLoad]);
+  }, [shouldLoad, pathname]);
 
   return null;
 }

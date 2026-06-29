@@ -531,6 +531,7 @@ async function fetchMonlineComics(path: string, language: SupportedLanguage, enr
       try {
         const response = await fetchLocalAPI(path, {
           signal: controller.signal,
+          cache: "no-store",
         });
         if (!response.ok) return [];
         const payload = (await response.json()) as MonlineComicsResponse;
