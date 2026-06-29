@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import type { SupportedLanguage } from "./language-provider";
+import logoIcon from "../icon.png";
 
 const LOADING_QUOTES: Record<SupportedLanguage, string[]> = {
   es: [
@@ -135,15 +137,17 @@ export default function MangaLoader({
           />
         </svg>
 
-        {/* Central Brand Isotipo "M" pulsing */}
-        <svg
-          viewBox="0 0 100 100"
-          className="relative h-11 w-11 text-orange-500 animate-pulse drop-shadow-[0_0_15px_rgba(249,115,22,0.8)]"
-          fill="currentColor"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <path d="M10 85 V20 L35 55 L50 35 L65 55 L90 20 V85 H70 V45 L50 75 L30 45 V85 Z" />
-        </svg>
+        {/* Central Brand Isotipo (Fénix) pulsing */}
+        <div className="relative h-11 w-11 animate-pulse drop-shadow-[0_0_12px_rgba(249,115,22,0.8)] flex items-center justify-center">
+          <Image
+            src={logoIcon}
+            alt="LectorFenix Logo"
+            width={44}
+            height={44}
+            className="object-contain"
+            priority
+          />
+        </div>
       </div>
 
       {/* Quote display with smooth pulse */}
