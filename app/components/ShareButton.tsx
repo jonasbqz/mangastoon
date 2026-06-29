@@ -28,8 +28,8 @@ export default function ShareButton({ title, text, url, variant = "inline", labe
     e.stopPropagation();
 
     const shareUrl = url || window.location.href;
-    const shareTitle = title || "MangaStoon";
-    const shareText = text || `¡Lee ${shareTitle} en MangaStoon!`;
+    const shareTitle = title || "LectorFenix";
+    const shareText = text || `¡Lee ${shareTitle} en LectorFenix!`;
 
     if (navigator.share) {
       try {

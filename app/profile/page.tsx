@@ -5,7 +5,7 @@ import SiteHeader, { type SupportedLanguage } from "../components/site-header";
 import ProfileForm from "./ProfileForm";
 
 export const metadata = {
-  title: "Mi Perfil — Mangastoon",
+  title: "Mi Perfil — LectorFenix",
   robots: {
     index: false,
     follow: false,

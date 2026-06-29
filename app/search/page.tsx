@@ -8,9 +8,9 @@ import SearchResultsContent from "./search-results-content";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Buscar manga, manhwa y comics online | MangaStoon",
+  title: "Buscar manga, manhwa y comics online | LectorFenix",
   description:
-    "Busca manga, manhwa, manhua y comics online en MangaStoon. Encuentra series por título y continúa leyendo tus capítulos favoritos.",
+    "Busca manga, manhwa, manhua y comics online en LectorFenix. Encuentra series por título y continúa leyendo tus capítulos favoritos.",
   alternates: {
     canonical: "/search",
   },
@@ -19,17 +19,17 @@ export const metadata: Metadata = {
     follow: true,
   },
   openGraph: {
-    title: "Buscar manga online | MangaStoon",
+    title: "Buscar manga online | LectorFenix",
     description:
-      "Encuentra manga, manhwa, manhua y comics online en MangaStoon.",
+      "Encuentra manga, manhwa, manhua y comics online en LectorFenix.",
     url: "/search",
     type: "website",
-    siteName: "MangaStoon",
+    siteName: "LectorFenix",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Buscar manga online | MangaStoon",
-    description: "Encuentra manga, manhwa, manhua y comics online en MangaStoon.",
+    title: "Buscar manga online | LectorFenix",
+    description: "Encuentra manga, manhwa, manhua y comics online en LectorFenix.",
   },
 };
 

@@ -13,4 +13,4 @@ if (
   );
 }
 
-export const MONLINE_API_URL = (rawApiUrl || "http://46.224.213.127:8085").replace(/\/$/, "");
+export const MONLINE_API_URL = (rawApiUrl || "http://89.58.11.45:8085").replace(/\/$/, "");

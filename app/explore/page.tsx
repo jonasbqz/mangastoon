@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 const EXPLORE_TITLE = `Explorar manga, manhwa y manhua online | ${SITE_NAME}`;
 const EXPLORE_DESCRIPTION =
-  "Explora mangas, manhwas y manhuas online en MangaStoon. Filtra por género, idioma, tipo de cómic, popularidad y últimas actualizaciones.";
+  `Explora mangas, manhwas y manhuas online en ${SITE_NAME}. Filtra por género, idioma, tipo de cómic, popularidad y últimas actualizaciones.`;
 
 type ExploreSearchParams = Promise<{
   q?: string | string[];
@@ -37,7 +37,7 @@ export async function generateMetadata({
     ? `Explorar ${query} online | ${SITE_NAME}`
     : EXPLORE_TITLE;
   const description = query
-    ? `Busca y explora resultados de ${query} en MangaStoon. Encuentra manga, manhwa y manhua online con capítulos disponibles para leer.`
+    ? `Busca y explora resultados de ${query} en ${SITE_NAME}. Encuentra manga, manhwa y manhua online con capítulos disponibles para leer.`
     : EXPLORE_DESCRIPTION;
 
   const isSearch = Boolean(query);

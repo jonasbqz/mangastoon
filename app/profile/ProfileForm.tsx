@@ -81,7 +81,7 @@ const PROFILE_FORM_COPY = {
     myLists: "Mis Listas",
     noFavoritesTitle: "No tienes mangas favoritos",
     noListsTitle: "No tienes listas creadas",
-    noListsDesc: "Crea listas para agrupar tus mangas favoritos y compartirlas con la comunidad de MangaStoon.",
+    noListsDesc: "Crea listas para agrupar tus mangas favoritos y compartirlas con la comunidad de LectorFenix.",
     noFavoritesDesc: "Navega por el catálogo y pulsa el botón de corazón para que aparezcan en tu biblioteca personal.",
     goToCatalog: "Ir al catálogo →",
     emptyHistoryTitle: "Tu historial está vacío",
@@ -103,7 +103,7 @@ const PROFILE_FORM_COPY = {
     deleteModalConfirm: "Programar eliminación",
     deleteModalCancel: "Cancelar",
     giftModalTitle: "¡Reclama tu Pase Premium Gratis!",
-    giftModalDesc: "¡Queremos que pruebes la experiencia completa de MangaStoon! Te regalamos un Pase Premium Temporal totalmente gratis.\n\nDisfruta de lectura 100% libre de anuncios, descargas extendidas de capítulos en PDF y opciones Pro mientras terminamos de integrar Paddle/LemonSqueezy.",
+    giftModalDesc: "¡Queremos que pruebes la experiencia completa de LectorFenix! Te regalamos un Pase Premium Temporal totalmente gratis.\n\nDisfruta de lectura 100% libre de anuncios, descargas extendidas de capítulos en PDF y opciones Pro mientras terminamos de integrar Paddle/LemonSqueezy.",
     giftModalActivating: "Activando...",
     giftModalActivate: "🎁 Activar Regalo",
     giftModalClose: "Cerrar",
@@ -175,7 +175,7 @@ const PROFILE_FORM_COPY = {
     myLists: "My Lists",
     noFavoritesTitle: "You have no favorite manga",
     noListsTitle: "You have no lists created",
-    noListsDesc: "Create lists to group your favorite manga and share them with the MangaStoon community.",
+    noListsDesc: "Create lists to group your favorite manga and share them with the LectorFenix community.",
     noFavoritesDesc: "Browse the catalog and tap the heart button to add them to your personal library.",
     goToCatalog: "Go to catalog →",
     emptyHistoryTitle: "Your history is empty",
@@ -197,7 +197,7 @@ const PROFILE_FORM_COPY = {
     deleteModalConfirm: "Schedule deletion",
     deleteModalCancel: "Cancel",
     giftModalTitle: "Claim Your Free Premium Pass!",
-    giftModalDesc: "We want you to try the full MangaStoon experience! We're gifting you a free temporary Premium Pass.\n\nEnjoy 100% ad-free reading, extended chapter PDF downloads, and Pro options while we finish integrating Paddle/LemonSqueezy.",
+    giftModalDesc: "We want you to try the full LectorFenix experience! We're gifting you a free temporary Premium Pass.\n\nEnjoy 100% ad-free reading, extended chapter PDF downloads, and Pro options while we finish integrating Paddle/LemonSqueezy.",
     giftModalActivating: "Activating...",
     giftModalActivate: "🎁 Activate Gift",
     giftModalClose: "Close",
@@ -269,7 +269,7 @@ const PROFILE_FORM_COPY = {
     myLists: "Minhas Listas",
     noFavoritesTitle: "Você não tem mangás favoritos",
     noListsTitle: "Você não tem listas criadas",
-    noListsDesc: "Crie listas para agrupar seus mangás favoritos e compartilhá-las com a comunidade do MangaStoon.",
+    noListsDesc: "Crie listas para agrupar seus mangás favoritos e compartilhá-las com a comunidade do LectorFenix.",
     noFavoritesDesc: "Navegue pelo catálogo e clique no botão de coração para adicioná-los à sua biblioteca pessoal.",
     goToCatalog: "Ir para o catálogo →",
     emptyHistoryTitle: "Seu histórico está vazio",
@@ -291,7 +291,7 @@ const PROFILE_FORM_COPY = {
     deleteModalConfirm: "Agendar exclusão",
     deleteModalCancel: "Cancelar",
     giftModalTitle: "Resgate seu Passe Premium Grátis!",
-    giftModalDesc: "Queremos que você experimente a experiência completa do MangaStoon! Estamos lhe dando um Passe Premium temporário totalmente grátis.\n\nAproveite leitura 100% livre de anúncios, downloads estendidos de capítulos em PDF e opções Pro enquanto terminamos a integração do Paddle/LemonSqueezy.",
+    giftModalDesc: "Queremos que você experimente a experiência completa do LectorFenix! Estamos lhe dando um Passe Premium temporário totalmente grátis.\n\nAproveite leitura 100% livre de anúncios, downloads estendidos de capítulos em PDF e opções Pro enquanto terminamos a integração do Paddle/LemonSqueezy.",
     giftModalActivating: "Ativando...",
     giftModalActivate: "🎁 Ativar Presente",
     giftModalClose: "Fechar",
@@ -867,8 +867,8 @@ export default function ProfileForm({ profile, user }: Props) {
     const userAgent = typeof window !== "undefined" ? window.navigator.userAgent : "Desconocido";
     const timestamp = new Date().toISOString();
 
-    const recipient = "soporte@mangastoon.com";
-    const subject = encodeURIComponent("Reporte de Error - MangaStoon");
+    const recipient = "soporte@lectorfenix.com";
+    const subject = encodeURIComponent("Reporte de Error - LectorFenix");
     
     let bodyText = "";
     if (language === "es") {

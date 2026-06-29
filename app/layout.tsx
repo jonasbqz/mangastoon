@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   keywords: [
-    "MangaStoon",
+    "LectorFenix",
     "manga online",
     "manhwa online",
     "manhua online",
@@ -65,7 +65,7 @@ export const metadata: Metadata = {
       default: `${SITE_NAME} - Lee tus mangas favoritos`,
     },
     description: SITE_DESCRIPTION,
-    siteName: "MangaStoon",
+    siteName: SITE_NAME,
     type: "website",
     url: "/",
     images: [
@@ -113,17 +113,17 @@ export const metadata: Metadata = {
 const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-  name: "MangaStoon",
-  alternateName: ["Mangastoon", "manga stoon"],
+  name: SITE_NAME,
+  alternateName: ["LectorFenix", "lector fenix", "Lector Fénix"],
   url: SITE_URL,
 };
 
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
-  url: "https://mangastoon.com",
-  logo: "https://mangastoon.com/icon.png",
-  name: "Mangastoon",
+  url: SITE_URL,
+  logo: `${SITE_URL}/icon.png`,
+  name: SITE_NAME,
 };
 
 

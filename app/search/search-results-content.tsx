@@ -188,19 +188,19 @@ function checkPopularMangaMatch(query: string): string | null {
 const SEARCH_COPY = {
   es: {
     noResults: "No se encontraron mangas para esta búsqueda.",
-    notAvailablePopular: (name: string) => `El manga <strong>${name}</strong> no está disponible actualmente en MangaStoon.`,
+    notAvailablePopular: (name: string) => `El manga <strong>${name}</strong> no está disponible actualmente en LectorFenix.`,
     notAvailableGeneral: "No encontramos resultados para tu búsqueda. Te sugerimos revisar la ortografía o probar con otros términos.",
     tryPopularInstead: "Mientras tanto, te recomendamos leer alguno de nuestros títulos más populares:",
   },
   en: {
     noResults: "No mangas found for this search.",
-    notAvailablePopular: (name: string) => `The manga <strong>${name}</strong> is not currently available on MangaStoon.`,
+    notAvailablePopular: (name: string) => `The manga <strong>${name}</strong> is not currently available on LectorFenix.`,
     notAvailableGeneral: "We couldn't find any results for your search. We suggest checking the spelling or trying other terms.",
     tryPopularInstead: "In the meantime, you might like to read some of our most popular titles:",
   },
   pt: {
     noResults: "Nenhum mangá encontrado para esta busca.",
-    notAvailablePopular: (name: string) => `O mangá <strong>${name}</strong> não está disponível no momento no MangaStoon.`,
+    notAvailablePopular: (name: string) => `O mangá <strong>${name}</strong> não está disponível no momento no LectorFenix.`,
     notAvailableGeneral: "Não encontramos resultados para sua busca. Sugerimos verificar a grafia ou tentar outros termos.",
     tryPopularInstead: "Enquanto isso, recomendamos ler alguns de nossos títulos mais populares:",
   }
@@ -226,7 +226,7 @@ function mapMangaVfComicsToShowcase(comics: MangaVfComic[], language: "es" | "en
   return comics
     .filter((comic) => comic.title?.trim())
     .map((comic, index): MangaShowcaseItem => {
-      const title = comic.title?.trim() || "MangaStoon";
+      const title = comic.title?.trim() || "LectorFenix";
       const slug = (comic.slug?.trim() || slugify(title)).replace(/^manga[-_]?vf[-_]?/i, "");
       const coverImage = normalizeMonlineImageUrl(comic.cover?.trim() || "");
       const genres = Array.isArray(comic.genres) ? comic.genres.filter(Boolean).slice(0, 4) : [];
@@ -267,7 +267,7 @@ function mapMonlineComicsToShowcase(comics: MonlineComic[], language: "es" | "en
   return comics.map((comic, index): MangaShowcaseItem => {
     const titleMap = getMonlineTitleMap(comic);
     const rawTitle = getStringValue(comic, ["title", "name", "comic_title", "original_title"]);
-    const title = getLocalizedTitle({ titleMap, title: rawTitle }, language) || "MangaStoon";
+    const title = getLocalizedTitle({ titleMap, title: rawTitle }, language) || "LectorFenix";
     const slug = getStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
     const coverImage = normalizeMonlineImageUrl(
       getStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])

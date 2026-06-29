@@ -175,7 +175,7 @@ function mapMangaVfComicsToShowcase(comics: MangaVfComic[], language: "es" | "en
   return comics
     .filter((comic) => comic.title?.trim())
     .map((comic, index): MonlineShowcaseItem => {
-      const title = comic.title?.trim() || "MangaStoon";
+      const title = comic.title?.trim() || "LectorFenix";
       const slug = (comic.slug?.trim() || slugify(title)).replace(/^manga[-_]?vf[-_]?/i, "");
       const coverImage = normalizeMonlineImageUrl(comic.cover?.trim() || "");
       const genres = Array.isArray(comic.genres) ? comic.genres.filter(Boolean).slice(0, 4) : [];
@@ -216,7 +216,7 @@ function mapMonlineComicsToShowcase(comics: MonlineComic[], language: "es" | "en
   return comics.map((comic, index): MonlineShowcaseItem => {
     const titleMap = getMonlineTitleMap(comic);
     const rawTitle = getStringValue(comic, ["title", "name", "comic_title", "original_title"]);
-    const title = getLocalizedTitle({ titleMap, title: rawTitle }, language) || "MangaStoon";
+    const title = getLocalizedTitle({ titleMap, title: rawTitle }, language) || "LectorFenix";
     const slug = getStringValue(comic, ["slug", "manga_slug", "comic_slug", "id"]);
     const coverImage = normalizeMonlineImageUrl(
       getStringValue(comic, ["coverImage", "cover_image", "cover", "thumbnail", "image", "poster", "url_cover"])

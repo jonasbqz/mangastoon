@@ -4,7 +4,7 @@ import { MONLINE_API_URL as MONLINE_CONFIG_API_URL } from "./monline-config";
 
 export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://mangastoon.com").replace(/\/$/, "");
 
-export const SITE_NAME = "MangaStoon";
+export const SITE_NAME = "LectorFenix";
 
 export const SITE_DESCRIPTION =
   "Explora y lee manga, manhwa y comics online en alta calidad. Actualizaciones diarias en español, inglés y portugués.";

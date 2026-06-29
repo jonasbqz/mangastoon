@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import LegalPage from "../components/LegalPage";
 
 export const metadata: Metadata = {
-  title: "Política de privacidad | MangaStoon",
-  description: "Consulta cómo MangaStoon trata la privacidad, cookies y datos de uso de los usuarios.",
+  title: "Política de privacidad | LectorFenix",
+  description: "Consulta cómo LectorFenix trata la privacidad, cookies y datos de uso de los usuarios.",
   alternates: {
     canonical: "/privacidad",
   },

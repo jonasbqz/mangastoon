@@ -11,7 +11,7 @@ import { C } from "../lib/colors";
 
 const COPY = {
   es: {
-    title: "¡Probá MangaStoon Premium Gratis! 👑",
+    title: "¡Probá LectorFenix Premium Gratis! 👑",
     subtitle: "Desbloqueá la mejor experiencia de lectura, descargas y personalización sin límites.",
     feature1: "Lectura Sin Anuncios",
     feature1Desc: "Navegación 100% limpia sin scripts de publicidad molesta.",
@@ -25,7 +25,7 @@ const COPY = {
     dismiss: "Quizás más tarde"
   },
   en: {
-    title: "Try MangaStoon Premium for Free! 👑",
+    title: "Try LectorFenix Premium for Free! 👑",
     subtitle: "Unlock the ultimate reading, download, and customization experience without limits.",
     feature1: "Ad-Free Reading",
     feature1Desc: "100% clean browsing without annoying external advertisements.",
@@ -39,7 +39,7 @@ const COPY = {
     dismiss: "Maybe later"
   },
   pt: {
-    title: "Experimente o MangaStoon Premium Grátis! 👑",
+    title: "Experimente o LectorFenix Premium Grátis! 👑",
     subtitle: "Desbloqueie a melhor experiência de leitura, downloads e personalização sem limites.",
     feature1: "Leitura Sem Anúncios",
     feature1Desc: "Navegação 100% limpa sem scripts de anúncios irritantes.",

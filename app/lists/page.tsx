@@ -8,8 +8,8 @@ import SiteHeader, { type SupportedLanguage } from "../components/site-header";
 import { C } from "../lib/colors";
 
 export const metadata: Metadata = {
-  title: "Listas de la Comunidad | MangaStoon",
-  description: "Explora las colecciones y listas de mangas, manhwas y cómics creadas y compartidas por la comunidad de MangaStoon.",
+  title: "Listas de la Comunidad | LectorFenix",
+  description: "Explora las colecciones y listas de mangas, manhwas y cómics creadas y compartidas por la comunidad de LectorFenix.",
 };
 
 
@@ -21,7 +21,7 @@ function normalizeLanguage(value: string | undefined): SupportedLanguage {
 const COPY = {
   es: {
     title: "Listas de la Comunidad",
-    subtitle: "Colecciones de cómics seleccionadas y compartidas por la comunidad de MangaStoon.",
+    subtitle: "Colecciones de cómics seleccionadas y compartidas por la comunidad de LectorFenix.",
     createdBy: "Creada por",
     viewList: "Explorar Lista",
     emptyState: "No se encontraron listas públicas en este momento.",
@@ -29,7 +29,7 @@ const COPY = {
   },
   en: {
     title: "Community Lists",
-    subtitle: "Comic collections curated and shared by the MangaStoon community.",
+    subtitle: "Comic collections curated and shared by the LectorFenix community.",
     createdBy: "Created by",
     viewList: "Explore List",
     emptyState: "No public lists found at this moment.",
@@ -37,7 +37,7 @@ const COPY = {
   },
   pt: {
     title: "Listas da Comunidade",
-    subtitle: "Coleções de quadrinhos selecionadas e compartilhadas pela comunidade do MangaStoon.",
+    subtitle: "Coleções de quadrinhos selecionadas e compartilhadas pela comunidade do LectorFenix.",
     createdBy: "Criada por",
     viewList: "Explorar Lista",
     emptyState: "Nenhuma lista pública encontrada no momento.",
