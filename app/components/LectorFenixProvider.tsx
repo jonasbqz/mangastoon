@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { createClient } from "../../utils/supabase/client";
 
 // Clave y TTL para la caché del estado de premium en sessionStorage
-const PREMIUM_CACHE_KEY = "mangastoon_is_premium";
+const PREMIUM_CACHE_KEY = "lectorfenix_is_premium";
 const PREMIUM_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
 
 function getCachedPremiumState(): boolean | null {
@@ -34,7 +34,7 @@ function setCachedPremiumState(isPremium: boolean) {
   } catch {}
 }
 
-export default function MangastoonProvider() {
+export default function LectorFenixProvider() {
   const pathname = usePathname();
   const [shouldLoad, setShouldLoad] = useState(false);
 
@@ -76,7 +76,7 @@ export default function MangastoonProvider() {
         // de 10 minutos para que los anuncios aparezcan en cada navegación.
         setShouldLoad(true);
       } catch (error) {
-        console.warn("[MangastoonProvider] Error checking monetization, falling back to show ads:", error);
+        console.warn("[LectorFenixProvider] Error checking monetization, falling back to show ads:", error);
         setShouldLoad(true);
       }
     }
@@ -92,10 +92,11 @@ export default function MangastoonProvider() {
         !currentPath.startsWith("/comics/") &&
         !currentPath.startsWith("/api/")
       ) {
-        sessionStorage.setItem("mangastoon_manga_referrer", fullUrl);
+        sessionStorage.setItem("lectorfenix_manga_referrer", fullUrl);
       }
     }
   }, [pathname]);
+
   // ─── ANUNCIOS ACTIVADOS ──────────────────────────────────────────────────
   useEffect(() => {
     if (!shouldLoad) return;
@@ -113,13 +114,13 @@ export default function MangastoonProvider() {
 
     function runFallback() {
       if (!active) return;
-      console.log("[MangastoonProvider] Loading ads via fallback client-side proxy...");
+      console.log("[LectorFenixProvider] Loading ads via fallback client-side proxy...");
 
       const inlineScript = document.createElement("script");
       inlineScript.innerHTML = `
         (function(s,u,z,p){s.src=u,s.setAttribute('data-zone',z),p.appendChild(s);})(document.createElement('script'),'/api/v1/stats/tracker',11014955,document.body||document.documentElement)
       `;
-      inlineScript.id = "mangastoon-ad-inline-fallback";
+      inlineScript.id = "lectorfenix-ad-inline-fallback";
 
       document.head.appendChild(inlineScript);
     }
@@ -163,7 +164,7 @@ export default function MangastoonProvider() {
           document.head.appendChild(newScript);
         });
       } catch (err) {
-        console.warn("[MangastoonProvider] Error loading dynamic ads, running fallback:", err);
+        console.warn("[LectorFenixProvider] Error loading dynamic ads, running fallback:", err);
         runFallback();
       }
     }

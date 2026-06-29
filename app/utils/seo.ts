@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchLocalAPI } from "./monline";
 import { MONLINE_API_URL as MONLINE_CONFIG_API_URL } from "./monline-config";
 
-export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://mangastoon.com").replace(/\/$/, "");
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://lectorfenix.com").replace(/\/$/, "");
 
 export const SITE_NAME = "LectorFenix";
 

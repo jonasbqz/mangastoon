@@ -13,7 +13,7 @@ export async function GET() {
     const res = await fetch(url, {
       headers: {
         "User-Agent": "AntiAdBlock API Client (curl)",
-        "Referer": "https://mangastoon.com/"
+        "Referer": "https://lectorfenix.com/"
       },
       next: { revalidate: 1800 } // Cache for 30 minutes matching PHP code TTL
     });

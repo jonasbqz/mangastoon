@@ -8,7 +8,7 @@ import BottomNavbar from "./components/BottomNavbar";
 import HideOnAdmin from "./components/hide-on-admin";
 import { LanguageProvider } from "./components/language-provider";
 import PageTransitionLoader from "./components/PageTransitionLoader";
-import MangastoonProvider from "./components/MangastoonProvider";
+import LectorFenixProvider from "./components/LectorFenixProvider";
 import HeartbeatTracker from "./components/HeartbeatTracker";
 import { SITE_DESCRIPTION, SITE_IMAGE, SITE_NAME, SITE_URL, safeJsonLd } from "./utils/seo";
 import "./globals.css";
@@ -200,7 +200,7 @@ export default async function RootLayout({
             suppressHydrationWarning
             dangerouslySetInnerHTML={safeJsonLd(organizationJsonLd)}
           />
-          <MangastoonProvider />
+          <LectorFenixProvider />
           <HeartbeatTracker />
           {children}
           <HideOnAdmin>
