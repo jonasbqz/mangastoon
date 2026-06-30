@@ -1524,13 +1524,25 @@ export async function resolveBestSource(idOrSlug: string, slug?: string | null):
             const finalCandidates = sortedCandidates.slice(0, 4);
             logger.info(`[resolveBestSource] MangaDex candidates for ${idOrSlug}: ${JSON.stringify(finalCandidates)}`);
 
-            // Intentar secuencialmente con cada candidato hasta encontrar un slug válido
-            for (const candidate of finalCandidates) {
-              const slugMatch = await searchLeerCapituloByTitle(candidate);
-              if (slugMatch) {
-                leercapituloSlug = slugMatch;
-                logger.info(`[resolveBestSource] Found LeerCapitulo match: "${leercapituloSlug}" for candidate title: "${candidate}"`);
-                break;
+            // Filtrar candidatos que sean UUIDs (no son títulos legibles)
+            const cleanCandidates = finalCandidates.filter(c => !isMangaDexUuid(c));
+
+            // Intentar en paralelo con cada candidato válido para optimizar velocidad (timeout de 8s compartido)
+            if (cleanCandidates.length > 0) {
+              const slugMatches = await Promise.all(
+                cleanCandidates.map(async (candidate) => {
+                  try {
+                    const match = await searchLeerCapituloByTitle(candidate);
+                    return match ? { candidate, match } : null;
+                  } catch {
+                    return null;
+                  }
+                })
+              );
+              const firstValidMatch = slugMatches.find(m => m !== null);
+              if (firstValidMatch) {
+                leercapituloSlug = firstValidMatch.match;
+                logger.info(`[resolveBestSource] Found LeerCapitulo match: "${leercapituloSlug}" for candidate title: "${firstValidMatch.candidate}"`);
               }
             }
           } else {
@@ -1543,7 +1555,7 @@ export async function resolveBestSource(idOrSlug: string, slug?: string | null):
         if (!leercapituloSlug && slug) {
           const extractedTitle = extractTitleFromSlug(slug);
           logger.info(`[resolveBestSource] MangaDex failed, extracted title fallback: "${extractedTitle}"`);
-          if (extractedTitle && extractedTitle !== "lectorfenix" && extractedTitle !== "comic") {
+          if (extractedTitle && extractedTitle !== "lectorfenix" && extractedTitle !== "comic" && !isMangaDexUuid(extractedTitle)) {
             leercapituloSlug = (await searchLeerCapituloByTitle(extractedTitle)) ?? undefined;
           }
         }
