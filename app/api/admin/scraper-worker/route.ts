@@ -45,6 +45,25 @@ export async function GET(request: NextRequest) {
 
     try {
       if (sourceUrl.includes("leercapitulo.co") || sourceUrl.includes("leercapitulo.com")) {
+        // Verificar preliminarmente si la URL redirige a la raíz (manga inexistente o eliminado)
+        try {
+          const checkRes = await fetch(sourceUrl, {
+            method: "HEAD",
+            redirect: "manual",
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+          });
+          const loc = checkRes.headers.get("location");
+          if ((checkRes.status === 301 || checkRes.status === 302) && (!loc || loc === "/" || loc.endsWith("leercapitulo.co") || loc.endsWith("leercapitulo.co/"))) {
+            throw new Error("El manga no existe en LeerCapitulo (la URL redirige a la página principal del sitio de origen).");
+          }
+        } catch (fetchErr: any) {
+          if (fetchErr.message && fetchErr.message.includes("redirige")) {
+            throw fetchErr;
+          }
+        }
+
         // Extraer el slug de la URL
         const match = sourceUrl.match(/\/manga\/([^/]+)/);
         const slug = match && match[1] ? match[1] : null;
