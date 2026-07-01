@@ -1,6 +1,6 @@
 import postgres from "postgres";
 
-const connectionString = process.env.LOCAL_DATABASE_URL || "postgresql://postgres:uzij1a12sb1p10vq@localhost:5432/postgres";
+const connectionString = process.env.LOCAL_DATABASE_URL || "postgresql://postgres:uzij1a12sb1p10vq@dokploy-postgres:5432/postgres";
 
 // Evitar fugas y agotamiento de conexiones en desarrollo al usar Fast Refresh en Next.js
 const globalForPostgres = global as unknown as {
