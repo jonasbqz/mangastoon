@@ -1,56 +1,71 @@
 import { NextRequest, NextResponse } from "next/server";
 import { logger } from "../../utils/logger";
-import { createClient } from "../../../utils/supabase/server";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { fetchMangaVfAPI } from "../../utils/monline";
+import { sql } from "../../utils/postgres/client";
 
 export const dynamic = "force-dynamic";
 
+function isValidMangaSearchQuery(q: string): boolean {
+  const query = q.trim();
+  
+  // 1. Evitar URLs completas o nombres de dominio
+  if (/^https?:\/\//i.test(query) || query.includes("www.") || query.includes(".com") || query.includes(".net") || query.includes(".co") || query.includes("/") || query.includes("\\")) {
+    return false;
+  }
+  
+  // 2. Longitud de caracteres razonable para un titulo de manga
+  if (query.length < 3 || query.length > 55) {
+    return false;
+  }
+  
+  // 3. Descartar que sean solo números, solo espacios, o solo caracteres no alfanuméricos
+  if (/^\d+$/.test(query) || /^[^a-zA-Z0-9\sñáéíóúüÑÁÉÍÓÚÜ]+$/.test(query)) {
+    return false;
+  }
+
+  // 4. Descartar términos genéricos del sistema o de spam comunes
+  const exclusions = new Set([
+    "manga", "anime", "leer", "capitulo", "inicio", "favoritos", "perfil", 
+    "admin", "financiera", "buscar", "search", "null", "undefined", 
+    "capitulos", "comics", "comic", "home", "descargar"
+  ]);
+  if (exclusions.has(query.toLowerCase())) {
+    return false;
+  }
+
+  return true;
+}
+
 async function logFailedSearch(query: string) {
+  if (!isValidMangaSearchQuery(query)) {
+    return;
+  }
+
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://xlcsqqwelopzpslxgdni.supabase.co";
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const queryNormalized = query.trim();
+    
+    // Buscar si ya existe la búsqueda fallida en la BD local
+    const [existing] = await sql`
+      SELECT id, count FROM public.failed_searches WHERE query = ${queryNormalized} LIMIT 1
+    ` as any[];
 
-    let supabase;
-    if (serviceRoleKey) {
-      supabase = createSupabaseClient(supabaseUrl, serviceRoleKey, {
-        auth: { persistSession: false }
-      });
+    if (existing) {
+      await sql`
+        UPDATE public.failed_searches
+        SET count = ${existing.count + 1}, last_searched = NOW()
+        WHERE id = ${existing.id}
+      `;
     } else {
-      supabase = await createClient();
-    }
-
-    const { data: existing, error: findError } = await supabase
-      .from("failed_searches")
-      .select("id, count")
-      .eq("query", query)
-      .maybeSingle();
-
-    if (!findError) {
-      if (existing) {
-        await supabase
-          .from("failed_searches")
-          .update({
-            count: existing.count + 1,
-            last_searched: new Date().toISOString()
-          })
-          .eq("id", existing.id);
-      } else {
-        await supabase
-          .from("failed_searches")
-          .insert({
-            query: query,
-            count: 1,
-            last_searched: new Date().toISOString()
-          });
-      }
-    } else {
-      logger.error("Error checking failed search in database:", findError);
+      await sql`
+        INSERT INTO public.failed_searches (query, count, last_searched)
+        VALUES (${queryNormalized}, 1, NOW())
+      `;
     }
   } catch (dbErr) {
-    logger.error("Failed to log empty search to database", dbErr);
+    logger.error("Failed to log empty search to local database", dbErr);
   }
 }
+
 
 export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.get("q")?.trim();

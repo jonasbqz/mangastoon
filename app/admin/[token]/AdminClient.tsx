@@ -308,11 +308,9 @@ export default function AdminClient() {
 
   const fetchFailedSearches = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from("failed_searches")
-        .select("*")
-        .order("count", { ascending: false });
-      if (!error && data) {
+      const res = await fetch("/api/admin/failed-searches");
+      if (res.ok) {
+        const data = await res.json();
         setFailedSearches(data);
       }
     } catch (err) {
@@ -434,12 +432,12 @@ export default function AdminClient() {
   // Actions
   const handleResolveSearch = async (searchId: string) => {
     try {
-      const { error } = await supabase
-        .from("failed_searches")
-        .delete()
-        .eq("id", searchId);
-      if (error) {
-        alert(`Error al resolver búsqueda: ${error.message}`);
+      const res = await fetch(`/api/admin/failed-searches?id=${searchId}`, {
+        method: "DELETE"
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(`Error al resolver búsqueda: ${errData.error || res.statusText}`);
       } else {
         setFailedSearches(prev => prev.filter(s => s.id !== searchId));
       }
