@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "../../../../utils/postgres/client";
-import { fetchMangaVfDetailsBySlug } from "../../../../utils/mangadex";
-import { logger } from "../../../../utils/logger";
+import { fetchMangaVfDetailsBySlug } from "../../../utils/mangadex";
+import { logger } from "../../../utils/logger";
 
 export const dynamic = "force-dynamic";
 
