@@ -1,9 +1,10 @@
 export function getOptimizedImageUrl(url: string): string {
   if (!url) return "";
   try {
-    // Evitar reprocesar URLs que ya son del proxy
+    // Si ya es del proxy, la optimizamos a través de weserv.nl usando nuestro proxy como origen
     if (url.startsWith("/api/proxy-image") || url.includes("/api/proxy-image")) {
-      return url;
+      const absoluteProxyUrl = url.startsWith("/") ? `https://lectorfenix.com${url}` : url;
+      return `https://images.weserv.nl/?url=${encodeURIComponent(absoluteProxyUrl)}&default=${encodeURIComponent(absoluteProxyUrl)}&output=webp&q=75&w=400&fit=cover`;
     }
 
     const parsed = new URL(url);
@@ -25,10 +26,13 @@ export function getOptimizedImageUrl(url: string): string {
       hostname.endsWith("olympusbiblioteca.com") ||
       hostname.endsWith("olympusxyz.com") ||
       hostname.endsWith("imagesolymp.xyz") ||
-      hostname.endsWith("yoveo.xyz");
+      hostname.endsWith("yoveo.xyz") ||
+      hostname.endsWith("leercapitulo.co") ||
+      hostname.endsWith("t34798ndc.com");
 
     if (isHotlinkingBlockedHost) {
-      return `/api/proxy-image?url=${encodeURIComponent(url)}`;
+      const proxyUrl = `https://lectorfenix.com/api/proxy-image?url=${encodeURIComponent(url)}`;
+      return `https://images.weserv.nl/?url=${encodeURIComponent(proxyUrl)}&default=${encodeURIComponent(proxyUrl)}&output=webp&q=75&w=400&fit=cover`;
     }
 
     // MangaDex permite hotlinking y tiene su propia CDN optimizada globalmente

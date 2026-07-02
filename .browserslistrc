@@ -1,0 +1,7 @@
+# Especificar navegadores modernos para compilar de forma eficiente sin polyfills antiguos
+chrome >= 90
+firefox >= 90
+safari >= 15
+edge >= 90
+not IE 11
+not op_mini all
