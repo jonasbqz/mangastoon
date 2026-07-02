@@ -34,11 +34,34 @@ function setCachedPremiumState(isPremium: boolean) {
   } catch {}
 }
 
+const CLEAN_PATHS = new Set([
+  "",
+  "/",
+  "/explore",
+  "/favorites",
+  "/favoritos"
+]);
+
+function isCleanPath(path: string): boolean {
+  const clean = path.replace(/^\/(es|pt|en)(?=\/|$)/, "");
+  return CLEAN_PATHS.has(clean || "/");
+}
+
 export default function LectorFenixProvider() {
   const pathname = usePathname();
   const [shouldLoad, setShouldLoad] = useState(false);
 
   useEffect(() => {
+    // Si la ruta actual debe estar limpia de anuncios, no cargamos nada
+    // y removemos cualquier script remanente de navegaciones previas
+    if (isCleanPath(pathname)) {
+      setShouldLoad(false);
+      if (typeof document !== "undefined") {
+        document.querySelectorAll(".lectorfenix-ad-injected").forEach((el) => el.remove());
+      }
+      return;
+    }
+
     async function checkMonetizationState() {
       // Usar caché de sessionStorage para evitar un fetch a Supabase en cada navegación entre capítulos
       const cachedPremium = getCachedPremiumState();
