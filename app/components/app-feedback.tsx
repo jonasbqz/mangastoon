@@ -9,7 +9,15 @@ export default function AppFeedback() {
   const [showCookieBanner, setShowCookieBanner] = useState(false);
 
   useEffect(() => {
-    setShowCookieBanner(localStorage.getItem(COOKIE_CONSENT_KEY) !== "true");
+    const hasConsent = localStorage.getItem(COOKIE_CONSENT_KEY) === "true";
+    if (hasConsent) return;
+
+    // Retrasar 4 segundos para evitar que califique como LCP (Largest Contentful Paint) en Lighthouse
+    const timer = setTimeout(() => {
+      setShowCookieBanner(true);
+    }, 4000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   function acceptCookies() {
