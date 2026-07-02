@@ -33,7 +33,7 @@ export default function Footer() {
         </div>
       </div>
       <div suppressHydrationWarning={true} className="mx-auto mt-10 max-w-[1600px] px-4 text-center text-xs text-gray-600 md:px-8">
-        &copy; {new Date().getFullYear()} LectorFenix. Todos los derechos reservados. Este sitio no
+        &copy; {new Date().getFullYear()} MangaStoon. Todos los derechos reservados. Este sitio no
         almacena ningun archivo en su servidor. Todo el contenido es provisto por terceros no afiliados.
       </div>
     </footer>
